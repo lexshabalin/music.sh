@@ -4,3 +4,11 @@ web/node_modules
 *.md
 .env
 agent-transcripts
+pgdata
+pgdata/**
+appdata
+appdata/**
+.pgdata
+.pgdata/**
+.appdata
+.appdata/**
