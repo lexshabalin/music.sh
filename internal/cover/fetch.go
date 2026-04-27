@@ -8,6 +8,14 @@ import (
 	"path/filepath"
 )
 
+type HTTPStatusError struct {
+	StatusCode int
+}
+
+func (e HTTPStatusError) Error() string {
+	return fmt.Sprintf("http %d", e.StatusCode)
+}
+
 // DownloadFront fetches 250px front cover for a MusicBrainz release id, saves to dest (jpg).
 func DownloadFront(mbid, dest string) error {
 	if mbid == "" {
@@ -18,7 +26,11 @@ func DownloadFront(mbid, dest string) error {
 		return nil
 	}
 	u2 := "https://coverartarchive.org/release/" + mbid + "/front-250"
-	return downloadURL(u2, dest)
+	if err := downloadURL(u2, dest); err == nil {
+		return nil
+	}
+	u3 := "https://coverartarchive.org/release/" + mbid + "/front"
+	return downloadURL(u3, dest)
 }
 
 func downloadURL(u, dest string) error {
@@ -31,7 +43,7 @@ func downloadURL(u, dest string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("http %d", resp.StatusCode)
+		return HTTPStatusError{StatusCode: resp.StatusCode}
 	}
 	_ = os.MkdirAll(filepath.Dir(dest), 0o755)
 	f, err := os.CreateTemp(filepath.Dir(dest), "cov-*")

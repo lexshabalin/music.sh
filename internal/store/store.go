@@ -695,7 +695,16 @@ func (d *DB) CompleteJob(ctx context.Context, id uuid.UUID) error {
 }
 
 func (d *DB) FailJob(ctx context.Context, id uuid.UUID, msg string) error {
-	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET status = 'failed', last_error = $2, attempts = attempts + 1 WHERE id = $1`, id, msg)
+	// Requeue with backoff instead of permanent failure (covers/metadata often fail transiently).
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE jobs
+		SET
+			status = 'pending',
+			last_error = $2,
+			attempts = attempts + 1,
+			run_after = now() + (interval '5 seconds' * GREATEST(1, LEAST(12, attempts + 1)))
+		WHERE id = $1
+	`, id, msg)
 	return err
 }
 

@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -117,9 +118,14 @@ func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {
 		return err
 	}
 	if err = cover.DownloadFront(mbid, dest); err != nil {
-		// No cover is common; don't poison the queue with permanent failures.
-		log.Printf("cover fetch failed for %s (%q/%q): %v", mbid, artist, title, err)
-		return nil
+		// 404 means there is no cover in CAA; don't retry forever.
+		var se cover.HTTPStatusError
+		if errors.As(err, &se) && se.StatusCode == 404 {
+			log.Printf("no cover in CAA for %s (%q/%q)", mbid, artist, title)
+			return nil
+		}
+		// transient issues -> retry via FailJob
+		return err
 	}
 	rel := filepath.Join("covers", albumID.String()+".jpg")
 	if err = h.DB.SetAlbumCoverPath(ctx, albumID, rel); err != nil {

@@ -53,9 +53,30 @@ func (c *Client) SearchRelease(artist, album string) (releaseID, releaseTitle, r
 	if album == "" {
 		album = "Unknown"
 	}
+	artist = normalizePerson(artist)
+	album = normalizeTitle(album)
+
+	artistAlts := uniqNonEmpty([]string{artist, normalizeCyr(artist), stripFeat(artist)})
+	albumAlts := uniqNonEmpty([]string{album, normalizeCyr(album), stripParens(album)})
+
+	for _, a := range artistAlts {
+		for _, al := range albumAlts {
+			id, title, date, e := c.searchReleaseFields(a, al)
+			if e != nil {
+				err = e
+				continue
+			}
+			if id != "" {
+				return id, title, date, nil
+			}
+		}
+	}
+	// fallback fuzzy (free text)
+	return c.searchReleaseFuzzy(artist, album)
+}
+
+func (c *Client) searchReleaseFields(artist, album string) (releaseID, releaseTitle, releaseDate string, err error) {
 	c.throttle()
-	// Use official Lucene fields that work well with non-latin (incl. Cyrillic).
-	// See MusicBrainz search syntax: release:"..." artist:"..."
 	q := fmt.Sprintf(`release:"%s" AND artist:"%s"`, quoteMB(album), quoteMB(artist))
 	u := "https://musicbrainz.org/ws/2/release/?query=" + url.QueryEscape(q) + "&fmt=json&limit=3"
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
@@ -75,10 +96,9 @@ func (c *Client) SearchRelease(artist, album string) (releaseID, releaseTitle, r
 		return "", "", "", err
 	}
 	if len(out.Releases) == 0 {
-		return c.searchReleaseFuzzy(artist, album)
+		return "", "", "", nil
 	}
 	r0 := out.Releases[0]
-	// try parse date as string
 	_ = json.Unmarshal(r0.Date, &releaseDate)
 	return r0.ID, r0.Title, releaseDate, nil
 }
@@ -90,6 +110,50 @@ func quoteMB(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	return s
+}
+
+func normalizeCyr(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, "ё", "е")
+	return s
+}
+
+func stripParens(s string) string {
+	if i := strings.IndexAny(s, "(["); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+func stripFeat(s string) string {
+	ls := strings.ToLower(s)
+	for _, k := range []string{" feat.", " ft.", " featuring "} {
+		if i := strings.Index(ls, k); i >= 0 {
+			return strings.TrimSpace(s[:i])
+		}
+	}
+	return s
+}
+
+func normalizePerson(s string) string { return strings.TrimSpace(s) }
+func normalizeTitle(s string) string  { return strings.TrimSpace(s) }
+
+func uniqNonEmpty(in []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		k := strings.ToLower(s)
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 func (c *Client) searchReleaseFuzzy(artist, album string) (releaseID, releaseTitle, releaseDate string, err error) {

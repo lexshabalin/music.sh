@@ -83,11 +83,14 @@ export function Library() {
       <div className="grid">
         {albums.map((a) => (
           <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
-            <div className="card">
+            <div className="card album-tile">
               {a.coverUrl ? <img className="album-art" src={lib.coverUrl(a.id)} alt="" /> : <div className="album-art" />}
-              <div style={{ marginTop: 6, fontSize: "0.9rem" }}>{a.title}</div>
-              <div className="muted" style={{ fontSize: "0.8rem" }}>
-                {a.artistName || "—"}
+              <div className="album-meta">
+                <div className="album-title">{a.title}</div>
+                <div className="album-sub">
+                  <span>{a.artistName || "—"}</span>
+                  {a.year ? <span className="album-year">{a.year}</span> : null}
+                </div>
               </div>
             </div>
           </Link>

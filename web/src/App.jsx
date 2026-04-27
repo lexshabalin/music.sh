@@ -10,6 +10,7 @@ import { Likes } from "./pages/Likes";
 import { Register } from "./pages/Register";
 import { Artists } from "./pages/Artists";
 import { Albums } from "./pages/Albums";
+import { Artist } from "./pages/Artist";
 
 function fmtTime(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "0:00";
@@ -232,6 +233,10 @@ export function App() {
           <Route
             path="/artists"
             element={!getToken() ? <Navigate to="/login" replace /> : <Artists />}
+          />
+          <Route
+            path="/artist/:id"
+            element={!getToken() ? <Navigate to="/login" replace /> : <Artist />}
           />
           <Route
             path="/albums"

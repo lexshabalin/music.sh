@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { lib } from "../api";
 
 export function Artists() {
@@ -28,8 +29,10 @@ export function Artists() {
       <ul className="plain-list">
         {list.map((a) => (
           <li key={a.id}>
-            <span>{a.name}</span>
-            <span className="muted"> </span>
+            <Link to={"/artist/" + a.id} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
+              {a.name}
+            </Link>
+            <span className="muted">Albums →</span>
           </li>
         ))}
       </ul>
