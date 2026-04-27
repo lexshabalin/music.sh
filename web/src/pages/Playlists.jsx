@@ -11,7 +11,7 @@ export function Playlists() {
       .playlists()
       .then((x) => {
         setErr("");
-        setList(x);
+        setList(Array.isArray(x) ? x : []);
       })
       .catch((e) => setErr(e.message || "error"));
   useEffect(() => {
@@ -62,7 +62,7 @@ function PlaylistView({ id }) {
       .playlist(id)
       .then((x) => {
         setErr("");
-        setData(x);
+        setData(x && typeof x === "object" ? x : { name: "", tracks: [] });
       })
       .catch((e) => setErr(e.message || "error"));
   useEffect(() => {

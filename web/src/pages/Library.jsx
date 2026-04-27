@@ -8,7 +8,10 @@ export function Library() {
   const [scanning, setScan] = useState(false);
   const [msg, setMsg] = useState("");
   const load = () => {
-    lib.albums(q).then(setA).catch((e) => setMsg(e.message));
+    lib
+      .albums(q)
+      .then((x) => setA(Array.isArray(x) ? x : []))
+      .catch((e) => setMsg(e.message));
   };
   useEffect(() => {
     const t = setTimeout(load, 200);

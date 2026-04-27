@@ -74,9 +74,6 @@ function Shell({ children }) {
           <button className="ghost" type="button" onClick={p.next} title="Next">
             ▶
           </button>
-          <div className="muted" style={{ maxWidth: "200px" }}>
-            {p.current.label}
-          </div>
           <div className="muted" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             Vol
             <input
@@ -99,6 +96,9 @@ function Shell({ children }) {
             src={p.current.url}
             onEnded={() => p.next()}
           />
+          <div className="muted" style={{ maxWidth: "240px", marginLeft: "auto" }}>
+            {p.current.label}
+          </div>
         </div>
       ) : null}
     </>

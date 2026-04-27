@@ -12,7 +12,7 @@ export function Album() {
   const load = () => {
     lib
       .tracks("", id)
-      .then(setTr)
+      .then((x) => setTr(Array.isArray(x) ? x : []))
       .catch(() => setTr([]));
     lib
       .album(id)
@@ -20,7 +20,7 @@ export function Album() {
       .catch(() => setA(null));
     lib
       .likeIds()
-      .then(({ trackIds = [] }) => setLiked(new Set(trackIds)))
+      .then((r) => setLiked(new Set(Array.isArray(r?.trackIds) ? r.trackIds : [])))
       .catch(() => setLiked(new Set()));
   };
   useEffect(() => {

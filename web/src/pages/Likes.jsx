@@ -6,7 +6,8 @@ export function Likes() {
   const [tracks, setT] = useState([]);
   const p = usePlayer();
   const load = async () => {
-    const { trackIds = [] } = await lib.likeIds();
+    const res = await lib.likeIds();
+    const trackIds = Array.isArray(res?.trackIds) ? res.trackIds : [];
     const t = await Promise.all(trackIds.map((id) => lib.track(id).catch(() => null)));
     setT(t.filter(Boolean));
   };
