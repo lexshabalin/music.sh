@@ -19,6 +19,15 @@ export function PlayerProvider({ children }) {
       setIdx(typeof startIndex === "number" ? startIndex : 0);
     };
     const playOne = (id, label, url) => playQueue([{ id, label, url }], 0);
+    const playNext = (item) => {
+      if (!item) return;
+      setQueue((q) => {
+        const base = Array.isArray(q) ? q.slice() : [];
+        const insertAt = idx >= 0 ? idx + 1 : base.length;
+        base.splice(insertAt, 0, item);
+        return base;
+      });
+    };
     const next = () => setIdx((i) => (queue.length ? Math.min(queue.length - 1, i + 1) : -1));
     const prev = () => setIdx((i) => (queue.length ? Math.max(0, i - 1) : -1));
     const setVol = (v) => {
@@ -26,7 +35,7 @@ export function PlayerProvider({ children }) {
       setVolume(vv);
       applyVolume(vv);
     };
-    return { ref, queue, index: idx, current, volume, playQueue, playOne, next, prev, setVolume: setVol };
+    return { ref, queue, index: idx, current, volume, playQueue, playOne, playNext, next, prev, setVolume: setVol };
   }, [queue, idx, current, volume]);
 
   // keep element volume in sync
@@ -46,6 +55,7 @@ export function usePlayer() {
       volume: 1,
       playQueue: () => {},
       playOne: () => {},
+      playNext: () => {},
       next: () => {},
       prev: () => {},
       setVolume: () => {},

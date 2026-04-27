@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { lib } from "../api";
 import { usePlayer } from "../usePlayer";
+import { TrackRow } from "../components/TrackMenu";
 
 export function Likes() {
   const [tracks, setT] = useState([]);
   const p = usePlayer();
+  const likedSet = new Set(tracks.map((t) => t.id));
   const load = async () => {
     const res = await lib.likeIds();
     const trackIds = Array.isArray(res?.trackIds) ? res.trackIds : [];
@@ -24,6 +26,19 @@ export function Likes() {
     p.playQueue(items, startIdx);
   };
 
+  const playNext = (t) => {
+    const item = {
+      id: t.id,
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      url: lib.streamUrl(t.id),
+    };
+    if (!p.current) {
+      p.playQueue([item], 0);
+      return;
+    }
+    p.playNext(item);
+  };
+
   const unlike = async (trackId) => {
     await lib.unlike(trackId);
     setT((prev) => prev.filter((x) => x.id !== trackId));
@@ -34,26 +49,16 @@ export function Likes() {
       <h2>Likes</h2>
       <ul className="plain-list">
         {tracks.map((t, i) => (
-          <li key={t.id}>
-            <span>
-              {t.artist ? t.artist.name + " — " : ""}
-              {t.title}
-            </span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button type="button" onClick={() => playAt(i)}>
-                Play
-              </button>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => unlike(t.id)}
-                title="Unlike"
-                style={{ color: "tomato", borderColor: "tomato" }}
-              >
-                ♥
-              </button>
-            </div>
-          </li>
+          <TrackRow
+            key={t.id}
+            track={t}
+            index={i}
+            onPlayAt={(idx) => playAt(idx)}
+            onPlayNext={(trk) => playNext(trk)}
+            isLiked={likedSet.has(t.id)}
+            onToggleLike={() => unlike(t.id)}
+            label={`${t.artist ? t.artist.name + " — " : ""}${t.title || "Untitled"}`}
+          />
         ))}
       </ul>
     </div>

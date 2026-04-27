@@ -52,7 +52,8 @@ export const lib = {
   },
   playlists: () => req("/api/playlists"),
   playlist: (id) => req("/api/playlists/" + id),
-  createPl: (name) => req("/api/playlists", { method: "POST", body: JSON.stringify({ name }) }),
+  createPl: (name, description) =>
+    req("/api/playlists", { method: "POST", body: JSON.stringify({ name, description: description || undefined }) }),
   addToPl: (plId, trackId) => req("/api/playlists/" + plId + "/tracks", { method: "POST", body: JSON.stringify({ trackId }) }),
   likeIds: () => req("/api/likes"),
   like: (trackId) => req("/api/likes", { method: "POST", body: JSON.stringify({ trackId }) }),

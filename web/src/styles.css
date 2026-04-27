@@ -97,6 +97,40 @@ nav a:hover {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
 }
+
+.track-row {
+  gap: 12px;
+}
+.track-title {
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-title:hover {
+  color: var(--text);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.modal {
+  width: min(520px, 95vw);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
 .player {
   position: fixed;
   left: 0;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { lib } from "../api";
 import { usePlayer } from "../usePlayer";
+import { TrackRow } from "../components/TrackMenu";
 
 export function Album() {
   const { id } = useParams();
@@ -33,6 +34,19 @@ export function Album() {
       url: lib.streamUrl(t.id),
     }));
     p.playQueue(items, startIdx);
+  };
+
+  const playNext = (t) => {
+    const item = {
+      id: t.id,
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      url: lib.streamUrl(t.id),
+    };
+    if (!p.current) {
+      p.playQueue([item], 0);
+      return;
+    }
+    p.playNext(item);
   };
   const toggleLike = async (trackId) => {
     const on = liked.has(trackId);
@@ -69,27 +83,18 @@ export function Album() {
       </div>
       <ul className="plain-list">
         {tr.map((t, i) => (
-          <li key={t.id}>
-            <span>
-              {t.trackNo != null ? t.trackNo + ". " : ""}
-              {t.title || "Untitled"}{" "}
-              {t.durationMs != null ? <span className="muted">({Math.floor(t.durationMs / 1000)}s)</span> : null}
-            </span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <button type="button" onClick={() => playAt(i)}>
-                Play
-              </button>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => toggleLike(t.id)}
-                title="Like"
-                style={{ color: liked.has(t.id) ? "tomato" : undefined, borderColor: liked.has(t.id) ? "tomato" : undefined }}
-              >
-                ♥
-              </button>
-            </div>
-          </li>
+          <TrackRow
+            key={t.id}
+            track={t}
+            index={i}
+            onPlayAt={(idx) => playAt(idx)}
+            onPlayNext={(trk) => playNext(trk)}
+            isLiked={liked.has(t.id)}
+            onToggleLike={(id2) => toggleLike(id2)}
+            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || "Untitled"}${
+              t.durationMs != null ? ` (${Math.floor(t.durationMs / 1000)}s)` : ""
+            }`}
+          />
         ))}
       </ul>
     </div>

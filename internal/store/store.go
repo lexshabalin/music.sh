@@ -471,21 +471,28 @@ func (d *DB) IsLiked(ctx context.Context, userID, trackID uuid.UUID) (bool, erro
 
 // --- Playlists ---
 
-func (d *DB) CreatePlaylist(ctx context.Context, id, userID uuid.UUID, name string) (Playlist, error) {
+func (d *DB) CreatePlaylist(ctx context.Context, id, userID uuid.UUID, name string, description *string) (Playlist, error) {
 	now := time.Now()
-	_, err := d.Pool.Exec(ctx, `INSERT INTO playlists (id, user_id, name, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)`,
-		id, userID, name, now, now)
+	_, err := d.Pool.Exec(ctx, `INSERT INTO playlists (id, user_id, name, description, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+		id, userID, name, description, now, now)
 	if err != nil {
 		return Playlist{}, err
 	}
-	return Playlist{ID: id, Name: name, CreatedAt: now, UpdatedAt: now}, nil
+	return Playlist{ID: id, Name: name, Description: description, CreatedAt: now, UpdatedAt: now}, nil
 }
 
-func (d *DB) UpdatePlaylist(ctx context.Context, userID, plID uuid.UUID, name *string) error {
-	if name == nil {
+func (d *DB) UpdatePlaylist(ctx context.Context, userID, plID uuid.UUID, name *string, description *string) error {
+	if name == nil && description == nil {
 		return nil
 	}
-	res, err := d.Pool.Exec(ctx, `UPDATE playlists SET name = $3, updated_at = now() WHERE id = $1 AND user_id = $2`, plID, userID, *name)
+	res, err := d.Pool.Exec(ctx, `
+		UPDATE playlists
+		SET
+			name = COALESCE($3, name),
+			description = COALESCE($4, description),
+			updated_at = now()
+		WHERE id = $1 AND user_id = $2
+	`, plID, userID, name, description)
 	if err != nil {
 		return err
 	}
@@ -501,7 +508,7 @@ func (d *DB) DeletePlaylist(ctx context.Context, userID, plID uuid.UUID) error {
 }
 
 func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID) ([]Playlist, error) {
-	rows, err := d.Pool.Query(ctx, `SELECT id, name, created_at, updated_at FROM playlists WHERE user_id = $1 ORDER BY name`, userID)
+	rows, err := d.Pool.Query(ctx, `SELECT id, name, description, created_at, updated_at FROM playlists WHERE user_id = $1 ORDER BY name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -509,8 +516,13 @@ func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID) ([]Playlist, e
 	var out []Playlist
 	for rows.Next() {
 		var p Playlist
-		if err = rows.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		var desc sql.NullString
+		if err = rows.Scan(&p.ID, &p.Name, &desc, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if desc.Valid {
+			s := desc.String
+			p.Description = &s
 		}
 		out = append(out, p)
 	}
@@ -519,11 +531,16 @@ func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID) ([]Playlist, e
 
 func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist, []Track, error) {
 	var p Playlist
-	err := d.Pool.QueryRow(ctx, `SELECT id, name, created_at, updated_at FROM playlists WHERE id = $1 AND user_id = $2`, plID, userID).Scan(
-		&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt,
+	var desc sql.NullString
+	err := d.Pool.QueryRow(ctx, `SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = $1 AND user_id = $2`, plID, userID).Scan(
+		&p.ID, &p.Name, &desc, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return p, nil, err
+	}
+	if desc.Valid {
+		s := desc.String
+		p.Description = &s
 	}
 	rows, err := d.Pool.Query(ctx, `
 		SELECT

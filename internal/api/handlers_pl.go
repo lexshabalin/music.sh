@@ -10,10 +10,12 @@ import (
 )
 
 type plCreate struct {
-	Name string `json:"name"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
 }
 type plPatch struct {
-	Name *string `json:"name"`
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
 }
 type plAddTrack struct {
 	TrackID uuid.UUID `json:"trackId"`
@@ -36,7 +38,7 @@ func (a *App) createPl(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "name required")
 		return
 	}
-	p, err := a.DB.CreatePlaylist(r.Context(), uuid.New(), uid, b.Name)
+	p, err := a.DB.CreatePlaylist(r.Context(), uuid.New(), uid, b.Name, b.Description)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
@@ -68,7 +70,7 @@ func (a *App) patchPl(w http.ResponseWriter, r *http.Request) {
 	}
 	var b plPatch
 	_ = ReadJSON(r, &b)
-	if err := a.DB.UpdatePlaylist(r.Context(), uid, id, b.Name); err != nil {
+	if err := a.DB.UpdatePlaylist(r.Context(), uid, id, b.Name, b.Description); err != nil {
 		JSONError(w, 400, "update")
 		return
 	}
