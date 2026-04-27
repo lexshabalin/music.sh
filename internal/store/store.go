@@ -18,16 +18,14 @@ type DB struct {
 
 // UserAuthByEmail returns auth fields needed for login.
 func (d *DB) UserAuthByEmail(ctx context.Context, email string) (id uuid.UUID, emailOut string, username *string, displayName *string, hash string, err error) {
-	var id uuid.UUID
-	var hash, emailOut string
 	var uname sql.NullString
 	var name sql.NullString
-	err := d.Pool.QueryRow(ctx,
+	err = d.Pool.QueryRow(ctx,
 		`SELECT id, email, username, display_name, password_hash FROM users WHERE email = $1`,
 		strings.ToLower(strings.TrimSpace(email)),
 	).Scan(&id, &emailOut, &uname, &name, &hash)
 	if err != nil {
-		return uuid.Nil, "", nil, "", err
+		return uuid.Nil, "", nil, nil, "", err
 	}
 	if uname.Valid && strings.TrimSpace(uname.String) != "" {
 		s := uname.String
