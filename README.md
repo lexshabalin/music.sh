@@ -21,7 +21,7 @@ Self‑hosted веб‑приложение для прослушивания м
    docker compose up --build
    ```
 
-3. Веб-интерфейс: [http://localhost:8080](http://localhost:8080)  
+3. Веб-интерфейс: [http://localhost:8180](http://localhost:8180)  
 4. Создайте учётку через **Register**, затем **Scan library** на главной.
 
 `JWT_SECRET` в `docker-compose.yml` **обязательно смените** для публичного сервера.

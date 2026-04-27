@@ -6,6 +6,8 @@ export function PlayerProvider({ children }) {
   const [queue, setQueue] = useState([]);
   const [idx, setIdx] = useState(-1);
   const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [lastVolume, setLastVolume] = useState(1);
 
   const current = idx >= 0 && idx < queue.length ? queue[idx] : null;
 
@@ -13,6 +15,10 @@ export function PlayerProvider({ children }) {
     const applyVolume = (v) => {
       const el = ref.current;
       if (el) el.volume = v;
+    };
+    const applyMuted = (m) => {
+      const el = ref.current;
+      if (el) el.muted = m;
     };
     const playQueue = (items, startIndex) => {
       setQueue(items || []);
@@ -33,14 +39,50 @@ export function PlayerProvider({ children }) {
     const setVol = (v) => {
       const vv = Math.max(0, Math.min(1, v));
       setVolume(vv);
+      if (vv > 0) setLastVolume(vv);
       applyVolume(vv);
     };
-    return { ref, queue, index: idx, current, volume, playQueue, playOne, playNext, next, prev, setVolume: setVol };
-  }, [queue, idx, current, volume]);
+    const toggleMute = () => {
+      setMuted((m) => {
+        const nextM = !m;
+        applyMuted(nextM);
+        if (!nextM) {
+          // restore volume to last non-zero
+          setVol(lastVolume || 1);
+        }
+        return nextM;
+      });
+    };
+    const setMute = (m) => {
+      const mm = !!m;
+      setMuted(mm);
+      applyMuted(mm);
+      if (!mm) setVol(lastVolume || volume || 1);
+    };
+    return {
+      ref,
+      queue,
+      index: idx,
+      current,
+      volume,
+      muted,
+      playQueue,
+      playOne,
+      playNext,
+      next,
+      prev,
+      setVolume: setVol,
+      toggleMute,
+      setMute,
+    };
+  }, [queue, idx, current, volume, muted, lastVolume]);
 
   // keep element volume in sync
   if (ref.current && ref.current.volume !== volume) {
     ref.current.volume = volume;
+  }
+  if (ref.current && ref.current.muted !== muted) {
+    ref.current.muted = muted;
   }
   const value = api;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -53,12 +95,15 @@ export function usePlayer() {
       index: -1,
       current: null,
       volume: 1,
+      muted: false,
       playQueue: () => {},
       playOne: () => {},
       playNext: () => {},
       next: () => {},
       prev: () => {},
       setVolume: () => {},
+      toggleMute: () => {},
+      setMute: () => {},
     }
   );
 }

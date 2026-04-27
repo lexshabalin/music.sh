@@ -11,6 +11,8 @@ import { Register } from "./pages/Register";
 import { Artists } from "./pages/Artists";
 import { Albums } from "./pages/Albums";
 import { Artist } from "./pages/Artist";
+import { lib } from "./api";
+import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 
 function fmtTime(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "0:00";
@@ -55,6 +57,8 @@ function Shell({ children }) {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [curT, setCurT] = React.useState(0);
   const [dur, setDur] = React.useState(0);
+  const [liked, setLiked] = React.useState(false);
+  const [showPlModal, setShowPlModal] = React.useState(false);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -85,6 +89,24 @@ function Shell({ children }) {
       el.removeEventListener("loadedmetadata", onMeta);
       el.removeEventListener("durationchange", onMeta);
       el.removeEventListener("ended", onEnded);
+    };
+  }, [p.current?.id]);
+
+  React.useEffect(() => {
+    let stop = false;
+    const check = async () => {
+      try {
+        if (!p.current?.id) return;
+        const r = await lib.likeIds();
+        if (stop) return;
+        setLiked(Array.isArray(r?.trackIds) && r.trackIds.includes(p.current.id));
+      } catch (_) {
+        if (!stop) setLiked(false);
+      }
+    };
+    check();
+    return () => {
+      stop = true;
     };
   }, [p.current?.id]);
 
@@ -120,12 +142,12 @@ function Shell({ children }) {
       </div>
       {p.current && getToken() ? (
         <div className="player">
-          <button className="ghost" type="button" onClick={p.prev} title="Previous">
-            ◀
+          <button className="player-skip" type="button" onClick={p.prev} title="Rewind">
+            ⏪
           </button>
 
           <button
-            className="ghost"
+            className="player-play"
             type="button"
             onClick={() => {
               const el = p.ref.current;
@@ -135,11 +157,20 @@ function Shell({ children }) {
             }}
             title={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? "❚❚" : "►"}
+            {isPlaying ? "⏸" : "▶"}
           </button>
 
-          <button className="ghost" type="button" onClick={p.next} title="Next">
-            ▶
+          <button className="player-skip" type="button" onClick={p.next} title="Fast-forward">
+            ⏩
+          </button>
+
+          <button
+            className="player-skip"
+            type="button"
+            onClick={p.toggleMute}
+            title={p.muted ? "Unmute" : "Mute"}
+          >
+            {p.muted ? "🔇" : "🔊"}
           </button>
 
           <input
@@ -167,6 +198,27 @@ function Shell({ children }) {
               <div className="nowplaying-line2">{p.current.album || ""}</div>
             </div>
           </div>
+
+          <button
+            className="ghost"
+            type="button"
+            title={liked ? "Unlike" : "Like"}
+            onClick={async () => {
+              try {
+                if (!p.current?.id) return;
+                if (liked) await lib.unlike(p.current.id);
+                else await lib.like(p.current.id);
+                setLiked(!liked);
+              } catch (_) {}
+            }}
+            style={{ color: liked ? "tomato" : undefined, borderColor: liked ? "tomato" : undefined }}
+          >
+            ♥
+          </button>
+
+          <button className="ghost" type="button" title="Add to playlist" onClick={() => setShowPlModal(true)}>
+            ＋
+          </button>
 
           <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
             {fmtTime(curT)}
@@ -202,6 +254,9 @@ function Shell({ children }) {
             src={p.current.url}
           />
         </div>
+      ) : null}
+      {showPlModal && p.current?.id ? (
+        <PlayerPlaylistModal trackId={p.current.id} onClose={() => setShowPlModal(false)} />
       ) : null}
     </>
   );
