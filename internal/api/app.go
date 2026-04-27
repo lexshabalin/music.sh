@@ -92,6 +92,12 @@ func middlewareUser(a *App) func(http.Handler) http.Handler {
 				JSONError(w, 401, "unauthorized")
 				return
 			}
+			// Token can be valid while the user row is gone (e.g. DB reset).
+			// Treat that as unauthorized so the UI can re-login.
+			if _, err := a.DB.UserByID(r.Context(), uid); err != nil {
+				JSONError(w, 401, "unauthorized")
+				return
+			}
 			next.ServeHTTP(w, r.WithContext(withUserID(r.Context(), uid)))
 		})
 	}
