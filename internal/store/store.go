@@ -1,0 +1,795 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type DB struct {
+	Pool *pgxpool.Pool
+}
+
+func (d *DB) UserByEmail(ctx context.Context, email string) (uuid.UUID, string, *string, string, error) {
+	var id uuid.UUID
+	var hash, emailOut string
+	var name sql.NullString
+	err := d.Pool.QueryRow(ctx,
+		`SELECT id, email, display_name, password_hash FROM users WHERE email = $1`, strings.ToLower(strings.TrimSpace(email)),
+	).Scan(&id, &emailOut, &name, &hash)
+	if err != nil {
+		return uuid.Nil, "", nil, "", err
+	}
+	if !name.Valid {
+		return id, emailOut, nil, hash, nil
+	}
+	s := name.String
+	return id, emailOut, &s, hash, nil
+}
+
+func (d *DB) CreateUser(ctx context.Context, id uuid.UUID, email, hash string, name *string) error {
+	_, err := d.Pool.Exec(ctx,
+		`INSERT INTO users (id, email, password_hash, display_name) VALUES ($1, $2, $3, $4)`,
+		id, strings.ToLower(strings.TrimSpace(email)), hash, name,
+	)
+	return err
+}
+
+func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	var u User
+	var name sql.NullString
+	err := d.Pool.QueryRow(ctx,
+		`SELECT id, email, display_name, created_at FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &name, &u.CreatedAt)
+	if err != nil {
+		return u, err
+	}
+	if name.Valid {
+		s := name.String
+		u.DisplayName = &s
+	}
+	return u, nil
+}
+
+// FindOrCreateArtist returns an artist by exact name (case-insensitive first look).
+func (d *DB) FindOrCreateArtist(ctx context.Context, name string) (uuid.UUID, error) {
+	if strings.TrimSpace(name) == "" {
+		name = "Unknown"
+	}
+	var id uuid.UUID
+	err := d.Pool.QueryRow(ctx, `SELECT id FROM artists WHERE lower(name) = lower($1) LIMIT 1`, name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != pgx.ErrNoRows {
+		return uuid.UUID{}, err
+	}
+	aid := uuid.New()
+	_, err = d.Pool.Exec(ctx,
+		`INSERT INTO artists (id, name, name_search) VALUES ($1, $2, $3)`,
+		aid, name, normalizeSearch(name),
+	)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	return aid, nil
+}
+
+func (d *DB) FindOrCreateAlbum(ctx context.Context, artistID *uuid.UUID, title string, year *int) (uuid.UUID, error) {
+	t := strings.TrimSpace(title)
+	if t == "" {
+		t = "Unknown"
+	}
+	ts := normalizeSearch(t)
+	// find existing: same title + same artist
+	if artistID != nil {
+		var id uuid.UUID
+		err := d.Pool.QueryRow(ctx, `
+			SELECT id FROM albums
+			WHERE artist_id = $1 AND title_search = $2
+			LIMIT 1
+		`, *artistID, ts).Scan(&id)
+		if err == nil {
+			return id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return uuid.UUID{}, err
+		}
+	} else {
+		var id uuid.UUID
+		err := d.Pool.QueryRow(ctx, `
+			SELECT id FROM albums WHERE artist_id IS NULL AND title_search = $1 LIMIT 1
+		`, ts).Scan(&id)
+		if err == nil {
+			return id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return uuid.UUID{}, err
+		}
+	}
+	aid := uuid.New()
+	_, err := d.Pool.Exec(ctx, `
+		INSERT INTO albums (id, artist_id, title, title_search, year) VALUES ($1, $2, $3, $4, $5)
+	`, aid, artistID, t, ts, year)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	return aid, nil
+}
+
+// UpsertTrack reads metadata from the scanner and inserts or updates a file row.
+func (d *DB) UpsertTrack(
+	ctx context.Context,
+	filePath string,
+	fileSize, mtimeNs int64,
+	artistName, albumTitle, title string,
+	trackNo, discNo, year *int,
+	durationMS *int,
+) (trackID, albumID uuid.UUID, isNewOrChanged bool, err error) {
+	artistID, err := d.FindOrCreateArtist(ctx, artistName)
+	if err != nil {
+		return
+	}
+	albID, err := d.FindOrCreateAlbum(ctx, &artistID, albumTitle, year)
+	if err != nil {
+		return
+	}
+	albumID = albID
+
+	trackTitle := strings.TrimSpace(title)
+	if trackTitle == "" {
+		trackTitle = baseNameNoExt(filePath)
+	}
+
+	var id uuid.UUID
+	var oldMtime int64
+	err2 := d.Pool.QueryRow(ctx, `SELECT id, file_mtime_ns FROM tracks WHERE file_path = $1`, filePath).Scan(&id, &oldMtime)
+	if err2 == nil {
+		trackID = id
+		if oldMtime == mtimeNs {
+			return trackID, albumID, false, nil
+		}
+		_, e := d.Pool.Exec(ctx, `
+			UPDATE tracks SET
+				file_size = $2, file_mtime_ns = $3, duration_ms = $4, title = $5,
+				track_no = $6, disc_no = $7, year = $8, album_id = $9, artist_id = $10
+			WHERE id = $1
+		`, id, fileSize, mtimeNs, durationMS, trackTitle, trackNo, discNo, year, albumID, artistID)
+		if e != nil {
+			err = e
+			return
+		}
+		return trackID, albumID, true, nil
+	}
+	if err2 != pgx.ErrNoRows {
+		return uuid.UUID{}, albumID, false, err2
+	}
+
+	trackID = uuid.New()
+	isNewOrChanged = true
+	_, err = d.Pool.Exec(ctx, `
+		INSERT INTO tracks (
+			id, file_path, file_size, file_mtime_ns, duration_ms, title, track_no, disc_no, year,
+			album_id, artist_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, trackNo, discNo, year, albumID, artistID)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// BaseName is filename without extension
+func BaseName(p string) string { return baseNameNoExt(p) }
+
+func baseNameNoExt(p string) string {
+	p = strings.ReplaceAll(p, "\\", "/")
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		p = p[i+1:]
+	}
+	if d := strings.LastIndex(p, "."); d > 0 {
+		p = p[:d]
+	}
+	return p
+}
+
+func (d *DB) SetAlbumCoverPath(ctx context.Context, albumID uuid.UUID, relPath string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE albums SET cover_path = $2 WHERE id = $1`, albumID, relPath)
+	return err
+}
+
+func (d *DB) SetMBReleaseID(ctx context.Context, albumID uuid.UUID, mbID string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE albums SET musicbrainz_release_id = $2 WHERE id = $1`, albumID, mbID)
+	return err
+}
+
+// --- Library queries ---
+
+func (d *DB) ListArtists(ctx context.Context, q string) ([]Artist, error) {
+	qn := "%" + normalizeSearch(q) + "%"
+	rows, err := d.Pool.Query(ctx, `
+		SELECT id, name, musicbrainz_id FROM artists
+		WHERE $1 = '' OR name ILIKE $2
+		ORDER BY name
+	`, strings.TrimSpace(q), qn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Artist
+	for rows.Next() {
+		var a Artist
+		var mb sql.NullString
+		if err = rows.Scan(&a.ID, &a.Name, &mb); err != nil {
+			return nil, err
+		}
+		if mb.Valid {
+			s := mb.String
+			a.MusicBrainzID = &s
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// GetAlbum returns one album row for the API
+func (d *DB) GetAlbum(ctx context.Context, id uuid.UUID) (Album, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT a.id, a.title, a.year, a.artist_id::text, ar.name, a.musicbrainz_release_id, a.cover_path
+		FROM albums a
+		LEFT JOIN artists ar ON a.artist_id = ar.id
+		WHERE a.id = $1
+	`, id)
+	if err != nil {
+		return Album{}, err
+	}
+	defer rows.Close()
+	list, err := scanAlbums(rows)
+	if err != nil {
+		return Album{}, err
+	}
+	if len(list) == 0 {
+		return Album{}, pgx.ErrNoRows
+	}
+	return list[0], nil
+}
+
+func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]Album, error) {
+	qs := strings.TrimSpace(q)
+	like := "%" + qs + "%"
+	rows, err := d.Pool.Query(ctx, `
+		SELECT a.id, a.title, a.year, a.artist_id::text, ar.name, a.musicbrainz_release_id, a.cover_path
+		FROM albums a
+		LEFT JOIN artists ar ON a.artist_id = ar.id
+		WHERE ($3::uuid IS NULL OR a.artist_id = $3)
+		  AND ($1 = '' OR a.title ILIKE $2 OR ar.name ILIKE $2)
+		ORDER BY ar.name NULLS LAST, a.title
+	`, qs, like, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAlbums(rows)
+}
+
+func scanAlbums(rows pgx.Rows) ([]Album, error) {
+	var out []Album
+	for rows.Next() {
+		var a Album
+		var y sql.NullInt64
+		var aid sql.NullString
+		var an sql.NullString
+		var mb, cp sql.NullString
+		if err := rows.Scan(&a.ID, &a.Title, &y, &aid, &an, &mb, &cp); err != nil {
+			return nil, err
+		}
+		if y.Valid {
+			yy := int(y.Int64)
+			a.Year = &yy
+		}
+		if aid.Valid && aid.String != "" {
+			uid, err := uuid.Parse(aid.String)
+			if err == nil {
+				a.ArtistID = &uid
+			}
+		}
+		if an.Valid {
+			s := an.String
+			a.ArtistName = &s
+		}
+		if cp.Valid {
+			s := cp.String
+			a.CoverPath = &s
+		}
+		if mb.Valid {
+			s := mb.String
+			a.MusicBrainzRelease = &s
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uuid.UUID) ([]Track, error) {
+	qs := strings.TrimSpace(query)
+	like := "%" + qs + "%"
+	rows, err := d.Pool.Query(ctx, `
+		SELECT
+			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.album_id::text, al.title,
+			t.artist_id::text, ar.name
+		FROM tracks t
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE ($1 = '' OR
+			(t.title ILIKE $2) OR
+			(al.title ILIKE $2) OR
+			(ar.name ILIKE $2) OR
+			(t.file_path ILIKE $2))
+		AND ($3::uuid IS NULL OR t.album_id = $3)
+		AND ($4::uuid IS NULL OR t.artist_id = $4)
+		ORDER BY ar.name NULLS LAST, al.title NULLS LAST, t.disc_no NULLS FIRST, t.track_no NULLS FIRST, t.title NULLS FIRST
+	`, qs, like, albumID, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTrackRows(rows)
+}
+
+func scanTrackRows(rows pgx.Rows) ([]Track, error) {
+	var out []Track
+	for rows.Next() {
+		var t Track
+		var title sql.NullString
+		var dms sql.NullInt32
+		var tno, dno, yr sql.NullInt32
+		var aID, alID sql.NullString
+		var alT, arN sql.NullString
+		if err := rows.Scan(&t.ID, &title, &dms, &tno, &dno, &yr, &aID, &alT, &alID, &arN); err != nil {
+			return nil, err
+		}
+		if title.Valid {
+			s := title.String
+			t.Title = &s
+		}
+		if dms.Valid {
+			x := int(dms.Int32)
+			t.DurationMs = &x
+		}
+		if tno.Valid {
+			x := int(tno.Int32)
+			t.TrackNo = &x
+		}
+		if dno.Valid {
+			x := int(dno.Int32)
+			t.DiscNo = &x
+		}
+		if yr.Valid {
+			x := int(yr.Int32)
+			t.Year = &x
+		}
+		if aID.Valid && aID.String != "" {
+			uid, err := uuid.Parse(aID.String)
+			if err == nil {
+				tt := ""
+				if alT.Valid {
+					tt = alT.String
+				}
+				t.Album = &TrackAlbum{ID: uid, Title: tt}
+			}
+		}
+		if alID.Valid && alID.String != "" {
+			uid, err := uuid.Parse(alID.String)
+			if err == nil {
+				nn := ""
+				if arN.Valid {
+					nn = arN.String
+				}
+				t.Artist = &TrackArtist{ID: uid, Name: nn}
+			}
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// GetTrackForStream returns file path, title for logging
+func (d *DB) GetTrackForStream(ctx context.Context, id uuid.UUID) (string, *string, error) {
+	var path string
+	var t sql.NullString
+	err := d.Pool.QueryRow(ctx, `SELECT file_path, title FROM tracks WHERE id = $1`, id).Scan(&path, &t)
+	if err != nil {
+		return "", nil, err
+	}
+	if t.Valid {
+		return path, &t.String, nil
+	}
+	return path, nil, nil
+}
+
+// Cover path for album (relative to data dir)
+func (d *DB) GetAlbumCoverPath(ctx context.Context, albumID uuid.UUID) (string, error) {
+	var cp sql.NullString
+	err := d.Pool.QueryRow(ctx, `SELECT cover_path FROM albums WHERE id = $1`, albumID).Scan(&cp)
+	if err != nil {
+		return "", err
+	}
+	if !cp.Valid {
+		return "", pgx.ErrNoRows
+	}
+	return cp.String, nil
+}
+
+// --- Likes ---
+
+func (d *DB) SetLike(ctx context.Context, userID, trackID uuid.UUID, on bool) error {
+	if on {
+		_, err := d.Pool.Exec(ctx, `
+			INSERT INTO track_likes (user_id, track_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
+		`, userID, trackID)
+		return err
+	}
+	_, err := d.Pool.Exec(ctx, `DELETE FROM track_likes WHERE user_id = $1 AND track_id = $2`, userID, trackID)
+	return err
+}
+
+func (d *DB) ListLikes(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := d.Pool.Query(ctx, `SELECT track_id FROM track_likes WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err = rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (d *DB) IsLiked(ctx context.Context, userID, trackID uuid.UUID) (bool, error) {
+	var n int
+	err := d.Pool.QueryRow(ctx, `SELECT 1 FROM track_likes WHERE user_id = $1 AND track_id = $2`, userID, trackID).Scan(&n)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// --- Playlists ---
+
+func (d *DB) CreatePlaylist(ctx context.Context, id, userID uuid.UUID, name string) (Playlist, error) {
+	now := time.Now()
+	_, err := d.Pool.Exec(ctx, `INSERT INTO playlists (id, user_id, name, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)`,
+		id, userID, name, now, now)
+	if err != nil {
+		return Playlist{}, err
+	}
+	return Playlist{ID: id, Name: name, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+func (d *DB) UpdatePlaylist(ctx context.Context, userID, plID uuid.UUID, name *string) error {
+	if name == nil {
+		return nil
+	}
+	res, err := d.Pool.Exec(ctx, `UPDATE playlists SET name = $3, updated_at = now() WHERE id = $1 AND user_id = $2`, plID, userID, *name)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("not found")
+	}
+	return nil
+}
+
+func (d *DB) DeletePlaylist(ctx context.Context, userID, plID uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `DELETE FROM playlists WHERE id = $1 AND user_id = $2`, plID, userID)
+	return err
+}
+
+func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID) ([]Playlist, error) {
+	rows, err := d.Pool.Query(ctx, `SELECT id, name, created_at, updated_at FROM playlists WHERE user_id = $1 ORDER BY name`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Playlist
+	for rows.Next() {
+		var p Playlist
+		if err = rows.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist, []Track, error) {
+	var p Playlist
+	err := d.Pool.QueryRow(ctx, `SELECT id, name, created_at, updated_at FROM playlists WHERE id = $1 AND user_id = $2`, plID, userID).Scan(
+		&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		return p, nil, err
+	}
+	rows, err := d.Pool.Query(ctx, `
+		SELECT
+			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.album_id::text, al.title, t.artist_id::text, ar.name, pt.position
+		FROM playlist_tracks pt
+		JOIN tracks t ON pt.track_id = t.id
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE pt.playlist_id = $1
+		ORDER BY pt.position
+	`, plID)
+	if err != nil {
+		return p, nil, err
+	}
+	defer rows.Close()
+	var tr []Track
+	for rows.Next() {
+		var t Track
+		var title sql.NullString
+		var dms sql.NullInt32
+		var tno, dno, yr sql.NullInt32
+		var aID, alID sql.NullString
+		var alT, arN sql.NullString
+		var pos int
+		if err = rows.Scan(&t.ID, &title, &dms, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &pos); err != nil {
+			return p, nil, err
+		}
+		if title.Valid {
+			s := title.String
+			t.Title = &s
+		}
+		if dms.Valid {
+			x := int(dms.Int32)
+			t.DurationMs = &x
+		}
+		if tno.Valid {
+			x := int(tno.Int32)
+			t.TrackNo = &x
+		}
+		if dno.Valid {
+			x := int(dno.Int32)
+			t.DiscNo = &x
+		}
+		if yr.Valid {
+			x := int(yr.Int32)
+			t.Year = &x
+		}
+		if aID.Valid && aID.String != "" {
+			uid, errU := uuid.Parse(aID.String)
+			if errU == nil {
+				tt := ""
+				if alT.Valid {
+					tt = alT.String
+				}
+				t.Album = &TrackAlbum{ID: uid, Title: tt}
+			}
+		}
+		if alID.Valid && alID.String != "" {
+			uid, errU := uuid.Parse(alID.String)
+			if errU == nil {
+				nn := ""
+				if arN.Valid {
+					nn = arN.String
+				}
+				t.Artist = &TrackArtist{ID: uid, Name: nn}
+			}
+		}
+		tr = append(tr, t)
+	}
+	return p, tr, rows.Err()
+}
+
+// AddToPlaylist appends a track at the end, or no-op if already in playlist.
+func (d *DB) AddToPlaylist(ctx context.Context, userID, plID, trackID uuid.UUID) error {
+	var ok int
+	if err := d.Pool.QueryRow(ctx, `SELECT 1 FROM playlists WHERE id = $1 AND user_id = $2`, plID, userID).Scan(&ok); err != nil {
+		return err
+	}
+	var pos int
+	if err := d.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_tracks WHERE playlist_id = $1`, plID).Scan(&pos); err != nil {
+		return err
+	}
+	_, err := d.Pool.Exec(ctx, `INSERT INTO playlist_tracks (id, playlist_id, track_id, position) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (playlist_id, track_id) DO NOTHING`,
+		uuid.New(), plID, trackID, pos)
+	return err
+}
+
+// RemoveFromPlaylist drops a track from a playlist.
+func (d *DB) RemoveFromPlaylist(ctx context.Context, userID, plID, trackID uuid.UUID) error {
+	res, err := d.Pool.Exec(ctx, `DELETE FROM playlist_tracks pt
+		USING playlists p
+		WHERE p.id = pt.playlist_id AND p.user_id = $1 AND p.id = $2 AND pt.track_id = $3`,
+		userID, plID, trackID)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("not found")
+	}
+	return nil
+}
+
+// --- Jobs ---
+
+func (d *DB) EnqueueJob(ctx context.Context, id uuid.UUID, jtype string, payload string) error {
+	_, err := d.Pool.Exec(ctx, `INSERT INTO jobs (id, type, payload) VALUES ($1, $2, $3::jsonb)`, id, jtype, payload)
+	return err
+}
+
+// ClaimNextJob marks one pending job as running and returns it.
+func (d *DB) ClaimNextJob(ctx context.Context) (id uuid.UUID, jtype, payload string, err error) {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+	err = tx.QueryRow(ctx, `
+		WITH cte AS (
+			SELECT id FROM jobs
+			WHERE status = 'pending' AND run_after <= now()
+			ORDER BY created_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT 1
+		)
+		UPDATE jobs j SET status = 'running' FROM cte
+		WHERE j.id = cte.id
+		RETURNING j.id, j.type, j.payload::text
+	`).Scan(&id, &jtype, &payload)
+	if err == pgx.ErrNoRows {
+		return uuid.UUID{}, "", "", nil
+	}
+	if err != nil {
+		return
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return
+	}
+	committed = true
+	return
+}
+
+func (d *DB) CompleteJob(ctx context.Context, id uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET status = 'done' WHERE id = $1`, id)
+	return err
+}
+
+func (d *DB) FailJob(ctx context.Context, id uuid.UUID, msg string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET status = 'failed', last_error = $2, attempts = attempts + 1 WHERE id = $1`, id, msg)
+	return err
+}
+
+// GetAlbumByID for metadata worker
+func (d *DB) GetAlbumByID(ctx context.Context, id uuid.UUID) (title string, year *int, artistName string, err error) {
+	var y sql.NullInt32
+	var arn sql.NullString
+	err = d.Pool.QueryRow(ctx, `
+		SELECT a.title, a.year, ar.name
+		FROM albums a
+		LEFT JOIN artists ar ON a.artist_id = ar.id
+		WHERE a.id = $1
+	`, id).Scan(&title, &y, &arn)
+	if y.Valid {
+		v := int(y.Int32)
+		year = &v
+	}
+	if arn.Valid {
+		artistName = arn.String
+	}
+	return
+}
+
+// AlbumNeedsCover: true if no local cover
+func (d *DB) AlbumHasCover(ctx context.Context, id uuid.UUID) (bool, error) {
+	var cp sql.NullString
+	if err := d.Pool.QueryRow(ctx, `SELECT cover_path FROM albums WHERE id = $1`, id).Scan(&cp); err != nil {
+		return false, err
+	}
+	return cp.Valid && strings.TrimSpace(cp.String) != "", nil
+}
+
+// GetAlbumMbid returns stored MusicBrainz release id (if any).
+func (d *DB) GetAlbumMbid(ctx context.Context, id uuid.UUID) (string, error) {
+	var mb sql.NullString
+	err := d.Pool.QueryRow(ctx, `SELECT musicbrainz_release_id FROM albums WHERE id = $1`, id).Scan(&mb)
+	if err != nil {
+		return "", err
+	}
+	if !mb.Valid {
+		return "", nil
+	}
+	return mb.String, nil
+}
+
+// GetTrackByID for API single track
+func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT
+			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.album_id::text, al.title, t.artist_id::text, ar.name
+		FROM tracks t
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE t.id = $1
+	`, id)
+	if err != nil {
+		return Track{}, err
+	}
+	defer rows.Close()
+	list, err := scanTrackRows(rows)
+	if err != nil {
+		return Track{}, err
+	}
+	if len(list) == 0 {
+		return Track{}, pgx.ErrNoRows
+	}
+	return list[0], nil
+}
+
+// ListTracksByIds preserves order
+func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Track, error) {
+	if len(ids) == 0 {
+		return map[uuid.UUID]Track{}, nil
+	}
+	rows, err := d.Pool.Query(ctx, `
+		SELECT
+			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.album_id::text, al.title, t.artist_id::text, ar.name
+		FROM tracks t
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE t.id = ANY($1::uuid[])
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list, err := scanTrackRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[uuid.UUID]Track, len(list))
+	for i := range list {
+		m[list[i].ID] = list[i]
+	}
+	return m, nil
+}
+
+// ResetStuckRunningJobs requeues running jobs (e.g. after crash)
+func (d *DB) ResetStuckRunningJobs(ctx context.Context) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET status = 'pending' WHERE status = 'running'`)
+	return err
+}
+
+// CountPendingMetaJobForAlbum returns if a fetch_album job already exists
+func (d *DB) CountPendingMetaJobForAlbum(ctx context.Context, albumID uuid.UUID) (int, error) {
+	var c int
+	err := d.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM jobs
+		WHERE type = 'fetch_album' AND status IN ('pending', 'running') AND (payload->>'albumId')::uuid = $1
+	`, albumID).Scan(&c)
+	return c, err
+}
