@@ -27,7 +27,7 @@ func (a *App) listPl(w http.ResponseWriter, r *http.Request) {
 	list, err := a.DB.ListPlaylists(r.Context(), uid)
 	if err != nil {
 		log.Printf("list playlists db error: %v", err)
-		JSONError(w, 500, "db: "+err.Error())
+		JSONError(w, 500, "db")
 		return
 	}
 	JSON(w, 200, list)
@@ -43,7 +43,7 @@ func (a *App) createPl(w http.ResponseWriter, r *http.Request) {
 	p, err := a.DB.CreatePlaylist(r.Context(), uuid.New(), uid, b.Name, b.Description)
 	if err != nil {
 		log.Printf("create playlist db error: %v", err)
-		JSONError(w, 500, "db: "+err.Error())
+		JSONError(w, 500, "db")
 		return
 	}
 	JSON(w, 201, p)
@@ -75,7 +75,7 @@ func (a *App) patchPl(w http.ResponseWriter, r *http.Request) {
 	_ = ReadJSON(r, &b)
 	if err := a.DB.UpdatePlaylist(r.Context(), uid, id, b.Name, b.Description); err != nil {
 		log.Printf("patch playlist db error: %v", err)
-		JSONError(w, 400, "update: "+err.Error())
+		JSONError(w, 400, "update failed")
 		return
 	}
 	JSON(w, 200, map[string]any{"ok": true})

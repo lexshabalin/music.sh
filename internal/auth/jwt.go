@@ -45,5 +45,8 @@ func ParseToken(secret, tokenString string) (*Claims, error) {
 	if !ok || !t.Valid {
 		return nil, errors.New("invalid token")
 	}
+	if c.Issuer != Issuer {
+		return nil, errors.New("invalid token issuer")
+	}
 	return c, nil
 }

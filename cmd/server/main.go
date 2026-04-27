@@ -63,7 +63,16 @@ func main() {
 	}
 	go wh.Run(ctx)
 
-	s := &http.Server{Addr: cfg.HTTPAddr, Handler: h, ReadHeaderTimeout: 20 * time.Second, ReadTimeout: 0}
+	s := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           h,
+		ReadHeaderTimeout: 20 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		// Streaming endpoints can legitimately run longer; avoid breaking audio by keeping WriteTimeout disabled.
+		WriteTimeout: 0,
+		IdleTimeout:  60 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
 	go func() {
 		if err = s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)

@@ -121,7 +121,7 @@ func (a *App) stream(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "id")
 		return
 	}
-	_, err = a.parseUserIDFromRequest(r)
+	_, err = a.parseUserIDFromMediaRequest(r)
 	if err != nil {
 		JSONError(w, 401, "unauthorized")
 		return
@@ -140,7 +140,7 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "id")
 		return
 	}
-	_, err = a.parseUserIDFromRequest(r)
+	_, err = a.parseUserIDFromMediaRequest(r)
 	if err != nil {
 		JSONError(w, 401, "unauthorized")
 		return

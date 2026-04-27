@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"log"
+	"net"
 	"net/http"
 	"regexp"
+	"sync/atomic"
 	"sync"
 	"strings"
 	"time"
@@ -58,21 +61,30 @@ func (a *App) Handlers() http.Handler {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.RequestID)
-	r.Use(chimw.Logger)
-	if len(a.Orig) == 1 && a.Orig[0] == "*" {
-		c := cors.New(cors.Options{AllowedOrigins: []string{"*"}, AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"*"}, ExposedHeaders:   []string{"*"}, AllowCredentials: false})
-		r.Use(c.Handler)
-	} else {
-		c := cors.New(cors.Options{AllowedOrigins: a.Orig, AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"*"}, ExposedHeaders:   []string{"*"}, AllowCredentials: true, MaxAge: 86400})
+	r.Use(accessLogNoQuery())
+	r.Use(securityHeaders())
+
+	// CORS is opt-in. Default (no middleware) is safest for same-origin deployments.
+	if len(a.Orig) > 0 {
+		c := cors.New(cors.Options{
+			AllowedOrigins:   a.Orig,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Content-Type", "Authorization"},
+			ExposedHeaders:   []string{},
+			AllowCredentials: true,
+			MaxAge:           86400,
+		})
 		r.Use(c.Handler)
 	}
 
 	r.Get("/api/healthz", a.health)
 
-	r.Post("/api/auth/register", a.register)
-	r.Post("/api/auth/login", a.login)
+	// Rate-limit auth endpoints to reduce brute-force / abuse.
+	r.Group(func(g chi.Router) {
+		g.Use(rateLimitByIP(10, 5*time.Minute))
+		g.Post("/api/auth/register", a.register)
+		g.Post("/api/auth/login", a.login)
+	})
 	r.Get("/api/tracks/{id}/stream", a.stream) // may use ?token= for <audio>
 	r.Get("/api/albums/{id}/cover", a.albumCover)
 
@@ -98,6 +110,107 @@ func (a *App) Handlers() http.Handler {
 		g.Get("/api/library/scan/status", a.scanStatus)
 	})
 	return r
+}
+
+func accessLogNoQuery() func(http.Handler) http.Handler {
+	var seq uint64
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+			id := atomic.AddUint64(&seq, 1)
+			// Intentionally log only path (no query string) to avoid leaking secrets like ?token=.
+			ip := clientIP(r)
+			rid := chimw.GetReqID(r.Context())
+			log.Printf(
+				"req=%d rid=%s method=%s path=%s status=%d bytes=%d dur=%s ip=%s",
+				id,
+				rid,
+				r.Method,
+				r.URL.Path,
+				ww.Status(),
+				ww.BytesWritten(),
+				time.Since(start).Truncate(time.Millisecond),
+				ip,
+			)
+		})
+	}
+}
+
+func securityHeaders() func(http.Handler) http.Handler {
+	// Keep this compatible with the current app: no breaking CSP like 'unsafe-inline' removal yet.
+	// (The web UI uses static assets built by Vite; add stricter CSP later if you control all inline usage.)
+	const csp = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; media-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("Content-Security-Policy", csp)
+			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type ipLimiter struct {
+	mu    sync.Mutex
+	state map[string]*ipBucket
+	// cleanup is best-effort; keep it simple for self-hosted use.
+}
+
+type ipBucket struct {
+	tokens     int
+	lastRefill time.Time
+}
+
+func rateLimitByIP(burst int, refillEvery time.Duration) func(http.Handler) http.Handler {
+	l := &ipLimiter{state: map[string]*ipBucket{}}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := clientIP(r)
+			now := time.Now()
+			l.mu.Lock()
+			b, ok := l.state[ip]
+			if !ok {
+				b = &ipBucket{tokens: burst, lastRefill: now}
+				l.state[ip] = b
+			}
+			// refill 1 token per interval
+			elapsed := now.Sub(b.lastRefill)
+			if elapsed >= refillEvery {
+				add := int(elapsed / refillEvery)
+				if add > 0 {
+					b.tokens += add
+					if b.tokens > burst {
+						b.tokens = burst
+					}
+					b.lastRefill = b.lastRefill.Add(time.Duration(add) * refillEvery)
+				}
+			}
+			if b.tokens <= 0 {
+				l.mu.Unlock()
+				JSONError(w, 429, "too many requests")
+				return
+			}
+			b.tokens--
+			l.mu.Unlock()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil && host != "" {
+		return host
+	}
+	// If RemoteAddr has no port (or is malformed), fall back as-is.
+	if strings.TrimSpace(r.RemoteAddr) != "" {
+		return strings.TrimSpace(r.RemoteAddr)
+	}
+	return "unknown"
 }
 
 func middlewareUser(a *App) func(http.Handler) http.Handler {
@@ -190,6 +303,7 @@ func (a *App) register(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 500, "token")
 		return
 	}
+	setAuthCookie(w, r, tok, exp)
 	u, _ := a.DB.UserByID(r.Context(), id)
 	JSON(w, 201, tokenResp{Token: tok, ExpiresAt: exp, User: u})
 }
@@ -238,6 +352,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 500, "token")
 		return
 	}
+	setAuthCookie(w, r, tok, exp)
 	u, _ := a.DB.UserByID(r.Context(), uid)
 	JSON(w, 200, tokenResp{Token: tok, ExpiresAt: exp, User: u})
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -33,8 +34,21 @@ func (a *App) parseUserIDFromRequest(r *http.Request) (uuid.UUID, error) {
 	if strings.HasPrefix(strings.ToLower(h), "bearer ") {
 		return a.parseToken(strings.TrimSpace(h[7:]))
 	}
-	if t := r.URL.Query().Get("token"); t != "" {
-		return a.parseToken(t)
+	return uuid.UUID{}, errors.New("no token")
+}
+
+// parseUserIDFromMediaRequest authenticates stream/cover without leaking tokens in URL.
+// Supports:
+// - Authorization: Bearer <jwt> (preferred)
+// - HttpOnly cookie (set by /api/auth/login and /api/auth/register)
+func (a *App) parseUserIDFromMediaRequest(r *http.Request) (uuid.UUID, error) {
+	h := r.Header.Get("Authorization")
+	if strings.HasPrefix(strings.ToLower(h), "bearer ") {
+		return a.parseToken(strings.TrimSpace(h[7:]))
+	}
+	c, err := r.Cookie(authCookieName)
+	if err == nil && strings.TrimSpace(c.Value) != "" {
+		return a.parseToken(c.Value)
 	}
 	return uuid.UUID{}, errors.New("no token")
 }
@@ -45,4 +59,20 @@ func (a *App) parseToken(s string) (uuid.UUID, error) {
 		return uuid.UUID{}, err
 	}
 	return claims.UserID, nil
+}
+
+const authCookieName = "musicsh_at"
+
+func setAuthCookie(w http.ResponseWriter, r *http.Request, token string, exp time.Time) {
+	secure := r.TLS != nil
+	http.SetCookie(w, &http.Cookie{
+		Name:     authCookieName,
+		Value:    token,
+		Path:     "/",
+		Expires:  exp,
+		MaxAge:   int(time.Until(exp).Seconds()),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+	})
 }

@@ -25,11 +25,6 @@ func Load() (*Config, error) {
 				co = append(co, t)
 			}
 		}
-	} else {
-		co = []string{"*"} // self-hosted: allow any origin; override for production
-	}
-	if len(co) == 0 {
-		co = []string{"*"}
 	}
 	c := &Config{
 		HTTPAddr:    env("HTTP_ADDR", "0.0.0.0:8080"),
