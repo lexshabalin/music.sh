@@ -63,6 +63,31 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+function BrandIcon() {
+  return (
+    <svg
+      className="brand-icon"
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="4" width="19" height="16" rx="3.5" />
+      <path d="M2.5 8h19" />
+      <circle cx="6" cy="6" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="6" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="11" cy="6" r="0.6" fill="currentColor" stroke="none" />
+      {/* music note */}
+      <path d="M14 12v5.5a1.5 1.5 0 1 1-1-1.42V12l6-1.2v4.7a1.5 1.5 0 1 1-1-1.42V9.8L14 12Z" />
+    </svg>
+  );
+}
+
 function Shell({ children }) {
   const p = usePlayer();
   const [isPlaying, setIsPlaying] = React.useState(false);
@@ -126,7 +151,10 @@ function Shell({ children }) {
       <div className="layout">
         {getToken() ? (
           <aside className="sidebar">
-            <div className="brand">MusicSH</div>
+            <div className="brand">
+              <BrandIcon />
+              <span>music.sh</span>
+            </div>
             <nav className="side-nav">
               <Link to="/">Home</Link>
               <Link to="/artists">Artists</Link>

@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { lib } from "../api";
 import { IHeart } from "./icons";
+
+function fmtDur(ms) {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
+  const s = Math.floor(ms / 1000);
+  const mm = Math.floor(s / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
 
 export function TrackRow({
   track,
@@ -15,20 +24,38 @@ export function TrackRow({
   const [showAdd, setShowAdd] = useState(false);
   const btnRef = useRef(null);
 
+  const metaParts = [];
+  if (track?.format) metaParts.push(String(track.format).toUpperCase());
+  if (typeof track?.bitrateKbps === "number") metaParts.push(`${track.bitrateKbps} kbps`);
+  const d = fmtDur(track?.durationMs);
+  if (d) metaParts.push(d);
+
   return (
     <>
       <li className="track-row">
-        <span
-          className="track-title"
-          role="button"
-          tabIndex={0}
-          onClick={() => onPlayAt(index)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") onPlayAt(index);
-          }}
-        >
-          {label}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <span
+            className="track-title"
+            role="button"
+            tabIndex={0}
+            onClick={() => onPlayAt(index)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onPlayAt(index);
+            }}
+          >
+            {label}
+          </span>
+          <div className="muted" style={{ fontSize: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {track?.artist?.id ? (
+              <Link to={"/artist/" + track.artist.id} className="muted" style={{ textDecoration: "none" }}>
+                {track.artist.name || "Unknown Artist"}
+              </Link>
+            ) : track?.artist?.name ? (
+              <span>{track.artist.name}</span>
+            ) : null}
+            {metaParts.length ? <span>{metaParts.join(" · ")}</span> : null}
+          </div>
+        </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {typeof onToggleLike === "function" ? (
             <button

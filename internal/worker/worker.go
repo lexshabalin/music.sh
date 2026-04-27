@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,6 +97,28 @@ func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {
 	if has {
 		return nil
 	}
+
+	// Prefer local folder images if present (cover.jpg/folder.jpg/front.*, any jpg/png).
+	if p, ok := h.findLocalCoverForAlbum(ctx, albumID); ok {
+		if err := os.MkdirAll(filepath.Join(h.Cfg.DataDir, "covers"), 0o755); err != nil {
+			return err
+		}
+		ext := strings.ToLower(filepath.Ext(p))
+		if ext != ".png" && ext != ".jpg" && ext != ".jpeg" {
+			ext = ".jpg"
+		}
+		// normalize .jpeg to .jpg to simplify downstream content-type logic
+		if ext == ".jpeg" {
+			ext = ".jpg"
+		}
+		dest := filepath.Join(h.Cfg.DataDir, "covers", albumID.String()+ext)
+		if err := copyFile(dest, p); err != nil {
+			return err
+		}
+		rel := filepath.Join("covers", albumID.String()+ext)
+		return h.DB.SetAlbumCoverPath(ctx, albumID, rel)
+	}
+
 	mbid, _ := h.DB.GetAlbumMbid(ctx, albumID)
 	title, _, artist, err := h.DB.GetAlbumByID(ctx, albumID)
 	if err != nil {
@@ -135,4 +160,69 @@ func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {
 	_ = title
 	_ = artist
 	return nil
+}
+
+func (h *Worker) findLocalCoverForAlbum(ctx context.Context, albumID uuid.UUID) (string, bool) {
+	path, err := h.DB.GetAnyTrackPathForAlbum(ctx, albumID)
+	if err != nil || strings.TrimSpace(path) == "" {
+		return "", false
+	}
+	dir := filepath.Dir(path)
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+
+	type cand struct {
+		path  string
+		score int
+	}
+	var cands []cand
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		n := strings.ToLower(e.Name())
+		ext := strings.ToLower(filepath.Ext(n))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+			continue
+		}
+		score := 0
+		switch {
+		case strings.Contains(n, "cover"):
+			score += 100
+		case strings.Contains(n, "folder"):
+			score += 90
+		case strings.Contains(n, "front"):
+			score += 80
+		}
+		if ext == ".png" {
+			score += 5
+		}
+		cands = append(cands, cand{path: filepath.Join(dir, e.Name()), score: score})
+	}
+	if len(cands) == 0 {
+		return "", false
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		return cands[i].score > cands[j].score
+	})
+	return cands[0].path, true
+}
+
+func copyFile(dst, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
 }

@@ -74,7 +74,7 @@ export function Playlist() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={false}
             onToggleLike={null}
-            label={`${t.artist ? t.artist.name + " — " : ""}${t.title || "Untitled"}`}
+            label={`${t.title || "Untitled"}`}
           />
         ))}
       </ul>

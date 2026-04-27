@@ -65,7 +65,7 @@ export function Likes() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={likedSet.has(t.id)}
             onToggleLike={() => unlike(t.id)}
-            label={`${t.artist ? t.artist.name + " — " : ""}${t.title || "Untitled"}`}
+            label={`${t.title || "Untitled"}`}
           />
         ))}
       </ul>

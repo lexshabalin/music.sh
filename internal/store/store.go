@@ -163,6 +163,8 @@ func (d *DB) UpsertTrack(
 	artistName, albumTitle, title string,
 	trackNo, discNo, year *int,
 	durationMS *int,
+	format *string,
+	bitrateKbps *int,
 ) (trackID, albumID uuid.UUID, isNewOrChanged bool, err error) {
 	artistID, err := d.FindOrCreateArtist(ctx, artistName)
 	if err != nil {
@@ -190,9 +192,10 @@ func (d *DB) UpsertTrack(
 		_, e := d.Pool.Exec(ctx, `
 			UPDATE tracks SET
 				file_size = $2, file_mtime_ns = $3, duration_ms = $4, title = $5,
-				track_no = $6, disc_no = $7, year = $8, album_id = $9, artist_id = $10
+				format = $6, bitrate_kbps = $7,
+				track_no = $8, disc_no = $9, year = $10, album_id = $11, artist_id = $12
 			WHERE id = $1
-		`, id, fileSize, mtimeNs, durationMS, trackTitle, trackNo, discNo, year, albumID, artistID)
+		`, id, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID)
 		if e != nil {
 			err = e
 			return
@@ -207,10 +210,10 @@ func (d *DB) UpsertTrack(
 	isNewOrChanged = true
 	_, err = d.Pool.Exec(ctx, `
 		INSERT INTO tracks (
-			id, file_path, file_size, file_mtime_ns, duration_ms, title, track_no, disc_no, year,
-			album_id, artist_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, trackNo, discNo, year, albumID, artistID)
+			id, file_path, file_size, file_mtime_ns, duration_ms, title, format, bitrate_kbps,
+			track_no, disc_no, year, album_id, artist_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID)
 	if err != nil {
 		return
 	}
@@ -353,7 +356,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 	like := "%" + qs + "%"
 	rows, err := d.Pool.Query(ctx, `
 		SELECT
-			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.id, t.title, t.duration_ms, t.format, t.bitrate_kbps, t.track_no, t.disc_no, t.year,
 			t.album_id::text, al.title,
 			t.artist_id::text, ar.name
 		FROM tracks t
@@ -381,10 +384,12 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 		var t Track
 		var title sql.NullString
 		var dms sql.NullInt32
+		var fmtS sql.NullString
+		var br sql.NullInt32
 		var tno, dno, yr sql.NullInt32
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
-		if err := rows.Scan(&t.ID, &title, &dms, &tno, &dno, &yr, &aID, &alT, &alID, &arN); err != nil {
+		if err := rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN); err != nil {
 			return nil, err
 		}
 		if title.Valid {
@@ -394,6 +399,14 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 		if dms.Valid {
 			x := int(dms.Int32)
 			t.DurationMs = &x
+		}
+		if fmtS.Valid {
+			s := fmtS.String
+			t.Format = &s
+		}
+		if br.Valid {
+			x := int(br.Int32)
+			t.BitrateKbps = &x
 		}
 		if tno.Valid {
 			x := int(tno.Int32)
@@ -444,6 +457,14 @@ func (d *DB) GetTrackForStream(ctx context.Context, id uuid.UUID) (string, *stri
 		return path, &t.String, nil
 	}
 	return path, nil, nil
+}
+
+func (d *DB) GetAnyTrackPathForAlbum(ctx context.Context, albumID uuid.UUID) (string, error) {
+	var path string
+	if err := d.Pool.QueryRow(ctx, `SELECT file_path FROM tracks WHERE album_id = $1 ORDER BY file_path LIMIT 1`, albumID).Scan(&path); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // Cover path for album (relative to data dir)
@@ -576,7 +597,7 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 	}
 	rows, err := d.Pool.Query(ctx, `
 		SELECT
-			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.id, t.title, t.duration_ms, t.format, t.bitrate_kbps, t.track_no, t.disc_no, t.year,
 			t.album_id::text, al.title, t.artist_id::text, ar.name, pt.position
 		FROM playlist_tracks pt
 		JOIN tracks t ON pt.track_id = t.id
@@ -594,11 +615,13 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 		var t Track
 		var title sql.NullString
 		var dms sql.NullInt32
+		var fmtS sql.NullString
+		var br sql.NullInt32
 		var tno, dno, yr sql.NullInt32
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
 		var pos int
-		if err = rows.Scan(&t.ID, &title, &dms, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &pos); err != nil {
+		if err = rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &pos); err != nil {
 			return p, nil, err
 		}
 		if title.Valid {
@@ -608,6 +631,14 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 		if dms.Valid {
 			x := int(dms.Int32)
 			t.DurationMs = &x
+		}
+		if fmtS.Valid {
+			s := fmtS.String
+			t.Format = &s
+		}
+		if br.Valid {
+			x := int(br.Int32)
+			t.BitrateKbps = &x
 		}
 		if tno.Valid {
 			x := int(tno.Int32)
@@ -786,7 +817,7 @@ func (d *DB) GetAlbumMbid(ctx context.Context, id uuid.UUID) (string, error) {
 func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT
-			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.id, t.title, t.duration_ms, t.format, t.bitrate_kbps, t.track_no, t.disc_no, t.year,
 			t.album_id::text, al.title, t.artist_id::text, ar.name
 		FROM tracks t
 		LEFT JOIN albums al ON t.album_id = al.id
@@ -814,7 +845,7 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 	}
 	rows, err := d.Pool.Query(ctx, `
 		SELECT
-			t.id, t.title, t.duration_ms, t.track_no, t.disc_no, t.year,
+			t.id, t.title, t.duration_ms, t.format, t.bitrate_kbps, t.track_no, t.disc_no, t.year,
 			t.album_id::text, al.title, t.artist_id::text, ar.name
 		FROM tracks t
 		LEFT JOIN albums al ON t.album_id = al.id

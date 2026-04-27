@@ -3,7 +3,7 @@
   --card: #18181f;
   --text: #f3f3f4;
   --muted: #9a9aa3;
-  --accent: #1ed760;
+  --accent: tomato;
   --border: #2a2a33;
   font-family: "Inter", system-ui, sans-serif;
   color: var(--text);
@@ -22,7 +22,7 @@ a {
 button {
   cursor: pointer;
   background: var(--accent);
-  color: #0a0a0a;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   padding: 0.5rem 1rem;
@@ -67,6 +67,14 @@ input {
   font-weight: 800;
   letter-spacing: 0.2px;
   padding: 6px 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-icon {
+  flex: 0 0 auto;
+  color: var(--text);
+  opacity: 0.95;
 }
 .side-nav {
   display: flex;
@@ -134,6 +142,33 @@ input {
   border-radius: 6px;
   background: #222;
 }
+
+.pl-collage {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #222;
+  display: grid;
+  gap: 2px;
+}
+.pl-collage.four {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.pl-collage.one {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+.pl-collage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pl-collage-empty {
+  background: #222;
+}
 .plain-list {
   list-style: none;
   padding: 0;
@@ -153,6 +188,26 @@ input {
 
 .track-row {
   gap: 12px;
+}
+.track-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.track-row button.ghost {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.track-row button.ghost svg {
+  width: 18px;
+  height: 18px;
+}
+.track-row button.ghost[title="More"] {
+  font-size: 18px;
+  line-height: 1;
 }
 .track-title {
   cursor: pointer;

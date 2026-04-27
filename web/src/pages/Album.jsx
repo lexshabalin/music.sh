@@ -99,9 +99,7 @@ export function Album() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={liked.has(t.id)}
             onToggleLike={(id2) => toggleLike(id2)}
-            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || "Untitled"}${
-              t.durationMs != null ? ` (${Math.floor(t.durationMs / 1000)}s)` : ""
-            }`}
+            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || "Untitled"}`}
           />
         ))}
       </ul>

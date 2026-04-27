@@ -34,6 +34,8 @@ type Track struct {
 	ID           uuid.UUID  `json:"id"`
 	Title        *string    `json:"title,omitempty"`
 	DurationMs   *int       `json:"durationMs,omitempty"`
+	Format       *string    `json:"format,omitempty"`
+	BitrateKbps  *int       `json:"bitrateKbps,omitempty"`
 	TrackNo      *int       `json:"trackNo,omitempty"`
 	DiscNo       *int       `json:"discNo,omitempty"`
 	Year         *int       `json:"year,omitempty"`

@@ -32,7 +32,7 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS)
+		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
@@ -69,7 +69,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS)
+		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
@@ -89,6 +89,8 @@ type trackMeta struct {
 	artist, album, title                string
 	track, disc, year                  *int
 	durationMS                        *int
+	format                            *string
+	bitrateKbps                        *int
 }
 
 func readTrackMeta(p string) trackMeta {
@@ -123,6 +125,23 @@ func readTrackMeta(p string) trackMeta {
 	if m.Year() > 0 {
 		y := m.Year()
 		out.year = &y
+	}
+
+	// Basic audio meta: expose container/format by extension; estimate bitrate if duration is known.
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
+	if ext != "" {
+		out.format = &ext
+	}
+	if out.durationMS != nil && *out.durationMS > 0 {
+		if st, err := os.Stat(p); err == nil && st.Size() > 0 {
+			secs := float64(*out.durationMS) / 1000.0
+			if secs > 0.01 {
+				kbps := int(((float64(st.Size()) * 8.0) / secs) / 1000.0)
+				if kbps > 0 && kbps < 50000 {
+					out.bitrateKbps = &kbps
+				}
+			}
+		}
 	}
 	return out
 }
