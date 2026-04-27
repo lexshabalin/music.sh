@@ -11,8 +11,19 @@ import { Register } from "./pages/Register";
 import { Artists } from "./pages/Artists";
 import { Albums } from "./pages/Albums";
 import { Artist } from "./pages/Artist";
+import { Playlist } from "./pages/Playlist";
 import { lib } from "./api";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
+import {
+  IFastForward,
+  IHeart,
+  IPause,
+  IPlay,
+  IPlus,
+  IRewind,
+  ISpeaker,
+  ISpeakerOff,
+} from "./components/icons";
 
 function fmtTime(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "0:00";
@@ -143,7 +154,7 @@ function Shell({ children }) {
       {p.current && getToken() ? (
         <div className="player">
           <button className="player-skip" type="button" onClick={p.prev} title="Rewind">
-            ⏪
+            <IRewind />
           </button>
 
           <button
@@ -157,11 +168,11 @@ function Shell({ children }) {
             }}
             title={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? "⏸" : "▶"}
+            {isPlaying ? <IPause /> : <IPlay />}
           </button>
 
           <button className="player-skip" type="button" onClick={p.next} title="Fast-forward">
-            ⏩
+            <IFastForward />
           </button>
 
           <button
@@ -170,7 +181,7 @@ function Shell({ children }) {
             onClick={p.toggleMute}
             title={p.muted ? "Unmute" : "Mute"}
           >
-            {p.muted ? "🔇" : "🔊"}
+            {p.muted ? <ISpeakerOff /> : <ISpeaker />}
           </button>
 
           <input
@@ -213,11 +224,11 @@ function Shell({ children }) {
             }}
             style={{ color: liked ? "tomato" : undefined, borderColor: liked ? "tomato" : undefined }}
           >
-            ♥
+            <IHeart />
           </button>
 
           <button className="ghost" type="button" title="Add to playlist" onClick={() => setShowPlModal(true)}>
-            ＋
+            <IPlus />
           </button>
 
           <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
@@ -300,6 +311,10 @@ export function App() {
           <Route
             path="/playlists"
             element={!getToken() ? <Navigate to="/login" replace /> : <Playlists />}
+          />
+          <Route
+            path="/playlist/:id"
+            element={!getToken() ? <Navigate to="/login" replace /> : <Playlist />}
           />
           <Route
             path="/likes"

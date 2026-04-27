@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import { auth, setToken } from "../api";
 
 export function Login() {
-  const [email, setE] = useState("");
+  const [login, setLogin] = useState("");
   const [pw, setP] = useState("");
   const [err, setErr] = useState("");
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
     try {
-      const r = await auth.login(email, pw);
+      const r = await auth.login(login, pw);
       setToken(r.accessToken);
       window.location.hash = "#/";
     } catch (x) {
@@ -22,8 +22,8 @@ export function Login() {
       <h2>Log in</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <p>
-        <label>Email</label>
-        <input value={email} onChange={(e) => setE(e.target.value)} type="email" required />
+        <label>Username or email</label>
+        <input value={login} onChange={(e) => setLogin(e.target.value)} autoCapitalize="none" autoCorrect="off" required />
       </p>
       <p>
         <label>Password</label>

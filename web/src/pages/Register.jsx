@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { auth, setToken } from "../api";
 
 export function Register() {
+  const [username, setU] = useState("");
   const [email, setE] = useState("");
   const [pw, setP] = useState("");
   const [name, setN] = useState("");
@@ -11,7 +12,7 @@ export function Register() {
     e.preventDefault();
     setErr("");
     try {
-      const r = await auth.register(email, pw, name);
+      const r = await auth.register(username, email, pw, name);
       setToken(r.accessToken);
       window.location.hash = "#/";
     } catch (x) {
@@ -22,6 +23,17 @@ export function Register() {
     <form onSubmit={submit} className="card" style={{ maxWidth: 360, margin: "2rem auto" }}>
       <h2>Register</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
+      <p>
+        <label>Username</label>
+        <input
+          value={username}
+          onChange={(e) => setU(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          placeholder="e.g. rh"
+          required
+        />
+      </p>
       <p>
         <label>Display name (optional)</label>
         <input value={name} onChange={(e) => setN(e.target.value)} />

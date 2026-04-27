@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lib } from "../api";
+import { IHeart } from "./icons";
 
 export function TrackRow({
   track,
@@ -40,7 +41,7 @@ export function TrackRow({
                 borderColor: isLiked ? "tomato" : undefined,
               }}
             >
-              ♥
+              <IHeart />
             </button>
           ) : null}
           <button

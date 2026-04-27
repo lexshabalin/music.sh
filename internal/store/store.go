@@ -16,39 +16,73 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
-func (d *DB) UserByEmail(ctx context.Context, email string) (uuid.UUID, string, *string, string, error) {
+// UserAuthByEmail returns auth fields needed for login.
+func (d *DB) UserAuthByEmail(ctx context.Context, email string) (id uuid.UUID, emailOut string, username *string, displayName *string, hash string, err error) {
 	var id uuid.UUID
 	var hash, emailOut string
+	var uname sql.NullString
 	var name sql.NullString
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, email, display_name, password_hash FROM users WHERE email = $1`, strings.ToLower(strings.TrimSpace(email)),
-	).Scan(&id, &emailOut, &name, &hash)
+		`SELECT id, email, username, display_name, password_hash FROM users WHERE email = $1`,
+		strings.ToLower(strings.TrimSpace(email)),
+	).Scan(&id, &emailOut, &uname, &name, &hash)
 	if err != nil {
 		return uuid.Nil, "", nil, "", err
 	}
-	if !name.Valid {
-		return id, emailOut, nil, hash, nil
+	if uname.Valid && strings.TrimSpace(uname.String) != "" {
+		s := uname.String
+		username = &s
 	}
-	s := name.String
-	return id, emailOut, &s, hash, nil
+	if name.Valid && strings.TrimSpace(name.String) != "" {
+		s := name.String
+		displayName = &s
+	}
+	return id, emailOut, username, displayName, hash, nil
 }
 
-func (d *DB) CreateUser(ctx context.Context, id uuid.UUID, email, hash string, name *string) error {
+// UserAuthByUsername returns auth fields needed for login.
+func (d *DB) UserAuthByUsername(ctx context.Context, username string) (id uuid.UUID, emailOut string, usernameOut *string, displayName *string, hash string, err error) {
+	var uname sql.NullString
+	var name sql.NullString
+	err = d.Pool.QueryRow(ctx,
+		`SELECT id, email, username, display_name, password_hash FROM users WHERE username = $1`,
+		strings.TrimSpace(username),
+	).Scan(&id, &emailOut, &uname, &name, &hash)
+	if err != nil {
+		return uuid.Nil, "", nil, nil, "", err
+	}
+	if uname.Valid && strings.TrimSpace(uname.String) != "" {
+		s := uname.String
+		usernameOut = &s
+	}
+	if name.Valid && strings.TrimSpace(name.String) != "" {
+		s := name.String
+		displayName = &s
+	}
+	return id, emailOut, usernameOut, displayName, hash, nil
+}
+
+func (d *DB) CreateUser(ctx context.Context, id uuid.UUID, username *string, email, hash string, name *string) error {
 	_, err := d.Pool.Exec(ctx,
-		`INSERT INTO users (id, email, password_hash, display_name) VALUES ($1, $2, $3, $4)`,
-		id, strings.ToLower(strings.TrimSpace(email)), hash, name,
+		`INSERT INTO users (id, username, email, password_hash, display_name) VALUES ($1, $2, $3, $4, $5)`,
+		id, username, strings.ToLower(strings.TrimSpace(email)), hash, name,
 	)
 	return err
 }
 
 func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var u User
+	var uname sql.NullString
 	var name sql.NullString
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, email, display_name, created_at FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &name, &u.CreatedAt)
+		`SELECT id, username, email, display_name, created_at FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &uname, &u.Email, &name, &u.CreatedAt)
 	if err != nil {
 		return u, err
+	}
+	if uname.Valid && strings.TrimSpace(uname.String) != "" {
+		s := uname.String
+		u.Username = &s
 	}
 	if name.Valid {
 		s := name.String

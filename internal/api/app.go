@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"sync"
 	"strings"
 	"time"
@@ -123,12 +124,15 @@ func middlewareUser(a *App) func(http.Handler) http.Handler {
 func (a *App) health(w http.ResponseWriter, r *http.Request) { JSON(w, 200, map[string]string{"status": "ok"}) }
 
 type regBody struct {
+	Username string  `json:"username"`
 	Email    string  `json:"email"`
 	Password string  `json:"password"`
 	Name     *string `json:"displayName"`
 }
 
 type loginBody struct {
+	Login    string `json:"login"`
+	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -145,20 +149,37 @@ func (a *App) register(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "bad json")
 		return
 	}
+	b.Username = strings.TrimSpace(b.Username)
 	b.Email = strings.TrimSpace(strings.ToLower(b.Email))
 	if b.Email == "" || len(b.Password) < 8 {
 		JSONError(w, 400, "invalid email or password (min 8 chars)")
 		return
 	}
+
 	h, err := auth.HashPassword(b.Password)
 	if err != nil {
 		JSONError(w, 500, "hash")
 		return
 	}
 	id := uuid.New()
-	if err := a.DB.CreateUser(r.Context(), id, b.Email, h, b.Name); err != nil {
+
+	username := strings.ToLower(strings.TrimSpace(b.Username))
+	if username == "" {
+		// keep existing installs ergonomic: default to email local-part (sanitized)
+		username = sanitizeUsername(strings.TrimSpace(strings.SplitN(b.Email, "@", 2)[0]))
+	}
+	if !isValidUsername(username) {
+		// last-resort fallback (should be rare)
+		username = "user" + strings.ReplaceAll(id.String()[:8], "-", "")
+	}
+	if !isValidUsername(username) {
+		JSONError(w, 400, "invalid username (3-32 chars: a-z, 0-9, _, -, .)")
+		return
+	}
+
+	if err := a.DB.CreateUser(r.Context(), id, &username, b.Email, h, b.Name); err != nil {
 		if store.IsUniqueViolation(err) {
-			JSONError(w, 400, "email in use")
+			JSONError(w, 400, "username or email in use")
 			return
 		}
 		JSONError(w, 500, "db")
@@ -179,8 +200,31 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "bad json")
 		return
 	}
-	email := strings.TrimSpace(strings.ToLower(b.Email))
-	uid, _, _, hash, err := a.DB.UserByEmail(r.Context(), email)
+	login := strings.TrimSpace(b.Login)
+	if login == "" {
+		login = strings.TrimSpace(b.Username)
+	}
+	if login == "" {
+		login = strings.TrimSpace(b.Email)
+	}
+	loginLower := strings.ToLower(login)
+
+	var uid uuid.UUID
+	var email string
+	var hash string
+	var err error
+
+	// If input resembles an email, keep email semantics (case-insensitive).
+	if strings.Contains(loginLower, "@") {
+		uid, email, _, _, hash, err = a.DB.UserAuthByEmail(r.Context(), loginLower)
+	} else {
+		uid, email, _, _, hash, err = a.DB.UserAuthByUsername(r.Context(), loginLower)
+		if err != nil {
+			// Backward compatibility: old clients still send email in "email" field,
+			// but some users will type their email into a "username" box.
+			uid, email, _, _, hash, err = a.DB.UserAuthByEmail(r.Context(), loginLower)
+		}
+	}
 	if err != nil {
 		JSONError(w, 401, "invalid credentials")
 		return
@@ -205,6 +249,43 @@ func (a *App) makeToken(_ context.Context, id uuid.UUID, email string) (string, 
 		return "", time.Time{}, err
 	}
 	return t, exp, nil
+}
+
+var reUsername = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$`)
+
+func isValidUsername(s string) bool {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if len(s) < 3 || len(s) > 32 {
+		return false
+	}
+	// must start/end with alnum; allow . _ - inside
+	return reUsername.MatchString(s)
+}
+
+func sanitizeUsername(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	// map unsupported chars to underscore
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.' || r == '_' || r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	// trim to alnum at ends (to satisfy isValidUsername)
+	out = strings.Trim(out, "._-")
+	return out
 }
 
 func (a *App) me(w http.ResponseWriter, r *http.Request) {

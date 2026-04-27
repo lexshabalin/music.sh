@@ -30,8 +30,12 @@ async function req(path, opts = {}) {
 }
 
 export const auth = {
-  register: (email, password, name) => req("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, displayName: name || undefined }) }),
-  login: (email, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  register: (username, email, password, name) =>
+    req("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, email, password, displayName: name || undefined }),
+    }),
+  login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
 };
 
