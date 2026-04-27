@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"musicsh/internal/store"
 	"musicsh/internal/stream"
+	"musicsh/internal/scanner"
 )
 
 // --- library ---
@@ -168,9 +170,48 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 // --- scan ---
 
 func (a *App) scan(w http.ResponseWriter, r *http.Request) {
-	if err := a.DB.EnqueueJob(r.Context(), uuid.New(), "scan", "{}"); err != nil {
-		JSONError(w, 500, "queue")
+	a.scanMu.Lock()
+	if a.scanState.Running {
+		st := a.scanState
+		a.scanMu.Unlock()
+		JSON(w, 202, map[string]any{"ok": true, "running": true, "state": st})
 		return
 	}
-	JSON(w, 202, map[string]any{"ok": true, "queued": true, "at": time.Now()})
+	a.scanState = scanState{Running: true, StartedAt: time.Now()}
+	a.scanMu.Unlock()
+
+	go a.runScan(context.Background())
+
+	JSON(w, 202, map[string]any{"ok": true, "running": true, "at": time.Now()})
+}
+
+func (a *App) scanStatus(w http.ResponseWriter, r *http.Request) {
+	a.scanMu.Lock()
+	st := a.scanState
+	a.scanMu.Unlock()
+	JSON(w, 200, st)
+}
+
+func (a *App) runScan(ctx context.Context) {
+	var scanned, found, changed int
+	err := scanner.ScanWithProgress(ctx, a.DB, a.MusicDir, func(scannedFiles int, foundTracks int, changedTracks int) {
+		a.scanMu.Lock()
+		a.scanState.ScannedFiles = scannedFiles
+		a.scanState.FoundTracks = foundTracks
+		a.scanState.Changed = changedTracks
+		a.scanMu.Unlock()
+		scanned = scannedFiles
+		found = foundTracks
+		changed = changedTracks
+	})
+	a.scanMu.Lock()
+	defer a.scanMu.Unlock()
+	a.scanState.Running = false
+	a.scanState.FinishedAt = time.Now()
+	a.scanState.ScannedFiles = scanned
+	a.scanState.FoundTracks = found
+	a.scanState.Changed = changed
+	if err != nil {
+		a.scanState.Error = err.Error()
+	}
 }

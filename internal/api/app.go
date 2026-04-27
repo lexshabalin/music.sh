@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"sync"
 	"strings"
 	"time"
 
@@ -22,6 +23,19 @@ type App struct {
 	jwt  string
 	Orig []string
 	MusicDir, DataDir string
+
+	scanMu    sync.Mutex
+	scanState scanState
+}
+
+type scanState struct {
+	Running      bool      `json:"running"`
+	StartedAt    time.Time `json:"startedAt"`
+	FinishedAt   time.Time `json:"finishedAt"`
+	ScannedFiles int       `json:"scannedFiles"`
+	FoundTracks  int       `json:"foundTracks"`
+	Changed      int       `json:"changed"`
+	Error        string    `json:"error,omitempty"`
 }
 
 func New(c *config.Config, db *store.DB) *App {
@@ -80,6 +94,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/likes", a.addLike)
 		g.Delete("/api/likes/{trackId}", a.removeLike)
 		g.Post("/api/library/scan", a.scan)
+		g.Get("/api/library/scan/status", a.scanStatus)
 	})
 	return r
 }

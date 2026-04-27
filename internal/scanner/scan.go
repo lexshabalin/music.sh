@@ -46,6 +46,45 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	return
 }
 
+// ScanWithProgress is used by the API to show progress.
+// progress(scannedFiles, foundTracks, changedTracks)
+func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progress func(int, int, int)) error {
+	var scanned, found, changed int
+	if musicDir == "" {
+		return fmt.Errorf("MUSIC_DIR empty")
+	}
+	lastReport := 0
+	return filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		if !store.IsAudioFilename(info.Name()) {
+			return nil
+		}
+		scanned++
+		found++
+		st := info.Size()
+		mt := info.ModTime()
+		meta := readTrackMeta(path)
+		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS)
+		if e != nil {
+			return e
+		}
+		_ = enqueueMetaJob(ctx, s, albumID)
+		if ch {
+			changed++
+		}
+		if progress != nil && (scanned-lastReport >= 10 || scanned == 1) {
+			lastReport = scanned
+			progress(scanned, found, changed)
+		}
+		return nil
+	})
+}
+
 type trackMeta struct {
 	artist, album, title                string
 	track, disc, year                  *int

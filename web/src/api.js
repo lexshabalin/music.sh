@@ -42,6 +42,7 @@ export const lib = {
   tracks: (q, albumId) => req("/api/tracks?" + new URLSearchParams({ query: q || "", ...(albumId && { albumId }) })),
   track: (id) => req("/api/tracks/" + id),
   scan: () => req("/api/library/scan", { method: "POST", body: "{}" }),
+  scanStatus: () => req("/api/library/scan/status"),
   streamUrl: (id) => {
     const t = getToken();
     return base() + "/api/tracks/" + id + "/stream" + (t ? "?token=" + encodeURIComponent(t) : "");

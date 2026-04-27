@@ -54,7 +54,9 @@ func (c *Client) SearchRelease(artist, album string) (releaseID, releaseTitle, r
 		album = "Unknown"
 	}
 	c.throttle()
-	q := fmt.Sprintf(`releasename:"%s" AND artistname:"%s"`, quoteMB(album), quoteMB(artist))
+	// Use official Lucene fields that work well with non-latin (incl. Cyrillic).
+	// See MusicBrainz search syntax: release:"..." artist:"..."
+	q := fmt.Sprintf(`release:"%s" AND artist:"%s"`, quoteMB(album), quoteMB(artist))
 	u := "https://musicbrainz.org/ws/2/release/?query=" + url.QueryEscape(q) + "&fmt=json&limit=3"
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", userAgent)

@@ -7,6 +7,7 @@ export function Library() {
   const [albums, setA] = useState([]);
   const [scanning, setScan] = useState(false);
   const [msg, setMsg] = useState("");
+  const [scanState, setScanState] = useState(null);
   const load = () => {
     lib
       .albums(q)
@@ -17,6 +18,27 @@ export function Library() {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [q]);
+
+  useEffect(() => {
+    if (!scanning) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await lib.scanStatus();
+        if (stop) return;
+        setScanState(st);
+        if (!st.running) {
+          setScan(false);
+          load();
+        }
+      } catch (_) {}
+      if (!stop) setTimeout(tick, 500);
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
+  }, [scanning]);
   return (
     <div>
       <div className="search">
@@ -30,17 +52,33 @@ export function Library() {
             setScan(true);
             try {
               await lib.scan();
-              setMsg("Library scan queued");
-              load();
+              setMsg("Rescan started");
             } catch (e) {
               setMsg(e.message);
+              setScan(false);
             }
-            setScan(false);
           }}
         >
-          Scan library
+          Rescan
         </button>
       </div>
+      {scanning && scanState ? (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="muted" style={{ marginBottom: 8 }}>
+            Scanned files: <b>{scanState.scannedFiles}</b> • Found tracks: <b>{scanState.foundTracks}</b>
+          </div>
+          <div style={{ height: 6, background: "#2a2a33", borderRadius: 999 }}>
+            <div
+              style={{
+                height: 6,
+                width: `${Math.min(100, (scanState.scannedFiles / Math.max(1, scanState.foundTracks || 1)) * 100)}%`,
+                background: "#cfcfd6",
+                borderRadius: 999,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
       {msg ? <p className="muted">{msg}</p> : null}
       <div className="grid">
         {albums.map((a) => (
