@@ -8,6 +8,8 @@ import { Album } from "./pages/Album";
 import { Playlists } from "./pages/Playlists";
 import { Likes } from "./pages/Likes";
 import { Register } from "./pages/Register";
+import { Artists } from "./pages/Artists";
+import { Albums } from "./pages/Albums";
 
 function fmtTime(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "0:00";
@@ -88,16 +90,21 @@ function Shell({ children }) {
   return (
     <>
       <div className="layout">
-        <div className="top">
-          <h1 style={{ margin: 0, fontSize: "1.2rem" }}>MusicSH</h1>
-          {getToken() ? (
-            <nav>
+        {getToken() ? (
+          <aside className="sidebar">
+            <div className="brand">MusicSH</div>
+            <nav className="side-nav">
               <Link to="/">Home</Link>
+              <Link to="/artists">Artists</Link>
+              <Link to="/albums">Albums</Link>
               <Link to="/playlists">Playlists</Link>
               <Link to="/likes">Likes</Link>
+            </nav>
+            <div style={{ marginTop: "auto" }}>
               <button
                 className="ghost"
                 type="button"
+                style={{ width: "100%" }}
                 onClick={() => {
                   localStorage.removeItem("musicsh_token");
                   window.location.hash = "#/login";
@@ -105,10 +112,10 @@ function Shell({ children }) {
               >
                 Log out
               </button>
-            </nav>
-          ) : null}
-        </div>
-        {children}
+            </div>
+          </aside>
+        ) : null}
+        <main className="main">{children}</main>
       </div>
       {p.current && getToken() ? (
         <div className="player">
@@ -144,6 +151,21 @@ function Shell({ children }) {
             value={p.volume}
             onChange={(e) => p.setVolume(Number(e.target.value))}
           />
+
+          <div className="nowplaying">
+            {p.current.coverUrl ? (
+              <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
+            ) : (
+              <div className="nowplaying-art placeholder" />
+            )}
+            <div className="nowplaying-text">
+              <div className="nowplaying-line1">
+                {p.current.artist ? `${p.current.artist} — ` : ""}
+                {p.current.title || p.current.label}
+              </div>
+              <div className="nowplaying-line2">{p.current.album || ""}</div>
+            </div>
+          </div>
 
           <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
             {fmtTime(curT)}
@@ -206,6 +228,14 @@ export function App() {
           <Route
             path="/album/:id"
             element={!getToken() ? <Navigate to="/login" replace /> : <Album />}
+          />
+          <Route
+            path="/artists"
+            element={!getToken() ? <Navigate to="/login" replace /> : <Artists />}
+          />
+          <Route
+            path="/albums"
+            element={!getToken() ? <Navigate to="/login" replace /> : <Albums />}
           />
           <Route
             path="/playlists"

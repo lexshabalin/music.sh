@@ -32,6 +32,10 @@ export function Album() {
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
       url: lib.streamUrl(t.id),
+      artist: t.artist?.name || "",
+      title: t.title || "Track",
+      album: t.album?.title || "",
+      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
     }));
     p.playQueue(items, startIdx);
   };
@@ -41,6 +45,10 @@ export function Album() {
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
       url: lib.streamUrl(t.id),
+      artist: t.artist?.name || "",
+      title: t.title || "Track",
+      album: t.album?.title || "",
+      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
     };
     if (!p.current) {
       p.playQueue([item], 0);

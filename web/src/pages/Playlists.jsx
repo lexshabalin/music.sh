@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { lib } from "../api";
+import { usePlayer } from "../usePlayer";
+import { TrackRow } from "../components/TrackMenu";
 
 export function Playlists() {
   const [list, setList] = useState([]);
   const [name, setN] = useState("");
   const [sel, setSel] = useState(null);
   const [err, setErr] = useState("");
+  const p = usePlayer();
   const load = () =>
     lib
       .playlists()
@@ -28,7 +31,7 @@ export function Playlists() {
           onClick={async () => {
             if (!name.trim()) return;
             try {
-              await lib.createPl(name.trim());
+              await lib.createPl(name.trim(), "");
               setN("");
               load();
             } catch (e) {
@@ -49,12 +52,12 @@ export function Playlists() {
           </li>
         ))}
       </ul>
-      {sel ? <PlaylistView id={sel} /> : null}
+      {sel ? <PlaylistView id={sel} player={p} /> : null}
     </div>
   );
 }
 
-function PlaylistView({ id }) {
+function PlaylistView({ id, player }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const load = () =>
@@ -70,15 +73,49 @@ function PlaylistView({ id }) {
   }, [id]);
   if (err) return <p style={{ color: "tomato" }}>{err}</p>;
   if (!data) return <p className="muted">Loading…</p>;
+
+  const tracks = Array.isArray(data.tracks) ? data.tracks : [];
+  const playAt = (startIdx) => {
+    const items = tracks.map((t) => ({
+      id: t.id,
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      url: lib.streamUrl(t.id),
+      artist: t.artist?.name || "",
+      title: t.title || "Track",
+      album: t.album?.title || "",
+      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+    }));
+    player.playQueue(items, startIdx);
+  };
+  const playNext = (t) => {
+    const item = {
+      id: t.id,
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      url: lib.streamUrl(t.id),
+      artist: t.artist?.name || "",
+      title: t.title || "Track",
+      album: t.album?.title || "",
+      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+    };
+    if (!player.current) player.playQueue([item], 0);
+    else player.playNext(item);
+  };
+
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <h3>{data.name}</h3>
       <ul className="plain-list">
-        {(data.tracks || []).map((t) => (
-          <li key={t.id}>
-            {t.artist ? t.artist.name + " — " : ""}
-            {t.title || "Untitled"}
-          </li>
+        {tracks.map((t, i) => (
+          <TrackRow
+            key={t.id}
+            track={t}
+            index={i}
+            onPlayAt={(idx) => playAt(idx)}
+            onPlayNext={(trk) => playNext(trk)}
+            isLiked={false}
+            onToggleLike={() => {}}
+            label={`${t.artist ? t.artist.name + " — " : ""}${t.title || "Untitled"}`}
+          />
         ))}
       </ul>
     </div>

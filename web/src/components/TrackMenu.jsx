@@ -29,18 +29,20 @@ export function TrackRow({
           {label}
         </span>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button
-            className="ghost"
-            type="button"
-            onClick={() => onToggleLike(track.id)}
-            title="Like"
-            style={{
-              color: isLiked ? "tomato" : undefined,
-              borderColor: isLiked ? "tomato" : undefined,
-            }}
-          >
-            ♥
-          </button>
+          {typeof onToggleLike === "function" ? (
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => onToggleLike(track.id)}
+              title="Like"
+              style={{
+                color: isLiked ? "tomato" : undefined,
+                borderColor: isLiked ? "tomato" : undefined,
+              }}
+            >
+              ♥
+            </button>
+          ) : null}
           <button
             className="ghost"
             type="button"

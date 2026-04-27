@@ -8,6 +8,7 @@ import (
 
 type User struct {
 	ID          uuid.UUID `json:"id"`
+	Username    *string   `json:"username,omitempty"`
 	Email       string    `json:"email"`
 	DisplayName *string   `json:"displayName,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`

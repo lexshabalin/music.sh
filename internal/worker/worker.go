@@ -117,7 +117,9 @@ func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {
 		return err
 	}
 	if err = cover.DownloadFront(mbid, dest); err != nil {
-		return err
+		// No cover is common; don't poison the queue with permanent failures.
+		log.Printf("cover fetch failed for %s (%q/%q): %v", mbid, artist, title, err)
+		return nil
 	}
 	rel := filepath.Join("covers", albumID.String()+".jpg")
 	if err = h.DB.SetAlbumCoverPath(ctx, albumID, rel); err != nil {

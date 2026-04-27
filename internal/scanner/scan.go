@@ -36,9 +36,10 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		if e != nil {
 			return e
 		}
+		// Always try to enqueue cover metadata; dedupe is handled in DB.
+		_ = enqueueMetaJob(ctx, s, albumID)
 		if ch {
 			changed++
-			_ = enqueueMetaJob(ctx, s, albumID)
 		}
 		return nil
 	})
