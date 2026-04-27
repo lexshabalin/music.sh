@@ -9,6 +9,14 @@ import { Playlists } from "./pages/Playlists";
 import { Likes } from "./pages/Likes";
 import { Register } from "./pages/Register";
 
+function fmtTime(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return "0:00";
+  const s = Math.floor(sec);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -41,6 +49,42 @@ class ErrorBoundary extends React.Component {
 
 function Shell({ children }) {
   const p = usePlayer();
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [curT, setCurT] = React.useState(0);
+  const [dur, setDur] = React.useState(0);
+
+  React.useEffect(() => {
+    const el = p.ref.current;
+    if (!el) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onTime = () => setCurT(el.currentTime || 0);
+    const onMeta = () => setDur(el.duration || 0);
+    const onEnded = () => p.next();
+
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    el.addEventListener("durationchange", onMeta);
+    el.addEventListener("ended", onEnded);
+
+    // initial
+    onMeta();
+    onTime();
+    setIsPlaying(!el.paused);
+
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("loadedmetadata", onMeta);
+      el.removeEventListener("durationchange", onMeta);
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [p.current?.id]);
+
   return (
     <>
       <div className="layout">
@@ -71,34 +115,69 @@ function Shell({ children }) {
           <button className="ghost" type="button" onClick={p.prev} title="Previous">
             ◀
           </button>
+
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              const el = p.ref.current;
+              if (!el) return;
+              if (el.paused) el.play();
+              else el.pause();
+            }}
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? "❚❚" : "►"}
+          </button>
+
           <button className="ghost" type="button" onClick={p.next} title="Next">
             ▶
           </button>
-          <div className="muted" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            Vol
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={p.volume}
-              onChange={(e) => p.setVolume(Number(e.target.value))}
-              style={{ width: 120 }}
-            />
+
+          <input
+            className="range mono vol"
+            aria-label="Volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={p.volume}
+            onChange={(e) => p.setVolume(Number(e.target.value))}
+          />
+
+          <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
+            {fmtTime(curT)}
           </div>
+
+          <input
+            className="range mono progress"
+            aria-label="Seek"
+            type="range"
+            min="0"
+            max={Math.max(1, dur || 0)}
+            step="0.25"
+            value={Math.min(curT, Math.max(1, dur || 0))}
+            onChange={(e) => {
+              const el = p.ref.current;
+              if (!el) return;
+              const v = Number(e.target.value);
+              el.currentTime = v;
+              setCurT(v);
+            }}
+          />
+
+          <div className="muted" style={{ minWidth: 64 }}>
+            {fmtTime(dur)}
+          </div>
+
           <audio
             key={p.current.id}
-            controls
             autoPlay
             ref={(el) => {
               if (el) p.ref.current = el;
             }}
             src={p.current.url}
-            onEnded={() => p.next()}
           />
-          <div className="muted" style={{ maxWidth: "240px", marginLeft: "auto" }}>
-            {p.current.label}
-          </div>
         </div>
       ) : null}
     </>

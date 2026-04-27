@@ -111,9 +111,39 @@ nav a:hover {
   z-index: 50;
 }
 .player audio {
+  display: none;
+}
+
+.range {
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  outline: none;
+}
+.range.mono {
+  background: #2a2a33;
+}
+.range.mono::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #cfcfd6;
+  border: 1px solid #2a2a33;
+}
+.range.mono::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #cfcfd6;
+  border: 1px solid #2a2a33;
+}
+.range.vol {
+  width: 120px;
+}
+.range.progress {
   flex: 1;
-  min-width: 0;
-  height: 40px;
+  min-width: 160px;
 }
 .muted {
   color: var(--muted);
