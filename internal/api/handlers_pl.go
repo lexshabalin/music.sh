@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -25,7 +26,8 @@ func (a *App) listPl(w http.ResponseWriter, r *http.Request) {
 	uid, _ := userIDFromCtx(r.Context())
 	list, err := a.DB.ListPlaylists(r.Context(), uid)
 	if err != nil {
-		JSONError(w, 500, "db")
+		log.Printf("list playlists db error: %v", err)
+		JSONError(w, 500, "db: "+err.Error())
 		return
 	}
 	JSON(w, 200, list)
@@ -40,7 +42,8 @@ func (a *App) createPl(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := a.DB.CreatePlaylist(r.Context(), uuid.New(), uid, b.Name, b.Description)
 	if err != nil {
-		JSONError(w, 500, "db")
+		log.Printf("create playlist db error: %v", err)
+		JSONError(w, 500, "db: "+err.Error())
 		return
 	}
 	JSON(w, 201, p)
@@ -71,7 +74,8 @@ func (a *App) patchPl(w http.ResponseWriter, r *http.Request) {
 	var b plPatch
 	_ = ReadJSON(r, &b)
 	if err := a.DB.UpdatePlaylist(r.Context(), uid, id, b.Name, b.Description); err != nil {
-		JSONError(w, 400, "update")
+		log.Printf("patch playlist db error: %v", err)
+		JSONError(w, 400, "update: "+err.Error())
 		return
 	}
 	JSON(w, 200, map[string]any{"ok": true})
@@ -85,7 +89,8 @@ func (a *App) deletePl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.DB.DeletePlaylist(r.Context(), uid, id); err != nil {
-		JSONError(w, 500, "db")
+		log.Printf("delete playlist db error: %v", err)
+		JSONError(w, 500, "db: "+err.Error())
 		return
 	}
 	JSON(w, 200, map[string]any{"ok": true})
