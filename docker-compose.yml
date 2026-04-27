@@ -1,12 +1,13 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: musicsh
       POSTGRES_PASSWORD: musicsh
       POSTGRES_DB: musicsh
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U musicsh -d musicsh"]
       interval: 3s
@@ -15,24 +16,23 @@ services:
 
   app:
     build: .
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8180:8080"
     environment:
       DATABASE_URL: postgres://musicsh:musicsh@db:5432/musicsh?sslmode=disable
       JWT_SECRET: change-me-in-production-please-32ch
       MUSIC_DIR: /music
       DATA_DIR: /data
-      SCAN_ON_START: "0"
+      SCAN_ON_START: "1"
+      # Optional: set explicit allowed origins (comma-separated) instead of "*"
+      # CORS_ORIGIN: "https://your-domain.example"
     volumes:
       - type: bind
         source: ${MUSIC_HOST_DIR:-./music}
         target: /music
         read_only: true
-      - appdata:/data
+      - ./appdata:/data
     depends_on:
       db:
         condition: service_healthy
-
-volumes:
-  pgdata:
-  appdata:
