@@ -309,12 +309,50 @@ func (d *DB) GetAlbum(ctx context.Context, id uuid.UUID) (Album, error) {
 func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]Album, error) {
 	qs := strings.TrimSpace(q)
 	like := "%" + qs + "%"
+	// Collapse "shell duplicates" that share the same normalized album title/year but were created with
+	// different featured-artist strings on the album row.
+	//
+	// - Library view: artistID is NULL → dedupe across all albums.
+	// - Artist view: artistID is set → include albums where the artist appears on tracks OR is the album artist,
+	//   then dedupe within that artist's discography slice.
 	rows, err := d.Pool.Query(ctx, `
+		WITH cand AS (
+			SELECT a.*
+			FROM albums a
+			WHERE ($3::uuid IS NULL OR a.artist_id = $3 OR EXISTS (
+				SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.artist_id = $3
+			))
+		),
+		base AS (
+			SELECT
+				c.*,
+				lower(trim(both ' ,;-' FROM regexp_replace(
+					COALESCE(ar.name, ''),
+					'(?i)[[:space:]]+(feat\\.?|ft\\.?|featuring|w/|vs\\.?|x|при[[:space:]]+уч\\.|под[[:space:]]+уч\\.|совместно[[:space:]]+с)\\b.*$',
+					'',
+					'g'
+				))) AS artist_key
+			FROM cand c
+			LEFT JOIN artists ar ON c.artist_id = ar.id
+			WHERE ($1 = '' OR c.title ILIKE $2 OR ar.name ILIKE $2)
+		),
+		ranked AS (
+			SELECT
+				b.*,
+				row_number() OVER (
+					PARTITION BY b.title_search, COALESCE(b.year, -1), b.artist_key
+					ORDER BY
+						(b.cover_path IS NOT NULL AND btrim(b.cover_path) <> '') DESC,
+						(SELECT COUNT(*)::int FROM tracks t WHERE t.album_id = b.id) DESC,
+						b.created_at ASC,
+						b.id ASC
+				) AS rn
+			FROM base b
+		)
 		SELECT a.id, a.title, a.year, a.artist_id::text, ar.name, a.musicbrainz_release_id, a.cover_path
-		FROM albums a
+		FROM ranked a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
-		WHERE ($3::uuid IS NULL OR a.artist_id = $3)
-		  AND ($1 = '' OR a.title ILIKE $2 OR ar.name ILIKE $2)
+		WHERE a.rn = 1
 		ORDER BY ar.name NULLS LAST, a.title
 	`, qs, like, artistID)
 	if err != nil {

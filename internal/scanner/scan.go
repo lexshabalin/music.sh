@@ -113,11 +113,11 @@ func readTrackMeta(p string) trackMeta {
 	}
 	out := trackMeta{title: strings.TrimSpace(m.Title())}
 	artist := strings.TrimSpace(m.Artist())
-	albumArtist := ""
+	albumArtistRaw := ""
 	// Not all tag formats expose album-artist; use optional interface.
 	type albumArtistGetter interface{ AlbumArtist() string }
 	if aa, ok := m.(albumArtistGetter); ok {
-		albumArtist = strings.TrimSpace(aa.AlbumArtist())
+		albumArtistRaw = strings.TrimSpace(aa.AlbumArtist())
 	}
 	album := strings.TrimSpace(m.Album())
 	if out.title == "" {
@@ -126,6 +126,7 @@ func readTrackMeta(p string) trackMeta {
 	if artist == "" {
 		artist = "Unknown Artist"
 	}
+	albumArtist := albumArtistRaw
 	if albumArtist == "" {
 		albumArtist = artist
 	}
@@ -133,7 +134,10 @@ func readTrackMeta(p string) trackMeta {
 		album = "Unknown"
 	}
 	out.artist = artist
-	out.albumArtist = albumArtist
+	// Album grouping should not split on featured guests in the artist string.
+	// If album artist isn't explicitly tagged, derive it from the track artist.
+	// If it *is* explicitly tagged but still contains collab markers, normalize it too.
+	out.albumArtist = primaryArtistForAlbumGrouping(albumArtist)
 	out.album = album
 
 	if n, _ := m.Track(); n > 0 {
