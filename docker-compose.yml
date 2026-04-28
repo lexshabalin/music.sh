@@ -24,12 +24,12 @@ services:
       JWT_SECRET: change-me-in-production-please-32ch
       MUSIC_DIR: /music
       DATA_DIR: /data
-      SCAN_ON_START: "1"
+      SCAN_ON_START: "0"
       # Optional: set explicit allowed origins (comma-separated) instead of "*"
       # CORS_ORIGIN: "https://your-domain.example"
     volumes:
       - type: bind
-        source: ${MUSIC_HOST_DIR:-./music}
+        source: /share/music 
         target: /music
         read_only: true
       - ./appdata:/data
