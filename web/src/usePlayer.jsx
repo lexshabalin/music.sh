@@ -86,11 +86,16 @@ export function PlayerProvider({ children }) {
   }, [queue, idx, current, volume, muted, lastVolume]);
 
   // keep element volume in sync
-  if (ref.current && ref.current.volume !== volume) {
-    ref.current.volume = volume;
-  }
-  if (ref.current && ref.current.muted !== muted) {
-    ref.current.muted = muted;
+  try {
+    if (ref.current && ref.current.volume !== volume) {
+      ref.current.volume = volume;
+    }
+    if (ref.current && ref.current.muted !== muted) {
+      ref.current.muted = muted;
+    }
+  } catch (_) {
+    // Some browsers can throw if the underlying media element was unmounted.
+    // Next render will repair ref.current via the audio ref callback.
   }
   const value = api;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

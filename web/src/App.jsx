@@ -106,6 +106,20 @@ function Shell({ children }) {
   const [showUserMenu, setShowUserMenu] = React.useState(false);
   const userBtnRef = React.useRef(null);
 
+  const doLogout = React.useCallback(() => {
+    try {
+      const el = p.ref.current;
+      if (el && typeof el.pause === "function") el.pause();
+    } catch (_) {}
+    try {
+      if (typeof p.playQueue === "function") p.playQueue([], -1);
+    } catch (_) {}
+    try {
+      localStorage.removeItem("musicsh_token");
+    } catch (_) {}
+    window.location.hash = "#/login";
+  }, [p]);
+
   React.useEffect(() => {
     const el = p.ref.current;
     if (!el) return;
@@ -240,10 +254,7 @@ function Shell({ children }) {
                     setShowProfile(true);
                   }}
                   onLogout={() => {
-                    try {
-                      localStorage.removeItem("musicsh_token");
-                    } catch (_) {}
-                    window.location.hash = "#/login";
+                    doLogout();
                   }}
                 />
               ) : null}
@@ -407,7 +418,9 @@ function Shell({ children }) {
             key={p.current.id}
             autoPlay
             ref={(el) => {
-              if (el) p.ref.current = el;
+              // React calls the ref with null on unmount.
+              // Keep ref.current accurate to avoid referencing a dead element after logout.
+              p.ref.current = el;
             }}
             src={p.current.url}
           />
@@ -432,10 +445,7 @@ function Shell({ children }) {
             } catch (_) {}
           }}
           onLogout={() => {
-            try {
-              localStorage.removeItem("musicsh_token");
-            } catch (_) {}
-            window.location.hash = "#/login";
+            doLogout();
           }}
         />
       ) : null}
