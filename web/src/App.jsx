@@ -440,10 +440,13 @@ function Shell({ children }) {
 }
 
 function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
+  const menuRef = React.useRef(null);
   React.useEffect(() => {
     const onDoc = (e) => {
       const el = anchorRef.current;
       if (el && el.contains(e.target)) return;
+      const menuEl = menuRef.current;
+      if (menuEl && menuEl.contains(e.target)) return;
       onClose();
     };
     document.addEventListener("mousedown", onDoc);
@@ -467,7 +470,7 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
     : {};
 
   return (
-    <div style={style} role="menu" aria-label="Profile menu">
+    <div ref={menuRef} style={style} role="menu" aria-label="Profile menu">
       <div style={{ padding: "6px 8px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {name}
       </div>

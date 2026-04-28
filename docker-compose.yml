@@ -29,7 +29,7 @@ services:
       # CORS_ORIGIN: "https://your-domain.example"
     volumes:
       - type: bind
-        source: /share/music 
+        source: ./music 
         target: /music
         read_only: true
       - ./appdata:/data
