@@ -17,6 +17,9 @@ variables:
 build:image:
   stage: build
   image: docker:27
+  tags:
+    - mediasrv
+    - docker
   services:
     - name: docker:27-dind
       command: ["--mtu=1460"]
@@ -29,6 +32,9 @@ build:image:
 deploy:prod:
   stage: deploy
   image: alpine:3.20
+  tags:
+    - mediasrv
+    - docker
   environment:
     name: production
   rules:
