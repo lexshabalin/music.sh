@@ -56,28 +56,102 @@ body {
 
 /* Lava lamp preset (red/yellow animated blobs) */
 .bg-lava {
-  background: radial-gradient(1200px 900px at 30% 30%, rgba(255, 99, 71, 0.38), transparent 60%),
-    radial-gradient(900px 700px at 70% 55%, rgba(255, 215, 70, 0.30), transparent 60%),
-    radial-gradient(800px 700px at 50% 80%, rgba(255, 99, 71, 0.20), transparent 60%),
-    linear-gradient(180deg, rgba(12, 12, 16, 1), rgba(10, 10, 14, 1));
-  filter: blur(18px) saturate(1.2);
+  /* Base molten color field */
+  background:
+    radial-gradient(1200px 900px at 30% 25%, rgba(255, 92, 56, 0.26), transparent 62%),
+    radial-gradient(1100px 850px at 75% 35%, rgba(255, 215, 70, 0.20), transparent 62%),
+    radial-gradient(900px 820px at 50% 80%, rgba(255, 120, 40, 0.18), transparent 62%),
+    linear-gradient(180deg, #050509, #0a0a10 35%, #0e0e12);
   transform: translateZ(0);
-  animation: lavaDrift 10s ease-in-out infinite alternate;
 }
 .bg-lava::after {
+  /* Final dimmer so UI stays readable */
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(14, 14, 18, 0.62);
+  background: rgba(14, 14, 18, 0.58);
+  z-index: 3;
 }
-@keyframes lavaDrift {
+
+.bg-lava::before {
+  /* “Molten blobs” layer: multiple glowing blobs that rise/flow */
+  content: "";
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(circle at 20% 90%, rgba(255, 70, 35, 0.95) 0 10%, transparent 12%),
+    radial-gradient(circle at 40% 95%, rgba(255, 190, 55, 0.92) 0 12%, transparent 14%),
+    radial-gradient(circle at 60% 88%, rgba(255, 90, 40, 0.90) 0 11%, transparent 13%),
+    radial-gradient(circle at 78% 96%, rgba(255, 210, 70, 0.86) 0 10%, transparent 12%),
+    radial-gradient(circle at 30% 60%, rgba(255, 120, 35, 0.55) 0 14%, transparent 18%),
+    radial-gradient(circle at 72% 52%, rgba(255, 200, 70, 0.42) 0 14%, transparent 20%);
+  filter: blur(26px) saturate(1.35) contrast(1.25);
+  mix-blend-mode: screen;
+  opacity: 0.92;
+  animation: lavaRise 14s ease-in-out infinite;
+  z-index: 1;
+}
+
+.bg-lava .bg-lava__flow {
+  display: none;
+}
+
+/* Second flow layer using an extra background via box-shadow trick (keeps DOM minimal) */
+.bg-lava {
+  filter: saturate(1.12) contrast(1.15);
+}
+.bg-lava::before {
+  box-shadow:
+    0 0 120px rgba(255, 90, 40, 0.10),
+    0 0 180px rgba(255, 210, 70, 0.08);
+}
+
+/* Subtle moving “heat shimmer” / noise */
+.bg-lava {
+  overflow: hidden;
+}
+.bg-lava > * {
+  display: none;
+}
+.bg-lava::marker {
+  content: "";
+}
+.bg-lava::selection {
+  background: transparent;
+}
+.bg-lava:where(*) {}
+.bg-lava::backdrop {}
+
+.bg-lava::after {
+  /* Keep dimmer as topmost */
+}
+.bg-lava::after {
+  /* keep z-index 3 */
+}
+
+.bg-lava::after {
+  /* combine dim with a faint animated vignette */
+  background:
+    radial-gradient(900px 700px at 50% 35%, rgba(0,0,0,0.05), rgba(0,0,0,0.42) 68%),
+    rgba(14, 14, 18, 0.52);
+}
+
+@keyframes lavaRise {
   0% {
-    background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%;
-    transform: scale(1.02) translate3d(-10px, -6px, 0);
+    transform: translate3d(-3%, 6%, 0) scale(1.06);
+    opacity: 0.88;
+  }
+  35% {
+    transform: translate3d(2%, -6%, 0) scale(1.12);
+    opacity: 0.96;
+  }
+  70% {
+    transform: translate3d(-2%, -14%, 0) scale(1.09);
+    opacity: 0.92;
   }
   100% {
-    background-position: 100% 80%, 40% 100%, 70% 10%, 0% 0%;
-    transform: scale(1.08) translate3d(14px, 10px, 0);
+    transform: translate3d(3%, -20%, 0) scale(1.13);
+    opacity: 0.95;
   }
 }
 
@@ -203,8 +277,10 @@ body {
   flex: 0 0 auto;
 }
 .bg-thumb--lava {
-  background: radial-gradient(circle at 35% 35%, rgba(255, 99, 71, 0.95), transparent 60%),
-    radial-gradient(circle at 70% 65%, rgba(255, 215, 70, 0.85), transparent 60%),
+  background:
+    radial-gradient(circle at 30% 70%, rgba(255, 70, 35, 0.95) 0 28%, transparent 34%),
+    radial-gradient(circle at 70% 75%, rgba(255, 200, 70, 0.90) 0 26%, transparent 34%),
+    radial-gradient(circle at 55% 35%, rgba(255, 120, 35, 0.65) 0 22%, transparent 34%),
     linear-gradient(180deg, #111119, #0e0e12);
 }
 .bg-thumb--grain {
@@ -654,8 +730,15 @@ input {
   align-items: center;
   min-width: 0;
 }
+.track-grid {
+  /* Give time column a bit more breathing room */
+  grid-template-columns: minmax(320px, 3fr) minmax(180px, 1.9fr) minmax(220px, 2fr) 84px;
+}
 .track-grid--album {
   grid-template-columns: minmax(360px, 3.3fr) minmax(220px, 2.2fr) 72px;
+}
+.track-grid--album {
+  grid-template-columns: minmax(360px, 3.3fr) minmax(220px, 2.2fr) 84px;
 }
 .track-header .track-grid {
   grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
@@ -668,6 +751,7 @@ input {
 }
 .track-dur {
   text-align: right;
+  padding-right: 10px;
 }
 .track-album--hidden {
   display: none;
