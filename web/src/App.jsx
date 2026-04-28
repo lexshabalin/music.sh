@@ -182,31 +182,57 @@ function Shell({ children }) {
   }, [p.current?.id]);
 
   React.useEffect(() => {
-    if (!getToken()) return;
-    let stop = false;
+    const authed = !!getToken();
+
+    if (!authed) {
+      setMe(null);
+      setAvatarUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return "";
+      });
+      return;
+    }
+
+    let cancelled = false;
+
     (async () => {
       try {
         const u = await auth.me();
-        if (stop) return;
+        if (cancelled) return;
         setMe(u);
-      } catch (_) {}
+      } catch (_) {
+        if (cancelled) return;
+        setMe(null);
+      }
+
       try {
         const b = await auth.avatar();
-        if (stop) return;
-        if (!b) return;
+        if (cancelled) return;
+        if (!b) {
+          setAvatarUrl((old) => {
+            if (old) URL.revokeObjectURL(old);
+            return "";
+          });
+          return;
+        }
         const url = URL.createObjectURL(b);
         setAvatarUrl((old) => {
           if (old) URL.revokeObjectURL(old);
           return url;
         });
       } catch (_) {
-        // no avatar is fine
+        if (cancelled) return;
+        setAvatarUrl((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return "";
+        });
       }
     })();
+
     return () => {
-      stop = true;
+      cancelled = true;
     };
-  }, []);
+  }, [!!getToken()]);
 
   React.useEffect(() => {
     let stop = false;
