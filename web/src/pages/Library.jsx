@@ -41,13 +41,19 @@ export function Library() {
   }, [scanning]);
   return (
     <div>
-      <div className="search">
-        <input placeholder="Search albums/artists…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="search-row">
+        <input
+          className="search-input"
+          placeholder="Search albums/artists…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
         <button
           type="button"
-          className="ghost"
-          style={{ marginLeft: 8 }}
+          className={`rescan-icon-btn${scanning ? " rescan-icon-btn--scanning" : ""}`}
           disabled={scanning}
+          title="Rescan library"
+          aria-label="Rescan library"
           onClick={async () => {
             setScan(true);
             try {
@@ -59,7 +65,7 @@ export function Library() {
             }
           }}
         >
-          Rescan
+          <span className="rescan-pulse" aria-hidden />
         </button>
       </div>
       {scanning && scanState ? (

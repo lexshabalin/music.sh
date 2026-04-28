@@ -396,3 +396,73 @@ input {
 .search {
   margin: 0.5rem 0 1rem;
 }
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.5rem 0 1rem;
+}
+.search-row .search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Circular rescan: idle dot is calm; while scanning it beats */
+.rescan-icon-btn {
+  flex-shrink: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rescan-icon-btn:hover:not(:disabled) {
+  border-color: #3d3d4a;
+  background: rgba(255, 255, 255, 0.04);
+}
+.rescan-icon-btn:disabled {
+  cursor: wait;
+  opacity: 0.9;
+}
+.rescan-pulse {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.rescan-icon-btn--scanning {
+  border-color: rgba(255, 99, 71, 0.45);
+}
+.rescan-icon-btn--scanning .rescan-pulse {
+  background: var(--accent);
+  animation: rescanPulseBeat 0.9s ease-in-out infinite;
+}
+@keyframes rescanPulseBeat {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  18% {
+    transform: scale(1.42);
+    opacity: 1;
+  }
+  32% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  48% {
+    transform: scale(1.32);
+    opacity: 1;
+  }
+  62% {
+    transform: scale(0.94);
+    opacity: 0.88;
+  }
+}
