@@ -55,7 +55,7 @@ func (a *App) getAvatar(w http.ResponseWriter, r *http.Request) {
 	uid, _ := userIDFromCtx(r.Context())
 	p := a.avatarPathFor(uid.String())
 	if _, err := os.Stat(p); err != nil {
-		JSONError(w, 404, "no avatar")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")

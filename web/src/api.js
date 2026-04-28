@@ -42,7 +42,8 @@ export const auth = {
   avatar: async () => {
     const t = getToken();
     const r = await fetch(base() + "/api/me/avatar", { headers: t ? { Authorization: `Bearer ${t}` } : {} });
-    if (!r.ok) throw new Error("no avatar");
+    if (r.status === 204) return null;
+    if (!r.ok) throw new Error("avatar");
     return r.blob();
   },
   uploadAvatar: async (file) => {

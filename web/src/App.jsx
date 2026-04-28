@@ -179,6 +179,7 @@ function Shell({ children }) {
       try {
         const b = await auth.avatar();
         if (stop) return;
+        if (!b) return;
         const url = URL.createObjectURL(b);
         setAvatarUrl((old) => {
           if (old) URL.revokeObjectURL(old);
