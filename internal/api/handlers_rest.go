@@ -116,26 +116,46 @@ func (a *App) getTrack(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) stream(w http.ResponseWriter, r *http.Request) {
+	tw := &trackWriteState{ResponseWriter: w}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		JSONError(w, 400, "id")
+		JSONError(tw, 400, "id")
 		return
 	}
 	_, err = a.parseUserIDFromMediaRequest(r)
 	if err != nil {
-		JSONError(w, 401, "unauthorized")
+		JSONError(tw, 401, "unauthorized")
 		return
 	}
 	abs, _, err := a.DB.GetTrackForStream(r.Context(), id)
 	if err != nil {
-		JSONError(w, 404, "not found")
+		JSONError(tw, 404, "not found")
 		return
 	}
 	// ServeFileWithRange may return nil even if the client cancels mid-stream (seek/buffer),
 	// which is expected for <audio>. Only errors before headers are meaningful here.
-	if err := stream.ServeFileWithRange(w, r, abs); err != nil {
-		JSONError(w, 404, "stream failed")
+	if err := stream.ServeFileWithRange(tw, r, abs); err != nil {
+		// If headers/body already started, do NOT write JSON (it would corrupt the media stream).
+		if tw.wroteHeader {
+			return
+		}
+		JSONError(tw, 404, "stream failed")
 	}
+}
+
+type trackWriteState struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (t *trackWriteState) WriteHeader(statusCode int) {
+	t.wroteHeader = true
+	t.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (t *trackWriteState) Write(p []byte) (int, error) {
+	t.wroteHeader = true
+	return t.ResponseWriter.Write(p)
 }
 
 func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
