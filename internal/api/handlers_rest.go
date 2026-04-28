@@ -131,10 +131,10 @@ func (a *App) stream(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "not found")
 		return
 	}
+	// ServeFileWithRange may return nil even if the client cancels mid-stream (seek/buffer),
+	// which is expected for <audio>. Only errors before headers are meaningful here.
 	if err := stream.ServeFileWithRange(w, r, abs); err != nil {
-		// If we can't even open/stat/seek the file, return a useful error instead of a broken stream.
 		JSONError(w, 404, "stream failed")
-		return
 	}
 }
 

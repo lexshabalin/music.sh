@@ -1,14 +1,18 @@
 package stream
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // ServeFileWithRange supports HTTP Range for audio; path must be absolute
@@ -31,6 +35,9 @@ func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) err
 	if ra == "" {
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		_, err = io.Copy(w, f)
+		if isClientDisconnect(err, r) {
+			return nil
+		}
 		return err
 	}
 	start, end, ok := parseRange(ra, size)
@@ -47,7 +54,27 @@ func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) err
 	w.Header().Set("Content-Length", strconv.FormatInt(chunk, 10))
 	w.WriteHeader(http.StatusPartialContent)
 	_, err = io.CopyN(w, f, chunk)
+	if isClientDisconnect(err, r) {
+		return nil
+	}
 	return err
+}
+
+func isClientDisconnect(err error, r *http.Request) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && !ne.Timeout() {
+		return true
+	}
+	if r != nil && r.Context() != nil && errors.Is(r.Context().Err(), context.Canceled) {
+		return true
+	}
+	return false
 }
 
 func parseRange(ra string, size int64) (start, end int64, ok bool) {
