@@ -114,10 +114,22 @@ function Shell({ children }) {
     const onPause = () => setIsPlaying(false);
     const onTime = () => setCurT(el.currentTime || 0);
     const onMeta = () => setDur(el.duration || 0);
-    const onError = () => {
+    const onError = async () => {
       // Don't auto-skip: browsers can mark the media as ended after a failed load.
       setIsPlaying(false);
-      setPlayErr("Playback error (stream failed).");
+      const mediaErr = el.error?.code ? `mediaErr=${el.error.code}` : "";
+      const src = p.current?.url || el.currentSrc || "";
+      let http = "";
+      if (src) {
+        try {
+          // Probe the URL to surface the real HTTP status (401/404/416/500).
+          const r = await fetch(src, { headers: { Range: "bytes=0-0" } });
+          http = `http=${r.status}`;
+        } catch (_) {
+          http = "http=failed";
+        }
+      }
+      setPlayErr(["Playback error (stream failed).", mediaErr, http].filter(Boolean).join(" "));
       // keep queue position; user can retry or skip manually
     };
     const onEnded = () => {

@@ -131,7 +131,11 @@ func (a *App) stream(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "not found")
 		return
 	}
-	_ = stream.ServeFileWithRange(w, r, abs)
+	if err := stream.ServeFileWithRange(w, r, abs); err != nil {
+		// If we can't even open/stat/seek the file, return a useful error instead of a broken stream.
+		JSONError(w, 404, "stream failed")
+		return
+	}
 }
 
 func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
