@@ -407,62 +407,70 @@ input {
   min-width: 0;
 }
 
-/* Circular rescan: idle dot is calm; while scanning it beats */
+/* Rescan: monochrome disc + ECG-style pulse; heartbeat animation while scanning */
 .rescan-icon-btn {
   flex-shrink: 0;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 2.4rem;
+  height: 2.4rem;
   padding: 0;
   border-radius: 50%;
-  background: transparent;
+  background: #1c1c24;
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid #2f2f3a;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .rescan-icon-btn:hover:not(:disabled) {
   border-color: #3d3d4a;
-  background: rgba(255, 255, 255, 0.04);
+  background: #22222c;
 }
 .rescan-icon-btn:disabled {
   cursor: wait;
-  opacity: 0.9;
+  opacity: 1;
 }
-.rescan-pulse {
+.rescan-ecg {
+  width: 1.28rem;
+  height: 0.62rem;
   display: block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--muted);
+  overflow: visible;
+  transform-origin: 50% 50%;
+  opacity: 0.92;
+}
+.rescan-ecg__path {
+  fill: none;
+  stroke: #c4c4ce;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 .rescan-icon-btn--scanning {
-  border-color: rgba(255, 99, 71, 0.45);
+  border-color: #45454f;
 }
-.rescan-icon-btn--scanning .rescan-pulse {
-  background: var(--accent);
-  animation: rescanPulseBeat 0.9s ease-in-out infinite;
+.rescan-icon-btn--scanning .rescan-ecg {
+  animation: rescanHeartbeat 0.88s ease-in-out infinite;
 }
-@keyframes rescanPulseBeat {
+@keyframes rescanHeartbeat {
   0%,
   100% {
     transform: scale(1);
-    opacity: 0.75;
+    opacity: 0.88;
   }
-  18% {
-    transform: scale(1.42);
+  12% {
+    transform: scale(1.24);
     opacity: 1;
   }
-  32% {
+  24% {
     transform: scale(1);
-    opacity: 0.85;
+    opacity: 0.9;
   }
-  48% {
-    transform: scale(1.32);
+  38% {
+    transform: scale(1.14);
     opacity: 1;
   }
-  62% {
-    transform: scale(0.94);
+  50% {
+    transform: scale(1);
     opacity: 0.88;
   }
 }

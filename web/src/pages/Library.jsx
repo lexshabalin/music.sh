@@ -65,7 +65,12 @@ export function Library() {
             }
           }}
         >
-          <span className="rescan-pulse" aria-hidden />
+          <svg className="rescan-ecg" viewBox="0 0 40 14" aria-hidden>
+            <path
+              className="rescan-ecg__path"
+              d="M1.5 9.5 L9 9.5 L11 9.5 L14.5 2.5 L16.5 9.5 L18.5 5.5 L20.5 9.5 L38.5 9.5"
+            />
+          </svg>
         </button>
       </div>
       {scanning && scanState ? (
