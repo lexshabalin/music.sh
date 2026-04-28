@@ -136,7 +136,7 @@ export function Playlists() {
                   }}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden>
-                    <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="currentColor" />
+                    <path d="M8.5 6.6v10.8l10-5.4-10-5.4Z" fill="currentColor" />
                   </svg>
                 </button>
               </div>
