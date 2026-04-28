@@ -75,12 +75,14 @@ export const lib = {
   scan: () => req("/api/library/scan", { method: "POST", body: "{}" }),
   scanStatus: () => req("/api/library/scan/status"),
   streamUrl: (id) => {
-    // Audio tag requests cannot send Authorization headers; server uses HttpOnly cookie.
-    return base() + "/api/tracks/" + id + "/stream";
+    // Audio tag requests cannot send Authorization headers; pass token via query param.
+    const t = getToken();
+    return base() + "/api/tracks/" + id + "/stream" + (t ? "?token=" + encodeURIComponent(t) : "");
   },
   coverUrl: (id) => {
-    // Image requests cannot send Authorization headers; server uses HttpOnly cookie.
-    return base() + "/api/albums/" + id + "/cover";
+    // Image requests cannot send Authorization headers; pass token via query param.
+    const t = getToken();
+    return base() + "/api/albums/" + id + "/cover" + (t ? "?token=" + encodeURIComponent(t) : "");
   },
   playlists: (q) => req("/api/playlists?" + new URLSearchParams({ query: q || "" })),
   playlist: (id) => req("/api/playlists/" + id),
