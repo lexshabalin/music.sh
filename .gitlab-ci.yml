@@ -76,8 +76,10 @@ deploy:prod:
     - rsync -az --delete
       --exclude '.git'
       --exclude '.gitlab-ci.yml'
+      --exclude '.env'
       --exclude 'pgdata/'
       --exclude 'appdata/'
+      --exclude 'music/'
       ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
     # Run deploy on server
     - ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash '$DEPLOY_DIR/scripts/deploy_remote.sh'"
