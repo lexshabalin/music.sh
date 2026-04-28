@@ -16,6 +16,162 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
+// CountPendingIdentifyJobForTrack returns how many pending/running identify jobs exist for a track.
+func (d *DB) CountPendingIdentifyJobForTrack(ctx context.Context, trackID uuid.UUID) (int, error) {
+	var n int
+	err := d.Pool.QueryRow(ctx, `
+		SELECT count(*) FROM jobs
+		WHERE type = 'identify_track'
+		  AND status IN ('pending','running')
+		  AND payload->>'trackId' = $1
+	`, trackID.String()).Scan(&n)
+	return n, err
+}
+
+// EnsureIdentifyTrackJob enqueues identify_track if not already pending/running.
+func (d *DB) EnsureIdentifyTrackJob(ctx context.Context, trackID uuid.UUID) error {
+	c, err := d.CountPendingIdentifyJobForTrack(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	if c > 0 {
+		return nil
+	}
+	payload := fmt.Sprintf(`{"trackId":"%s"}`, trackID.String())
+	return d.EnqueueJob(ctx, uuid.New(), "identify_track", payload)
+}
+
+// EnsureFetchAlbumJob enqueues fetch_album for an album if not already pending/running.
+func (d *DB) EnsureFetchAlbumJob(ctx context.Context, albumID uuid.UUID) error {
+	c, err := d.CountPendingMetaJobForAlbum(ctx, albumID)
+	if err != nil {
+		return err
+	}
+	if c > 0 {
+		return nil
+	}
+	payload := fmt.Sprintf(`{"albumId":"%s"}`, albumID.String())
+	return d.EnqueueJob(ctx, uuid.New(), "fetch_album", payload)
+}
+
+// TrackIdentifyInput returns file path and current metadata for identification.
+func (d *DB) TrackIdentifyInput(ctx context.Context, id uuid.UUID) (filePath string, title *string, durationMs *int, artistName string, albumTitle string, mbRecordingID *string, err error) {
+	var t sql.NullString
+	var dur sql.NullInt32
+	var arn sql.NullString
+	var alb sql.NullString
+	var rec sql.NullString
+	err = d.Pool.QueryRow(ctx, `
+		SELECT tr.file_path, tr.title, tr.duration_ms, ar.name, al.title, tr.mb_recording_id
+		FROM tracks tr
+		LEFT JOIN artists ar ON tr.artist_id = ar.id
+		LEFT JOIN albums  al ON tr.album_id = al.id
+		WHERE tr.id = $1
+	`, id).Scan(&filePath, &t, &dur, &arn, &alb, &rec)
+	if err != nil {
+		return
+	}
+	if t.Valid && strings.TrimSpace(t.String) != "" {
+		s := t.String
+		title = &s
+	}
+	if dur.Valid && dur.Int32 > 0 {
+		x := int(dur.Int32)
+		durationMs = &x
+	}
+	if arn.Valid {
+		artistName = arn.String
+	}
+	if alb.Valid {
+		albumTitle = alb.String
+	}
+	if rec.Valid && strings.TrimSpace(rec.String) != "" {
+		s := rec.String
+		mbRecordingID = &s
+	}
+	return
+}
+
+// ApplyIdentifiedMeta updates a track based on identification results.
+// Only overwrites fields that are empty/unknown.
+func (d *DB) ApplyIdentifiedMeta(ctx context.Context, trackID uuid.UUID, title, artist, album string, year *int, mbRecordingID string) (albumID uuid.UUID, err error) {
+	artist = strings.TrimSpace(artist)
+	album = strings.TrimSpace(album)
+	title = strings.TrimSpace(title)
+
+	// read current
+	var curTitle sql.NullString
+	var curArtist sql.NullString
+	var curAlbum sql.NullString
+	var curYear sql.NullInt32
+	err = d.Pool.QueryRow(ctx, `
+		SELECT tr.title, ar.name, al.title, tr.year
+		FROM tracks tr
+		LEFT JOIN artists ar ON tr.artist_id = ar.id
+		LEFT JOIN albums  al ON tr.album_id = al.id
+		WHERE tr.id = $1
+	`, trackID).Scan(&curTitle, &curArtist, &curAlbum, &curYear)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	shouldSetTitle := !curTitle.Valid || strings.TrimSpace(curTitle.String) == ""
+	shouldSetArtist := !curArtist.Valid || strings.EqualFold(strings.TrimSpace(curArtist.String), "unknown artist") || strings.TrimSpace(curArtist.String) == ""
+	shouldSetAlbum := !curAlbum.Valid || strings.EqualFold(strings.TrimSpace(curAlbum.String), "unknown") || strings.TrimSpace(curAlbum.String) == ""
+	shouldSetYear := !curYear.Valid
+
+	newTitle := curTitle.String
+	if shouldSetTitle && title != "" {
+		newTitle = title
+	}
+	useArtist := curArtist.String
+	if shouldSetArtist && artist != "" {
+		useArtist = artist
+	}
+	useAlbum := curAlbum.String
+	if shouldSetAlbum && album != "" {
+		useAlbum = album
+	}
+	var useYear *int
+	if shouldSetYear && year != nil && *year > 0 {
+		useYear = year
+	} else if curYear.Valid {
+		y := int(curYear.Int32)
+		useYear = &y
+	}
+
+	if strings.TrimSpace(useArtist) == "" {
+		useArtist = "Unknown Artist"
+	}
+	if strings.TrimSpace(useAlbum) == "" {
+		useAlbum = "Unknown"
+	}
+
+	artistID, e := d.FindOrCreateArtist(ctx, useArtist)
+	if e != nil {
+		return uuid.Nil, e
+	}
+	albID, e := d.FindOrCreateAlbum(ctx, &artistID, useAlbum, useYear)
+	if e != nil {
+		return uuid.Nil, e
+	}
+	albumID = albID
+
+	var rec any = nil
+	if strings.TrimSpace(mbRecordingID) != "" {
+		rec = strings.TrimSpace(mbRecordingID)
+	}
+
+	_, err = d.Pool.Exec(ctx, `
+		UPDATE tracks
+		SET title = $2, artist_id = $3, album_id = $4, year = $5,
+		    mb_recording_id = COALESCE($6, mb_recording_id),
+		    identified_at = now()
+		WHERE id = $1
+	`, trackID, newTitle, artistID, albID, useYear, rec)
+	return albumID, err
+}
+
 // UserAuthByEmail returns auth fields needed for login.
 func (d *DB) UserAuthByEmail(ctx context.Context, email string) (id uuid.UUID, emailOut string, username *string, displayName *string, hash string, err error) {
 	var uname sql.NullString

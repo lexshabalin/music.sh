@@ -72,6 +72,7 @@ type JobType string
 const (
 	JobScan        JobType = "scan"
 	JobFetchAlbum  JobType = "fetch_album"
+	JobIdentifyTrack JobType = "identify_track"
 )
 
 type Job struct {

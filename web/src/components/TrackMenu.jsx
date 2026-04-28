@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { lib } from "../api";
-import { IHeart } from "./icons";
+import { IClock, IHeart } from "./icons";
 
 function fmtDur(ms) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
@@ -9,6 +9,99 @@ function fmtDur(ms) {
   const mm = Math.floor(s / 60);
   const ss = String(s % 60).padStart(2, "0");
   return `${mm}:${ss}`;
+}
+
+const durationCache = new Map();
+
+function useLazyDurationMs(trackId, knownDurationMs) {
+  const rowRef = useRef(null);
+  const [durMs, setDurMs] = useState(() => {
+    if (typeof knownDurationMs === "number" && Number.isFinite(knownDurationMs) && knownDurationMs > 0) return knownDurationMs;
+    const cached = trackId ? durationCache.get(trackId) : undefined;
+    return typeof cached === "number" ? cached : null;
+  });
+
+  useEffect(() => {
+    if (!trackId) return;
+    if (typeof knownDurationMs === "number" && Number.isFinite(knownDurationMs) && knownDurationMs > 0) {
+      durationCache.set(trackId, knownDurationMs);
+      setDurMs(knownDurationMs);
+      return;
+    }
+    const cached = durationCache.get(trackId);
+    if (typeof cached === "number" && cached > 0) {
+      setDurMs(cached);
+      return;
+    }
+  }, [trackId, knownDurationMs]);
+
+  useEffect(() => {
+    if (!trackId) return;
+    if (durMs) return;
+    if (!rowRef.current) return;
+    if (durationCache.has(trackId)) return;
+
+    let cancelled = false;
+    let obs = null;
+    const el = rowRef.current;
+
+    const load = () => {
+      if (cancelled) return;
+      // Avoid firing multiple times per track.
+      if (durationCache.has(trackId)) return;
+      durationCache.set(trackId, 0);
+
+      const a = document.createElement("audio");
+      a.preload = "metadata";
+      a.src = lib.streamUrl(trackId);
+      const cleanup = () => {
+        try {
+          a.removeAttribute("src");
+          a.load();
+        } catch (_) {}
+      };
+      const onMeta = () => {
+        if (cancelled) return cleanup();
+        const sec = Number(a.duration);
+        if (Number.isFinite(sec) && sec > 0) {
+          const ms = Math.round(sec * 1000);
+          durationCache.set(trackId, ms);
+          setDurMs(ms);
+        } else {
+          durationCache.delete(trackId);
+        }
+        cleanup();
+      };
+      const onErr = () => {
+        durationCache.delete(trackId);
+        cleanup();
+      };
+      a.addEventListener("loadedmetadata", onMeta, { once: true });
+      a.addEventListener("error", onErr, { once: true });
+    };
+
+    if ("IntersectionObserver" in window) {
+      obs = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            if (obs) obs.disconnect();
+            load();
+            break;
+          }
+        }
+      }, { rootMargin: "250px 0px" });
+      obs.observe(el);
+    } else {
+      load();
+    }
+
+    return () => {
+      cancelled = true;
+      if (obs) obs.disconnect();
+    };
+  }, [trackId, durMs, knownDurationMs]);
+
+  return { rowRef, durationMs: durMs };
 }
 
 export function TrackRow({
@@ -35,10 +128,14 @@ export function TrackRow({
 
   const artistName = track?.artist?.name || "";
   const albumTitle = track?.album?.title || "";
+  const { rowRef, durationMs } = useLazyDurationMs(track?.id, track?.durationMs);
 
   return (
     <>
-      <li className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}>
+      <li
+        ref={rowRef}
+        className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}
+      >
         <div className={`track-grid${columns === "album" ? " track-grid--album" : ""}`}>
           <span
             className="track-title"
@@ -71,7 +168,7 @@ export function TrackRow({
           )}
 
           <div className="track-col track-dur">
-            <span className="muted">{fmtDur(track?.durationMs) || ""}</span>
+            <span className="muted">{fmtDur(durationMs) || ""}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -145,7 +242,11 @@ export function TrackHeader({ columns = "full" }) {
         <div className="track-col track-title-h">Title</div>
         <div className="track-col track-artist-h">Artist</div>
         {columns === "full" ? <div className="track-col track-album-h">Album</div> : <div className="track-col track-album-h track-album--hidden" />}
-        <div className="track-col track-dur track-dur-h">Time</div>
+        <div className="track-col track-dur track-dur-h">
+          <span className="track-time-icon" title="Time" aria-label="Time">
+            <IClock size={16} />
+          </span>
+        </div>
       </div>
       <div className="track-actions track-actions--header" />
     </li>

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/dhowden/tag"
@@ -32,12 +33,16 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
 		// Always try to enqueue cover metadata; dedupe is handled in DB.
 		_ = enqueueMetaJob(ctx, s, albumID)
+		// If metadata was inferred (flat files/no tags), try acoustid identification in background.
+		if meta.inferred {
+			_ = s.EnsureIdentifyTrackJob(ctx, trackID)
+		}
 		if ch {
 			changed++
 		}
@@ -72,11 +77,14 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
 		_ = enqueueMetaJob(ctx, s, albumID)
+		if meta.inferred {
+			_ = s.EnsureIdentifyTrackJob(ctx, trackID)
+		}
 		if ch {
 			changed++
 		}
@@ -99,17 +107,98 @@ type trackMeta struct {
 	durationMS                        *int
 	format                            *string
 	bitrateKbps                        *int
+	inferred                          bool
+}
+
+var reArtistTitle = regexp.MustCompile(`\s*-\s*`)
+
+func inferFromPath(p string) (artist, album, title string) {
+	title = strings.TrimSpace(store.BaseName(p))
+
+	// Common pattern: "Artist - Title.ext"
+	if parts := reArtistTitle.Split(title, 2); len(parts) == 2 {
+		a := strings.TrimSpace(parts[0])
+		t := strings.TrimSpace(parts[1])
+		if a != "" && t != "" {
+			artist = a
+			title = t
+		}
+	}
+
+	// Folder-based: /Artist/Album/Track.ext
+	dir := filepath.Dir(p)
+	albumDir := strings.TrimSpace(filepath.Base(dir))
+	parent := filepath.Dir(dir)
+	artistDir := strings.TrimSpace(filepath.Base(parent))
+
+	if albumDir != "" && albumDir != "." && albumDir != string(filepath.Separator) {
+		album = albumDir
+	}
+	if artist == "" && artistDir != "" && artistDir != "." && artistDir != string(filepath.Separator) {
+		artist = artistDir
+	}
+	return
 }
 
 func readTrackMeta(p string) trackMeta {
 	f, err := os.Open(p)
 	if err != nil {
-		return trackMeta{title: store.BaseName(p)}
+		artist, album, title := inferFromPath(p)
+		out := trackMeta{
+			artist:      strings.TrimSpace(artist),
+			albumArtist: strings.TrimSpace(artist),
+			album:       strings.TrimSpace(album),
+			title:       strings.TrimSpace(title),
+		}
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
+		if ext != "" {
+			out.format = &ext
+		}
+		if out.durationMS == nil {
+			if ms, ok := probeDurationMS(p); ok {
+				out.durationMS = ms
+			}
+		}
+		if strings.TrimSpace(out.artist) == "" {
+			out.artist = "Unknown Artist"
+			out.albumArtist = out.artist
+		}
+		if strings.TrimSpace(out.album) == "" {
+			out.album = "Unknown"
+		}
+		out.albumArtist = primaryArtistForAlbumGrouping(out.albumArtist)
+		out.inferred = true
+		return out
 	}
 	defer f.Close()
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		return trackMeta{title: store.BaseName(p)}
+		artist, album, title := inferFromPath(p)
+		out := trackMeta{
+			artist:      strings.TrimSpace(artist),
+			albumArtist: strings.TrimSpace(artist),
+			album:       strings.TrimSpace(album),
+			title:       strings.TrimSpace(title),
+		}
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
+		if ext != "" {
+			out.format = &ext
+		}
+		if out.durationMS == nil {
+			if ms, ok := probeDurationMS(p); ok {
+				out.durationMS = ms
+			}
+		}
+		if strings.TrimSpace(out.artist) == "" {
+			out.artist = "Unknown Artist"
+			out.albumArtist = out.artist
+		}
+		if strings.TrimSpace(out.album) == "" {
+			out.album = "Unknown"
+		}
+		out.albumArtist = primaryArtistForAlbumGrouping(out.albumArtist)
+		out.inferred = true
+		return out
 	}
 	out := trackMeta{title: strings.TrimSpace(m.Title())}
 	artist := strings.TrimSpace(m.Artist())
@@ -140,6 +229,25 @@ func readTrackMeta(p string) trackMeta {
 	out.albumArtist = primaryArtistForAlbumGrouping(albumArtist)
 	out.album = album
 
+	// If tags were empty-ish, try to improve from filename/folders.
+	if strings.EqualFold(strings.TrimSpace(out.title), strings.TrimSpace(store.BaseName(p))) || out.title == "" {
+		ia, ialb, it := inferFromPath(p)
+		if strings.TrimSpace(out.title) == "" && strings.TrimSpace(it) != "" {
+			out.title = strings.TrimSpace(it)
+		}
+		if (artist == "" || artist == "Unknown Artist") && strings.TrimSpace(ia) != "" {
+			artist = strings.TrimSpace(ia)
+			out.artist = artist
+			if albumArtistRaw == "" {
+				out.albumArtist = primaryArtistForAlbumGrouping(artist)
+			}
+		}
+		if (album == "" || album == "Unknown") && strings.TrimSpace(ialb) != "" {
+			out.album = strings.TrimSpace(ialb)
+		}
+		out.inferred = true
+	}
+
 	if n, _ := m.Track(); n > 0 {
 		t := n
 		out.track = &t
@@ -154,6 +262,14 @@ func readTrackMeta(p string) trackMeta {
 	if ext != "" {
 		out.format = &ext
 	}
+
+	// Duration: if not present in tags, try ffprobe.
+	if out.durationMS == nil {
+		if ms, ok := probeDurationMS(p); ok {
+			out.durationMS = ms
+		}
+	}
+
 	if out.durationMS != nil && *out.durationMS > 0 {
 		if st, err := os.Stat(p); err == nil && st.Size() > 0 {
 			secs := float64(*out.durationMS) / 1000.0

@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"musicsh/internal/acoustid"
 	"musicsh/internal/cover"
 	"musicsh/internal/mb"
 	"musicsh/internal/scanner"
@@ -24,28 +25,36 @@ import (
 type Config struct {
 	MusicDir string
 	DataDir  string
+	AcoustIDKey string
 }
 
 // Worker processes background jobs
 type Worker struct {
 	DB  *store.DB
 	MB  *mb.Client
+	AC  *acoustid.Client
 	Cfg Config
 }
 
 func (h *Worker) Run(ctx context.Context) {
-	tick := time.NewTicker(2 * time.Second)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-			if err := h.runOne(ctx); err != nil {
-				log.Printf("worker: %v", err)
+	// Run up to 3 jobs concurrently (requested parallelism limit).
+	for i := 0; i < 3; i++ {
+		go func() {
+			tick := time.NewTicker(2 * time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-tick.C:
+					if err := h.runOne(ctx); err != nil {
+						log.Printf("worker: %v", err)
+					}
+				}
 			}
-		}
+		}()
 	}
+	<-ctx.Done()
 }
 
 func (h *Worker) runOne(ctx context.Context) error {
@@ -83,10 +92,75 @@ func (h *Worker) runOne(ctx context.Context) error {
 			return ferr
 		}
 		return h.DB.CompleteJob(ctx, id)
+	case "identify_track":
+		var p struct {
+			TrackID string `json:"trackId"`
+		}
+		if uerr := json.Unmarshal([]byte(payload), &p); uerr != nil {
+			_ = h.DB.FailJob(ctx, id, uerr.Error())
+			return uerr
+		}
+		tid, uerr := uuid.Parse(p.TrackID)
+		if uerr != nil {
+			_ = h.DB.FailJob(ctx, id, uerr.Error())
+			return uerr
+		}
+		if h.AC == nil {
+			h.AC = acoustid.New(h.Cfg.AcoustIDKey)
+		}
+		ierr := h.identifyTrack(ctx, tid)
+		if ierr != nil {
+			_ = h.DB.FailJob(ctx, id, ierr.Error())
+			return ierr
+		}
+		return h.DB.CompleteJob(ctx, id)
 	default:
 		_ = h.DB.FailJob(ctx, id, "unknown job: "+jt)
 		return nil
 	}
+}
+
+func (h *Worker) identifyTrack(ctx context.Context, trackID uuid.UUID) error {
+	path, _, durMs, _, _, rec, err := h.DB.TrackIdentifyInput(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	// already identified
+	if rec != nil && strings.TrimSpace(*rec) != "" {
+		return nil
+	}
+
+	durSec, fp, ok := runFpcalc(path)
+	if !ok {
+		// fpcalc missing or failed - don't retry forever
+		return nil
+	}
+	// prefer fpcalc duration if db missing
+	if durMs == nil && durSec > 0 {
+		x := durSec * 1000
+		durMs = &x
+	}
+
+	res, err := h.AC.Lookup(durSec, fp)
+	if err != nil {
+		return err
+	}
+	if res == nil || res.RecordingID == "" || res.Score < 0.55 {
+		// too weak / no match
+		return nil
+	}
+
+	albumID, err := h.DB.ApplyIdentifiedMeta(ctx, trackID, res.Title, res.Artist, res.Album, res.Year, res.RecordingID)
+	if err != nil {
+		return err
+	}
+	if albumID != uuid.Nil {
+		_ = h.DB.EnsureFetchAlbumJob(ctx, albumID)
+	}
+	return nil
 }
 
 func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {

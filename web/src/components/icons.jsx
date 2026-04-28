@@ -83,3 +83,10 @@ export const IQueue = (p) => (
   </S>
 );
 
+export const IClock = (p) => (
+  <S {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v6l4 2" />
+  </S>
+);
+

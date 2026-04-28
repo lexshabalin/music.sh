@@ -15,6 +15,7 @@ type Config struct {
 	DataDir       string
 	CORSOrigins   []string
 	MigrationPath string
+	AcoustIDKey   string
 }
 
 func Load() (*Config, error) {
@@ -33,6 +34,7 @@ func Load() (*Config, error) {
 		MusicDir:    env("MUSIC_DIR", "/music"),
 		DataDir:     env("DATA_DIR", "/data"),
 		CORSOrigins: co,
+		AcoustIDKey: os.Getenv("ACOUSTID_KEY"),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

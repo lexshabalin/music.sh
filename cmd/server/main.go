@@ -59,7 +59,7 @@ func main() {
 	wh := &worker.Worker{
 		DB: st,
 		MB: mb.New(),
-		Cfg: worker.Config{MusicDir: cfg.MusicDir, DataDir: cfg.DataDir},
+		Cfg: worker.Config{MusicDir: cfg.MusicDir, DataDir: cfg.DataDir, AcoustIDKey: cfg.AcoustIDKey},
 	}
 	go wh.Run(ctx)
 

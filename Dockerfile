@@ -16,7 +16,10 @@ COPY --from=web /app/cmd/server/dist ./cmd/server/dist
 RUN go mod tidy && CGO_ENABLED=0 go build -o /out/musicsh ./cmd/server
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata
+# Runtime deps:
+# - chromaprint provides fpcalc (AcoustID fingerprint)
+# - ffmpeg provides ffprobe (duration probing)
+RUN apk add --no-cache ca-certificates tzdata chromaprint ffmpeg
 WORKDIR /app
 COPY --from=gob /out/musicsh /app/musicsh
 ENV HTTP_ADDR=0.0.0.0:8080

@@ -25,6 +25,9 @@ services:
       MUSIC_DIR: /music
       DATA_DIR: /data
       SCAN_ON_START: "0"
+      # For "Shazam-like" background identification (Chromaprint+AcoustID).
+      # Get a free key: https://acoustid.org/
+      ACOUSTID_KEY: ${ACOUSTID_KEY:-}
       # Optional: set explicit allowed origins (comma-separated) instead of "*"
       # CORS_ORIGIN: "https://your-domain.example"
     volumes:
