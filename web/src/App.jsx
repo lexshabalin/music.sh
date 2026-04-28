@@ -95,6 +95,7 @@ function Shell({ children }) {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [curT, setCurT] = React.useState(0);
   const [dur, setDur] = React.useState(0);
+  const [playErr, setPlayErr] = React.useState("");
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
   const [showQueue, setShowQueue] = React.useState(false);
@@ -113,7 +114,21 @@ function Shell({ children }) {
     const onPause = () => setIsPlaying(false);
     const onTime = () => setCurT(el.currentTime || 0);
     const onMeta = () => setDur(el.duration || 0);
-    const onEnded = () => p.next();
+    const onError = () => {
+      // Don't auto-skip: browsers can mark the media as ended after a failed load.
+      setIsPlaying(false);
+      setPlayErr("Playback error (stream failed).");
+      // keep queue position; user can retry or skip manually
+    };
+    const onEnded = () => {
+      // Guard: if media ended due to an error / empty response, don't auto-advance forever.
+      if (el.error || !Number.isFinite(el.duration) || el.duration <= 0.5 || (el.currentTime || 0) <= 0.1) {
+        onError();
+        return;
+      }
+      setPlayErr("");
+      p.next();
+    };
 
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
@@ -121,11 +136,13 @@ function Shell({ children }) {
     el.addEventListener("loadedmetadata", onMeta);
     el.addEventListener("durationchange", onMeta);
     el.addEventListener("ended", onEnded);
+    el.addEventListener("error", onError);
 
     // initial
     onMeta();
     onTime();
     setIsPlaying(!el.paused);
+    setPlayErr("");
 
     return () => {
       el.removeEventListener("play", onPlay);
@@ -134,6 +151,7 @@ function Shell({ children }) {
       el.removeEventListener("loadedmetadata", onMeta);
       el.removeEventListener("durationchange", onMeta);
       el.removeEventListener("ended", onEnded);
+      el.removeEventListener("error", onError);
     };
   }, [p.current?.id]);
 
@@ -355,6 +373,12 @@ function Shell({ children }) {
           <div className="muted" style={{ minWidth: 64 }}>
             {fmtTime(dur)}
           </div>
+
+          {playErr ? (
+            <div className="muted" style={{ color: "tomato", fontSize: 12, marginLeft: 8, maxWidth: 220 }}>
+              {playErr}
+            </div>
+          ) : null}
 
           <audio
             key={p.current.id}
