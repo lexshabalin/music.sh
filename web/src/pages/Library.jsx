@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { lib } from "../api";
 import { usePlayer } from "../usePlayer";
+import { IPlay } from "../components/icons";
 
 export function Library() {
   const [q, setQ] = useState("");
@@ -125,9 +126,7 @@ export function Library() {
                     }
                   }}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden>
-                    <path d="M8.5 6.6v10.8l10-5.4-10-5.4Z" fill="currentColor" />
-                  </svg>
+                  <IPlay size={16} />
                 </button>
               </div>
               <div className="album-meta">
