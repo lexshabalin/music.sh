@@ -240,7 +240,9 @@ function Shell({ children }) {
                     setShowProfile(true);
                   }}
                   onLogout={() => {
-                    localStorage.removeItem("musicsh_token");
+                    try {
+                      localStorage.removeItem("musicsh_token");
+                    } catch (_) {}
                     window.location.hash = "#/login";
                   }}
                 />
@@ -430,7 +432,9 @@ function Shell({ children }) {
             } catch (_) {}
           }}
           onLogout={() => {
-            localStorage.removeItem("musicsh_token");
+            try {
+              localStorage.removeItem("musicsh_token");
+            } catch (_) {}
             window.location.hash = "#/login";
           }}
         />

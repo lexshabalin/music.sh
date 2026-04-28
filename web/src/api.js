@@ -1,6 +1,17 @@
 const LS = "musicsh_token";
-export const getToken = () => localStorage.getItem(LS) || "";
-export const setToken = (t) => (t ? localStorage.setItem(LS, t) : localStorage.removeItem(LS));
+export const getToken = () => {
+  try {
+    return localStorage.getItem(LS) || "";
+  } catch (_) {
+    return "";
+  }
+};
+export const setToken = (t) => {
+  try {
+    if (t) localStorage.setItem(LS, t);
+    else localStorage.removeItem(LS);
+  } catch (_) {}
+};
 export const clearToken = () => setToken("");
 
 const base = () => "";
