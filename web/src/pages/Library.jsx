@@ -66,10 +66,10 @@ export function Library() {
           }}
         >
           <svg className="rescan-ecg" viewBox="0 0 48 14" aria-hidden>
-            <path className="rescan-ecg__base" d="M1 9.5 L47 9.5" />
+            <path className="rescan-ecg__base" d="M1 7 L47 7" />
             <path
               className="rescan-ecg__pulse"
-              d="M1 9.5 L13.5 9.5 L16.8 1.2 L19.2 12.6 L22.2 5.3 L24.3 9.5 L47 9.5"
+              d="M1 7 L18 7 L22.2 0.9 L25.2 13.1 L28.4 4.8 L31 7 L47 7"
             />
           </svg>
         </button>
