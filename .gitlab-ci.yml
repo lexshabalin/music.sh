@@ -48,12 +48,25 @@ deploy:prod:
     - chmod 700 ~/.ssh
     - eval "$(ssh-agent -s)"
     # Prefer base64 form (single-line, can be masked): DEPLOY_SSH_PRIVATE_KEY_B64
-    # Fallback: raw multiline key in DEPLOY_SSH_PRIVATE_KEY (cannot be masked)
+    # Fallback: DEPLOY_SSH_PRIVATE_KEY (either base64 or raw multiline)
     - |
+      key_src=""
       if [ -n "${DEPLOY_SSH_PRIVATE_KEY_B64:-}" ]; then
-        echo "$DEPLOY_SSH_PRIVATE_KEY_B64" | base64 -d | tr -d '\r' | ssh-add -
+        key_src="$DEPLOY_SSH_PRIVATE_KEY_B64"
       else
-        echo "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+        key_src="${DEPLOY_SSH_PRIVATE_KEY:-}"
+      fi
+
+      if [ -z "$key_src" ]; then
+        echo "Missing DEPLOY_SSH_PRIVATE_KEY_B64 (preferred) or DEPLOY_SSH_PRIVATE_KEY" >&2
+        exit 1
+      fi
+
+      # If value is base64, decode; otherwise treat as raw private key.
+      if echo "$key_src" | base64 -d >/tmp/deploy_key 2>/dev/null; then
+        tr -d '\r' </tmp/deploy_key | ssh-add -
+      else
+        echo "$key_src" | tr -d '\r' | ssh-add -
       fi
     - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
   script:
