@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { lib } from "../api";
+import { usePlayer } from "../usePlayer";
 
 function hash32(s) {
   let h = 2166136261;
@@ -35,6 +36,7 @@ export function Playlists() {
   const [desc, setDesc] = useState("");
   const [err, setErr] = useState("");
   const [covers, setCovers] = useState({});
+  const player = usePlayer();
   const load = () =>
     lib
       .playlists()
@@ -99,12 +101,44 @@ export function Playlists() {
         {list.map((p) => (
           <Link key={p.id} to={"/playlist/" + p.id} style={{ textDecoration: "none", color: "inherit" }}>
             <div className="card album-tile">
-              <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")}>
-                {(covers[p.id] || []).length ? (
-                  (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
-                ) : (
-                  <div className="pl-collage-empty" />
-                )}
+              <div className="tile-media">
+                <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")}>
+                  {(covers[p.id] || []).length ? (
+                    (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
+                  ) : (
+                    <div className="pl-collage-empty" />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="tile-play-btn"
+                  title="Play playlist"
+                  aria-label="Play playlist"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                      const pl = await lib.playlist(p.id);
+                      const tracks = Array.isArray(pl?.tracks) ? pl.tracks : [];
+                      const items = tracks.map((t) => ({
+                        id: t.id,
+                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+                        url: lib.streamUrl(t.id),
+                        artist: t.artist?.name || "",
+                        title: t.title || "Track",
+                        album: t.album?.title || "",
+                        coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+                      }));
+                      if (items.length) player.playQueue(items, 0);
+                    } catch (e2) {
+                      setErr(e2?.message || "error");
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden>
+                    <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="currentColor" />
+                  </svg>
+                </button>
               </div>
               <div className="album-meta" style={{ minHeight: 80 }}>
                 <div className="album-title">{p.name}</div>

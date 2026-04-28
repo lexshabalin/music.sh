@@ -143,6 +143,39 @@ input {
   background: #222;
 }
 
+.tile-media {
+  position: relative;
+}
+.tile-play-btn {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 8, 12, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.tile-play-btn svg {
+  width: 22px;
+  height: 22px;
+}
+.album-tile:hover .tile-play-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.tile-play-btn:hover {
+  background: rgba(8, 8, 12, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .pl-collage {
   width: 100%;
   aspect-ratio: 1;
