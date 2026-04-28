@@ -111,17 +111,48 @@ type trackMeta struct {
 }
 
 var reArtistTitle = regexp.MustCompile(`\s*-\s*`)
+var reTrackPrefix = regexp.MustCompile(`^\s*(\d{1,3})([.)\s_-]+)\s*`)
+var reYearPrefix = regexp.MustCompile(`^\d{4}$`)
 
 func inferFromPath(p string) (artist, album, title string) {
 	title = strings.TrimSpace(store.BaseName(p))
 
+	// Strip leading track numbers like "01 -", "1.", "03_"
+	title = reTrackPrefix.ReplaceAllString(title, "")
+
 	// Common pattern: "Artist - Title.ext"
-	if parts := reArtistTitle.Split(title, 2); len(parts) == 2 {
-		a := strings.TrimSpace(parts[0])
-		t := strings.TrimSpace(parts[1])
-		if a != "" && t != "" {
-			artist = a
-			title = t
+	parts := reArtistTitle.Split(title, -1)
+	// Examples in flat libraries:
+	// - "1970 - Led Zeppelin - Immigrant Song"
+	// - "Led Zeppelin - Immigrant Song"
+	// - "Artist - Album - Title"
+	if len(parts) >= 2 {
+		p0 := strings.TrimSpace(parts[0])
+		// drop year prefix if present
+		if reYearPrefix.MatchString(p0) && len(parts) >= 3 {
+			parts = parts[1:]
+		}
+		p0 = strings.TrimSpace(parts[0])
+		if len(parts) == 2 {
+			a := strings.TrimSpace(parts[0])
+			t := strings.TrimSpace(parts[1])
+			if a != "" && t != "" {
+				artist = a
+				title = t
+			}
+		} else if len(parts) >= 3 {
+			// best-effort: Artist - Album - Title
+			a := p0
+			alb := strings.TrimSpace(parts[1])
+			t := strings.TrimSpace(parts[len(parts)-1])
+			if a != "" && t != "" {
+				artist = a
+				title = t
+			}
+			// album is optional; avoid treating "feat" etc as album by mistake
+			if alb != "" && alb != t {
+				album = alb
+			}
 		}
 	}
 
@@ -132,7 +163,10 @@ func inferFromPath(p string) (artist, album, title string) {
 	artistDir := strings.TrimSpace(filepath.Base(parent))
 
 	if albumDir != "" && albumDir != "." && albumDir != string(filepath.Separator) {
-		album = albumDir
+		// only use folder album if we didn't already infer album from filename
+		if strings.TrimSpace(album) == "" {
+			album = albumDir
+		}
 	}
 	if artist == "" && artistDir != "" && artistDir != "." && artistDir != string(filepath.Separator) {
 		artist = artistDir

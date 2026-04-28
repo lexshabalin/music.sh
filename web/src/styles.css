@@ -548,6 +548,17 @@ input {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--border);
 }
+.plain-list li.track-row,
+.plain-list li.track-header {
+  justify-content: normal; /* override space-between for column alignment */
+}
+.plain-list li.track-row,
+.plain-list li.track-header {
+  display: grid;
+  grid-template-columns: 1fr 120px; /* left grid + right actions */
+  gap: 12px;
+  align-items: center;
+}
 .plain-list li.track-header {
   padding: 0.35rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -605,13 +616,13 @@ input {
 }
 .track-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
+  grid-template-columns: minmax(320px, 3fr) minmax(180px, 1.9fr) minmax(220px, 2fr) 72px;
   gap: 16px;
   align-items: center;
   min-width: 0;
 }
 .track-grid--album {
-  grid-template-columns: minmax(260px, 2.8fr) minmax(160px, 1.6fr) 72px;
+  grid-template-columns: minmax(360px, 3.3fr) minmax(220px, 2.2fr) 72px;
 }
 .track-header .track-grid {
   grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
@@ -695,8 +706,15 @@ input {
 }
 
 .track-actions--header {
-  width: 70px;
+  width: 120px;
   height: 1px;
+}
+.track-actions {
+  width: 120px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
 }
 .track-row button.ghost {
   transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;

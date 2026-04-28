@@ -171,7 +171,7 @@ export function TrackRow({
             <span className="muted">{fmtDur(durationMs) || ""}</span>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div className="track-actions">
           {isNowPlaying ? (
             <span className="np-eq" aria-hidden="true" title={isPlaying ? "Now playing" : "Paused"}>
               <span className="np-eq__bar" />
