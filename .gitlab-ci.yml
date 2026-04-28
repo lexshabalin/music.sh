@@ -71,6 +71,13 @@ deploy:prod:
     - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
   script:
     # Sync repo to server (do not upload git metadata)
-    - rsync -az --delete --exclude '.git' --exclude '.gitlab-ci.yml' ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
+    # Important: do not touch runtime volumes created by Docker (pgdata/appdata),
+    # otherwise rsync --delete may fail on permissions and/or destroy data.
+    - rsync -az --delete
+      --exclude '.git'
+      --exclude '.gitlab-ci.yml'
+      --exclude 'pgdata/'
+      --exclude 'appdata/'
+      ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
     # Run deploy on server
     - ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash '$DEPLOY_DIR/scripts/deploy_remote.sh'"
