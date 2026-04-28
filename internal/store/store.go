@@ -228,9 +228,14 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var u User
 	var uname sql.NullString
 	var name sql.NullString
+	var bgt sql.NullString
+	var bgp sql.NullString
+	var bgpath sql.NullString
+	var bgmime sql.NullString
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, username, email, display_name, created_at FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &uname, &u.Email, &name, &u.CreatedAt)
+		`SELECT id, username, email, display_name, created_at, background_type, background_preset, background_path, background_mime
+		 FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &uname, &u.Email, &name, &u.CreatedAt, &bgt, &bgp, &bgpath, &bgmime)
 	if err != nil {
 		return u, err
 	}
@@ -242,7 +247,85 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		s := name.String
 		u.DisplayName = &s
 	}
+	if bgt.Valid && strings.TrimSpace(bgt.String) != "" {
+		s := bgt.String
+		u.BackgroundType = &s
+	}
+	if bgp.Valid && strings.TrimSpace(bgp.String) != "" {
+		s := bgp.String
+		u.BackgroundPreset = &s
+	}
+	if bgmime.Valid && strings.TrimSpace(bgmime.String) != "" {
+		s := bgmime.String
+		u.BackgroundMime = &s
+	}
+	// BackgroundURL is set by API layer (needs absolute route).
 	return u, nil
+}
+
+// --- Backgrounds (profile) ---
+
+func (d *DB) GetUserBackground(ctx context.Context, userID uuid.UUID) (bgType, preset, relPath, mime *string, err error) {
+	var t sql.NullString
+	var p sql.NullString
+	var rp sql.NullString
+	var m sql.NullString
+	err = d.Pool.QueryRow(ctx, `
+		SELECT background_type, background_preset, background_path, background_mime
+		FROM users WHERE id = $1
+	`, userID).Scan(&t, &p, &rp, &m)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if t.Valid && strings.TrimSpace(t.String) != "" {
+		s := t.String
+		bgType = &s
+	}
+	if p.Valid && strings.TrimSpace(p.String) != "" {
+		s := p.String
+		preset = &s
+	}
+	if rp.Valid && strings.TrimSpace(rp.String) != "" {
+		s := rp.String
+		relPath = &s
+	}
+	if m.Valid && strings.TrimSpace(m.String) != "" {
+		s := m.String
+		mime = &s
+	}
+	return
+}
+
+func (d *DB) SetUserBackgroundPreset(ctx context.Context, userID uuid.UUID, preset string) error {
+	preset = strings.TrimSpace(preset)
+	if preset == "" {
+		_, err := d.Pool.Exec(ctx, `UPDATE users SET background_type = NULL, background_preset = NULL WHERE id = $1`, userID)
+		return err
+	}
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE users
+		SET background_type = 'preset', background_preset = $2
+		WHERE id = $1
+	`, userID, preset)
+	return err
+}
+
+func (d *DB) SetUserBackgroundFile(ctx context.Context, userID uuid.UUID, relPath string, mime string) error {
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE users
+		SET background_type = 'custom', background_path = $2, background_mime = $3
+		WHERE id = $1
+	`, userID, relPath, strings.TrimSpace(mime))
+	return err
+}
+
+func (d *DB) ClearUserBackgroundFile(ctx context.Context, userID uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE users
+		SET background_path = NULL, background_mime = NULL
+		WHERE id = $1
+	`, userID)
+	return err
 }
 
 func (d *DB) PasswordHashByUserID(ctx context.Context, id uuid.UUID) (string, error) {

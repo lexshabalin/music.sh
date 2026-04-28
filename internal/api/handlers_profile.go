@@ -113,3 +113,181 @@ func (a *App) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	JSON(w, 200, map[string]any{"ok": true})
 }
 
+// --- Backgrounds ---
+
+type bgSettingsBody struct {
+	Type   string `json:"type"`   // preset|custom|none
+	Preset string `json:"preset"` // preset id
+}
+
+func (a *App) getBackgroundSettings(w http.ResponseWriter, r *http.Request) {
+	uid, _ := userIDFromCtx(r.Context())
+	t, p, rel, mime, err := a.DB.GetUserBackground(r.Context(), uid)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	out := map[string]any{
+		"type":   "none",
+		"preset": "",
+		"url":    "",
+		"mime":   "",
+	}
+	if t != nil {
+		out["type"] = *t
+	}
+	if p != nil {
+		out["preset"] = *p
+	}
+	if rel != nil && *rel != "" {
+		out["url"] = "/api/me/background"
+	}
+	if mime != nil {
+		out["mime"] = *mime
+	}
+	JSON(w, 200, out)
+}
+
+func (a *App) setBackgroundSettings(w http.ResponseWriter, r *http.Request) {
+	uid, _ := userIDFromCtx(r.Context())
+	var b bgSettingsBody
+	if err := ReadJSON(r, &b); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	switch strings.TrimSpace(b.Type) {
+	case "", "none":
+		if err := a.DB.SetUserBackgroundPreset(r.Context(), uid, ""); err != nil {
+			JSONError(w, 500, "db")
+			return
+		}
+		JSON(w, 200, map[string]any{"ok": true})
+		return
+	case "preset":
+		p := strings.TrimSpace(b.Preset)
+		if p == "" {
+			JSONError(w, 400, "preset required")
+			return
+		}
+		if err := a.DB.SetUserBackgroundPreset(r.Context(), uid, p); err != nil {
+			JSONError(w, 500, "db")
+			return
+		}
+		JSON(w, 200, map[string]any{"ok": true})
+		return
+	case "custom":
+		// Custom is set via upload endpoint.
+		JSON(w, 200, map[string]any{"ok": true})
+		return
+	default:
+		JSONError(w, 400, "invalid type")
+		return
+	}
+}
+
+func (a *App) bgPathFor(uid string, ext string) (abs string, rel string) {
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	if ext == "" {
+		ext = ".bin"
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	rel = filepath.Join("backgrounds", uid+ext)
+	abs = filepath.Join(a.DataDir, rel)
+	return
+}
+
+func (a *App) uploadBackground(w http.ResponseWriter, r *http.Request) {
+	uid, _ := userIDFromCtx(r.Context())
+	// allow larger files (gif/video). still reasonable.
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		JSONError(w, 400, "bad multipart")
+		return
+	}
+	f, hdr, err := r.FormFile("background")
+	if err != nil {
+		JSONError(w, 400, "background required")
+		return
+	}
+	defer f.Close()
+
+	buf := make([]byte, 512)
+	n, _ := io.ReadFull(f, buf)
+	ct := http.DetectContentType(buf[:n])
+
+	ok := ct == "image/png" || ct == "image/jpeg" || ct == "image/webp" || ct == "image/gif" ||
+		strings.HasPrefix(ct, "video/")
+	if !ok {
+		JSONError(w, 400, "unsupported background type")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(hdr.Filename))
+	if ext == "" {
+		// best-effort mapping
+		switch ct {
+		case "image/png":
+			ext = ".png"
+		case "image/jpeg":
+			ext = ".jpg"
+		case "image/webp":
+			ext = ".webp"
+		case "image/gif":
+			ext = ".gif"
+		default:
+			ext = ".mp4"
+		}
+	}
+
+	abs, rel := a.bgPathFor(uid.String(), ext)
+	_ = os.MkdirAll(filepath.Dir(abs), 0o755)
+	tmp := abs + ".tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		JSONError(w, 500, "write")
+		return
+	}
+	_, _ = out.Write(buf[:n])
+	_, err = io.Copy(out, f)
+	_ = out.Close()
+	if err != nil {
+		_ = os.Remove(tmp)
+		JSONError(w, 500, "write")
+		return
+	}
+	_ = os.Rename(tmp, abs)
+	if err := a.DB.SetUserBackgroundFile(r.Context(), uid, rel, ct); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, map[string]any{"ok": true, "url": "/api/me/background", "mime": ct})
+}
+
+func (a *App) getBackgroundAsset(w http.ResponseWriter, r *http.Request) {
+	uid, err := a.parseUserIDFromMediaRequest(r)
+	if err != nil {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	t, _, rel, mime, err := a.DB.GetUserBackground(r.Context(), uid)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	if t == nil || *t != "custom" || rel == nil || *rel == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	abs := filepath.Join(a.DataDir, *rel)
+	if _, err := os.Stat(abs); err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if mime != nil && *mime != "" {
+		w.Header().Set("Content-Type", *mime)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, abs)
+}
+

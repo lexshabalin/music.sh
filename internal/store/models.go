@@ -12,6 +12,11 @@ type User struct {
 	Email       string    `json:"email"`
 	DisplayName *string   `json:"displayName,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
+
+	BackgroundType   *string `json:"backgroundType,omitempty"`
+	BackgroundPreset *string `json:"backgroundPreset,omitempty"`
+	BackgroundURL    *string `json:"backgroundUrl,omitempty"`
+	BackgroundMime   *string `json:"backgroundMime,omitempty"`
 }
 
 type Artist struct {

@@ -16,6 +16,221 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* Background layer (behind everything) */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.layout,
+.player,
+.modal-backdrop {
+  position: relative;
+  z-index: 1;
+}
+.bg-custom {
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.05);
+}
+.bg-custom::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.55);
+}
+.bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.bg-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.55);
+}
+
+/* Lava lamp preset (red/yellow animated blobs) */
+.bg-lava {
+  background: radial-gradient(1200px 900px at 30% 30%, rgba(255, 99, 71, 0.38), transparent 60%),
+    radial-gradient(900px 700px at 70% 55%, rgba(255, 215, 70, 0.30), transparent 60%),
+    radial-gradient(800px 700px at 50% 80%, rgba(255, 99, 71, 0.20), transparent 60%),
+    linear-gradient(180deg, rgba(12, 12, 16, 1), rgba(10, 10, 14, 1));
+  filter: blur(18px) saturate(1.2);
+  transform: translateZ(0);
+  animation: lavaDrift 10s ease-in-out infinite alternate;
+}
+.bg-lava::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.62);
+}
+@keyframes lavaDrift {
+  0% {
+    background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+    transform: scale(1.02) translate3d(-10px, -6px, 0);
+  }
+  100% {
+    background-position: 100% 80%, 40% 100%, 70% 10%, 0% 0%;
+    transform: scale(1.08) translate3d(14px, 10px, 0);
+  }
+}
+
+/* Dark grain preset */
+.bg-grain {
+  background: radial-gradient(900px 700px at 25% 35%, rgba(255, 255, 255, 0.06), transparent 60%),
+    radial-gradient(1100px 900px at 75% 65%, rgba(255, 255, 255, 0.04), transparent 60%),
+    linear-gradient(180deg, #0b0b0f, #0e0e12);
+}
+.bg-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 4px);
+  mix-blend-mode: overlay;
+  animation: grainShift 5.5s steps(10) infinite;
+}
+.bg-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.68);
+}
+@keyframes grainShift {
+  0% { transform: translate3d(-6px, -4px, 0) }
+  100% { transform: translate3d(6px, 5px, 0) }
+}
+
+/* Neon grid preset */
+.bg-grid {
+  background:
+    radial-gradient(900px 700px at 30% 35%, rgba(255, 99, 71, 0.20), transparent 60%),
+    radial-gradient(900px 700px at 70% 70%, rgba(255, 215, 70, 0.16), transparent 62%),
+    linear-gradient(180deg, #07070b, #0e0e12);
+}
+.bg-grid::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  background-image:
+    linear-gradient(rgba(255, 99, 71, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 215, 70, 0.08) 1px, transparent 1px);
+  background-size: 56px 56px;
+  transform-origin: 50% 50%;
+  filter: blur(0.2px);
+  opacity: 0.55;
+  animation: gridPan 14s linear infinite;
+}
+.bg-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.70);
+}
+@keyframes gridPan {
+  0% { transform: translate3d(0, 0, 0) rotate(-2deg) }
+  100% { transform: translate3d(-180px, -120px, 0) rotate(-2deg) }
+}
+
+/* Subtle waves preset */
+.bg-waves {
+  background:
+    radial-gradient(1000px 800px at 35% 30%, rgba(255, 99, 71, 0.14), transparent 60%),
+    radial-gradient(900px 700px at 70% 70%, rgba(255, 215, 70, 0.10), transparent 62%),
+    linear-gradient(180deg, #0a0a10, #0e0e12);
+}
+.bg-waves::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(circle at 20% 40%, rgba(255,255,255,0.06) 0 18%, transparent 20%),
+    radial-gradient(circle at 60% 55%, rgba(255,255,255,0.05) 0 16%, transparent 18%),
+    radial-gradient(circle at 80% 30%, rgba(255,255,255,0.04) 0 14%, transparent 16%);
+  filter: blur(22px);
+  opacity: 0.7;
+  animation: wavesFloat 16s ease-in-out infinite alternate;
+}
+.bg-waves::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 18, 0.68);
+}
+@keyframes wavesFloat {
+  0% { transform: translate3d(-4%, -2%, 0) scale(1.02) }
+  100% { transform: translate3d(4%, 3%, 0) scale(1.08) }
+}
+
+/* Background picker UI */
+.bg-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.bg-preset {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.bg-preset:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.bg-preset.active {
+  border-color: rgba(255, 99, 71, 0.85);
+  box-shadow: 0 0 0 2px rgba(255, 99, 71, 0.18) inset;
+}
+.bg-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  flex: 0 0 auto;
+}
+.bg-thumb--lava {
+  background: radial-gradient(circle at 35% 35%, rgba(255, 99, 71, 0.95), transparent 60%),
+    radial-gradient(circle at 70% 65%, rgba(255, 215, 70, 0.85), transparent 60%),
+    linear-gradient(180deg, #111119, #0e0e12);
+}
+.bg-thumb--grain {
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.12), transparent 60%),
+    radial-gradient(circle at 70% 65%, rgba(255, 255, 255, 0.08), transparent 60%),
+    linear-gradient(180deg, #111119, #0e0e12);
+}
+.bg-thumb--grid {
+  background:
+    linear-gradient(rgba(255, 99, 71, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 215, 70, 0.18) 1px, transparent 1px),
+    linear-gradient(180deg, #111119, #0e0e12);
+  background-size: 8px 8px, 8px 8px, auto;
+}
+.bg-thumb--waves {
+  background: radial-gradient(circle at 30% 40%, rgba(255, 99, 71, 0.26), transparent 60%),
+    radial-gradient(circle at 70% 65%, rgba(255, 215, 70, 0.18), transparent 60%),
+    linear-gradient(180deg, #111119, #0e0e12);
+}
+.bg-thumb--upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.04);
+}
 a {
   color: var(--accent);
 }

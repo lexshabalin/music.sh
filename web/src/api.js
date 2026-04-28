@@ -76,6 +76,29 @@ export const auth = {
     }
     return r.json().catch(() => ({}));
   },
+  backgroundSettings: () => req("/api/me/background/settings"),
+  setBackgroundPreset: (preset) =>
+    req("/api/me/background/settings", { method: "POST", body: JSON.stringify({ type: preset ? "preset" : "none", preset: preset || "" }) }),
+  clearBackground: () => req("/api/me/background/settings", { method: "POST", body: JSON.stringify({ type: "none" }) }),
+  uploadBackground: async (file) => {
+    const t = getToken();
+    const fd = new FormData();
+    fd.append("background", file);
+    const r = await fetch(base() + "/api/me/background/upload", {
+      method: "POST",
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+      body: fd,
+    });
+    if (!r.ok) {
+      let msg = "error";
+      try {
+        const j = await r.json();
+        if (j.error) msg = j.error;
+      } catch (_) {}
+      throw new Error(msg);
+    }
+    return r.json().catch(() => ({}));
+  },
 };
 
 export const lib = {

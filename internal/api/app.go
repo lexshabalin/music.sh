@@ -87,12 +87,16 @@ func (a *App) Handlers() http.Handler {
 	})
 	r.Get("/api/tracks/{id}/stream", a.stream) // may use ?token= for <audio>
 	r.Get("/api/albums/{id}/cover", a.albumCover)
+	r.Get("/api/me/background", a.getBackgroundAsset)
 
 	r.Group(func(g chi.Router) {
 		g.Use(middlewareUser(a))
 		g.Get("/api/me", a.me)
 		g.Get("/api/me/avatar", a.getAvatar)
 		g.Post("/api/me/avatar", a.uploadAvatar)
+		g.Get("/api/me/background/settings", a.getBackgroundSettings)
+		g.Post("/api/me/background/settings", a.setBackgroundSettings)
+		g.Post("/api/me/background/upload", a.uploadBackground)
 		g.Post("/api/me/password", a.changePassword)
 		g.Get("/api/artists", a.listArtists)
 		g.Get("/api/albums", a.listAlbums)
@@ -412,6 +416,17 @@ func (a *App) me(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		JSONError(w, 404, "user")
 		return
+	}
+	// Attach backgroundUrl if user has a custom background file.
+	if u.BackgroundType != nil && *u.BackgroundType == "custom" {
+		_, _, rel, mime, _ := a.DB.GetUserBackground(r.Context(), uid)
+		if rel != nil && *rel != "" {
+			s := "/api/me/background"
+			u.BackgroundURL = &s
+			if mime != nil && *mime != "" {
+				u.BackgroundMime = mime
+			}
+		}
 	}
 	JSON(w, 200, u)
 }

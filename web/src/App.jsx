@@ -106,6 +106,7 @@ function Shell({ children }) {
   const [showProfile, setShowProfile] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
   const userBtnRef = React.useRef(null);
+  const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
 
   const doLogout = React.useCallback(() => {
     try {
@@ -120,6 +121,30 @@ function Shell({ children }) {
     } catch (_) {}
     window.location.hash = "#/login";
   }, [p]);
+
+  React.useEffect(() => {
+    const authed = !!getToken();
+    if (!authed) {
+      setBg({ type: "none", preset: "", url: "", mime: "" });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await auth.backgroundSettings();
+        if (cancelled) return;
+        setBg({
+          type: s?.type || "none",
+          preset: s?.preset || "",
+          url: s?.url || "",
+          mime: s?.mime || "",
+        });
+      } catch (_) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [!!getToken()]);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -253,8 +278,88 @@ function Shell({ children }) {
     };
   }, [p.current?.id]);
 
+  // Enable multimedia keys (next/prev) via Media Session API.
+  React.useEffect(() => {
+    if (!getToken()) return;
+    if (typeof navigator === "undefined") return;
+    const ms = navigator.mediaSession;
+    if (!ms) return;
+
+    const title = p.current?.title || p.current?.label || "Track";
+    const artist = p.current?.artist || "";
+    const album = p.current?.album || "";
+    const artwork = p.current?.coverUrl
+      ? [
+          { src: p.current.coverUrl, sizes: "96x96", type: "image/jpeg" },
+          { src: p.current.coverUrl, sizes: "256x256", type: "image/jpeg" },
+          { src: p.current.coverUrl, sizes: "512x512", type: "image/jpeg" },
+        ]
+      : [];
+
+    try {
+      // Some browsers require being served from a secure context; guard errors.
+      ms.metadata = new window.MediaMetadata({ title, artist, album, artwork });
+    } catch (_) {}
+
+    try {
+      ms.setActionHandler("play", async () => {
+        const el = p.ref.current;
+        if (!el) return;
+        const pr = el.play();
+        if (pr && typeof pr.catch === "function") pr.catch(() => {});
+      });
+    } catch (_) {}
+    try {
+      ms.setActionHandler("pause", () => {
+        const el = p.ref.current;
+        if (el && typeof el.pause === "function") el.pause();
+      });
+    } catch (_) {}
+    try {
+      ms.setActionHandler("nexttrack", () => p.next());
+    } catch (_) {}
+    try {
+      ms.setActionHandler("previoustrack", () => p.prev());
+    } catch (_) {}
+    try {
+      ms.setActionHandler("seekto", (details) => {
+        const el = p.ref.current;
+        if (!el) return;
+        if (details?.seekTime != null && Number.isFinite(details.seekTime)) {
+          el.currentTime = Math.max(0, details.seekTime);
+        }
+      });
+    } catch (_) {}
+
+    // Playback state hint helps some devices decide which buttons to show.
+    try {
+      ms.playbackState = isPlaying ? "playing" : "paused";
+    } catch (_) {}
+
+    // Position state improves scrubbing on lockscreen.
+    try {
+      if (Number.isFinite(dur) && dur > 0) {
+        ms.setPositionState?.({
+          duration: dur,
+          playbackRate: 1,
+          position: Math.max(0, Math.min(dur, curT || 0)),
+        });
+      }
+    } catch (_) {}
+
+    return () => {
+      // Avoid keeping stale handlers when logging out / switching tracks.
+      try { ms.setActionHandler("play", null); } catch (_) {}
+      try { ms.setActionHandler("pause", null); } catch (_) {}
+      try { ms.setActionHandler("nexttrack", null); } catch (_) {}
+      try { ms.setActionHandler("previoustrack", null); } catch (_) {}
+      try { ms.setActionHandler("seekto", null); } catch (_) {}
+    };
+  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, isPlaying, curT, dur]);
+
   return (
     <>
+      <BackgroundLayer bg={bg} />
       <div className="layout">
         {getToken() ? (
           <aside className="sidebar">
@@ -462,6 +567,8 @@ function Shell({ children }) {
         <ProfileModal
           me={me}
           avatarUrl={avatarUrl}
+          bg={bg}
+          onBgChange={setBg}
           onClose={() => setShowProfile(false)}
           onAvatarUpdated={async () => {
             try {
@@ -480,6 +587,34 @@ function Shell({ children }) {
       ) : null}
     </>
   );
+}
+
+function BackgroundLayer({ bg }) {
+  if (!bg || bg.type === "none") return null;
+  if (bg.type === "preset" && bg.preset === "lava") {
+    return <div className="bg-layer bg-lava" aria-hidden="true" />;
+  }
+  if (bg.type === "preset" && bg.preset === "grain") {
+    return <div className="bg-layer bg-grain" aria-hidden="true" />;
+  }
+  if (bg.type === "preset" && bg.preset === "grid") {
+    return <div className="bg-layer bg-grid" aria-hidden="true" />;
+  }
+  if (bg.type === "preset" && bg.preset === "waves") {
+    return <div className="bg-layer bg-waves" aria-hidden="true" />;
+  }
+  if (bg.type === "custom" && bg.url) {
+    if (typeof bg.mime === "string" && bg.mime.startsWith("video/")) {
+      return (
+        <div className="bg-layer bg-custom" aria-hidden="true">
+          <video className="bg-video" autoPlay loop muted playsInline preload="auto" src={bg.url} />
+          <div className="bg-dim" />
+        </div>
+      );
+    }
+    return <div className="bg-layer bg-custom" aria-hidden="true" style={{ backgroundImage: `url(${bg.url})` }} />;
+  }
+  return null;
 }
 
 function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
@@ -527,7 +662,7 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
   );
 }
 
-function ProfileModal({ me, avatarUrl, onClose, onAvatarUpdated, onLogout }) {
+function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated, onLogout }) {
   const [err, setErr] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [cur, setCur] = React.useState("");
@@ -575,6 +710,147 @@ function ProfileModal({ me, avatarUrl, onClose, onAvatarUpdated, onLogout }) {
                   }}
                 />
               </label>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <h4 style={{ margin: "0 0 8px" }}>Background</h4>
+          <div style={{ display: "grid", gap: 10 }}>
+            <div className="bg-presets">
+              <button
+                type="button"
+                className={`bg-preset ${!bg?.type || bg?.type === "none" ? "active" : ""}`}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.clearBackground();
+                    onBgChange?.({ type: "none", preset: "", url: "", mime: "" });
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+                disabled={busy}
+                title="No background"
+              >
+                None
+              </button>
+
+              <button
+                type="button"
+                className={`bg-preset ${bg?.type === "preset" && bg?.preset === "lava" ? "active" : ""}`}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.setBackgroundPreset("lava");
+                    onBgChange?.({ type: "preset", preset: "lava", url: "", mime: "" });
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+                disabled={busy}
+                title="Lava lamp"
+              >
+                <span className="bg-thumb bg-thumb--lava" aria-hidden="true" />
+                Lava
+              </button>
+
+              <button
+                type="button"
+                className={`bg-preset ${bg?.type === "preset" && bg?.preset === "grain" ? "active" : ""}`}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.setBackgroundPreset("grain");
+                    onBgChange?.({ type: "preset", preset: "grain", url: "", mime: "" });
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+                disabled={busy}
+                title="Dark grain"
+              >
+                <span className="bg-thumb bg-thumb--grain" aria-hidden="true" />
+                Grain
+              </button>
+
+              <button
+                type="button"
+                className={`bg-preset ${bg?.type === "preset" && bg?.preset === "grid" ? "active" : ""}`}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.setBackgroundPreset("grid");
+                    onBgChange?.({ type: "preset", preset: "grid", url: "", mime: "" });
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+                disabled={busy}
+                title="Neon grid"
+              >
+                <span className="bg-thumb bg-thumb--grid" aria-hidden="true" />
+                Grid
+              </button>
+
+              <button
+                type="button"
+                className={`bg-preset ${bg?.type === "preset" && bg?.preset === "waves" ? "active" : ""}`}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.setBackgroundPreset("waves");
+                    onBgChange?.({ type: "preset", preset: "waves", url: "", mime: "" });
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+                disabled={busy}
+                title="Subtle waves"
+              >
+                <span className="bg-thumb bg-thumb--waves" aria-hidden="true" />
+                Waves
+              </button>
+
+              <label className={`bg-preset ${bg?.type === "custom" ? "active" : ""}`} title="Upload your own">
+                <span className="bg-thumb bg-thumb--upload" aria-hidden="true">
+                  +
+                </span>
+                Upload
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setErr("");
+                    setBusy(true);
+                    try {
+                      const res = await auth.uploadBackground(f);
+                      onBgChange?.({ type: "custom", preset: "", url: res?.url || "/api/me/background", mime: res?.mime || "" });
+                    } catch (x) {
+                      setErr(x?.message || "upload failed");
+                    }
+                    setBusy(false);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="muted" style={{ fontSize: 12 }}>
+              Presets are instant. Upload supports images, GIFs, and short videos.
             </div>
           </div>
         </div>
