@@ -69,7 +69,7 @@ export function Library() {
             <path className="rescan-ecg__base" d="M1 9.5 L47 9.5" />
             <path
               className="rescan-ecg__pulse"
-              d="M1 9.5 L14 9.5 L17 2.2 L19 11.5 L22 6.2 L24 9.5 L47 9.5"
+              d="M1 9.5 L13.5 9.5 L16.8 1.2 L19.2 12.6 L22.2 5.3 L24.3 9.5 L47 9.5"
             />
           </svg>
         </button>
