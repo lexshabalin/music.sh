@@ -23,13 +23,15 @@ build:image:
   variables:
     DOCKER_HOST: "tcp://docker:2375"
     DOCKER_TLS_CERTDIR: ""
-    DOCKER_TLS_VERIFY: "0"
   services:
     - name: docker:27-dind
       alias: docker
       command: ["--host=tcp://0.0.0.0:2375", "--tls=false", "--mtu=1460"]
   rules:
     - if: $CI_COMMIT_BRANCH
+  before_script:
+    - unset DOCKER_TLS_VERIFY || true
+    - unset DOCKER_CERT_PATH || true
   script:
     - docker version
     - docker build --pull -t "$CI_PROJECT_NAME:$CI_COMMIT_SHA" .
