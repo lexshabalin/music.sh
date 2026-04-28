@@ -9,3 +9,4 @@ appdata/
 .appdata/
 music/**
 !music/.gitkeep
+docker-compose.yml
