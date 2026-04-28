@@ -452,6 +452,10 @@ input {
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+  /* Make the peak visually prominent inside the disc */
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transform: scaleY(3.5);
 }
 .rescan-icon-btn--scanning {
   border-color: #45454f;
