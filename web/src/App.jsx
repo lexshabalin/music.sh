@@ -1,6 +1,6 @@
 import React from "react";
 import { Routes, Route, Link, Navigate } from "react-router-dom";
-import { getToken } from "./api";
+import { auth, getToken } from "./api";
 import { usePlayer } from "./usePlayer";
 import { Login } from "./pages/Login";
 import { Library } from "./pages/Library";
@@ -14,12 +14,14 @@ import { Artist } from "./pages/Artist";
 import { Playlist } from "./pages/Playlist";
 import { lib } from "./api";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
+import { GlobalSearch } from "./components/GlobalSearch";
 import {
   IFastForward,
   IHeart,
   IPause,
   IPlay,
   IPlus,
+  IQueue,
   IRewind,
   ISpeaker,
   ISpeakerOff,
@@ -95,6 +97,13 @@ function Shell({ children }) {
   const [dur, setDur] = React.useState(0);
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
+  const [showQueue, setShowQueue] = React.useState(false);
+  const queueBtnRef = React.useRef(null);
+  const [me, setMe] = React.useState(null);
+  const [avatarUrl, setAvatarUrl] = React.useState("");
+  const [showProfile, setShowProfile] = React.useState(false);
+  const [showUserMenu, setShowUserMenu] = React.useState(false);
+  const userBtnRef = React.useRef(null);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -129,6 +138,32 @@ function Shell({ children }) {
   }, [p.current?.id]);
 
   React.useEffect(() => {
+    if (!getToken()) return;
+    let stop = false;
+    (async () => {
+      try {
+        const u = await auth.me();
+        if (stop) return;
+        setMe(u);
+      } catch (_) {}
+      try {
+        const b = await auth.avatar();
+        if (stop) return;
+        const url = URL.createObjectURL(b);
+        setAvatarUrl((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return url;
+        });
+      } catch (_) {
+        // no avatar is fine
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
     let stop = false;
     const check = async () => {
       try {
@@ -154,6 +189,31 @@ function Shell({ children }) {
             <div className="brand">
               <BrandIcon />
               <span>music.sh</span>
+              <button
+                ref={userBtnRef}
+                type="button"
+                className="user-chip"
+                title="Profile"
+                aria-label="Profile"
+                onClick={() => setShowUserMenu((v) => !v)}
+              >
+                {avatarUrl ? <img className="user-avatar" src={avatarUrl} alt="" /> : <div className="user-avatar placeholder" />}
+              </button>
+              {showUserMenu ? (
+                <UserMenu
+                  anchorRef={userBtnRef}
+                  name={me?.displayName || me?.username || me?.email || "User"}
+                  onClose={() => setShowUserMenu(false)}
+                  onOpenProfile={() => {
+                    setShowUserMenu(false);
+                    setShowProfile(true);
+                  }}
+                  onLogout={() => {
+                    localStorage.removeItem("musicsh_token");
+                    window.location.hash = "#/login";
+                  }}
+                />
+              ) : null}
             </div>
             <nav className="side-nav">
               <Link to="/">Home</Link>
@@ -162,22 +222,12 @@ function Shell({ children }) {
               <Link to="/playlists">Playlists</Link>
               <Link to="/likes">Likes</Link>
             </nav>
-            <div style={{ marginTop: "auto" }}>
-              <button
-                className="ghost"
-                type="button"
-                style={{ width: "100%" }}
-                onClick={() => {
-                  localStorage.removeItem("musicsh_token");
-                  window.location.hash = "#/login";
-                }}
-              >
-                Log out
-              </button>
-            </div>
           </aside>
         ) : null}
-        <main className="main">{children}</main>
+        <main className="main">
+          {getToken() ? <GlobalSearch /> : null}
+          {children}
+        </main>
       </div>
       {p.current && getToken() ? (
         <div className="player">
@@ -280,6 +330,28 @@ function Shell({ children }) {
             }}
           />
 
+          <div style={{ position: "relative" }}>
+            <button
+              ref={queueBtnRef}
+              className="player-skip"
+              type="button"
+              title="Queue"
+              aria-label="Queue"
+              onClick={() => setShowQueue((v) => !v)}
+            >
+              <IQueue />
+            </button>
+            {showQueue ? (
+              <QueuePopover
+                anchorRef={queueBtnRef}
+                items={Array.isArray(p.queue) ? p.queue : []}
+                currentIndex={typeof p.index === "number" ? p.index : -1}
+                onJump={(i) => p.jumpTo(i)}
+                onClose={() => setShowQueue(false)}
+              />
+            ) : null}
+          </div>
+
           <div className="muted" style={{ minWidth: 64 }}>
             {fmtTime(dur)}
           </div>
@@ -297,7 +369,230 @@ function Shell({ children }) {
       {showPlModal && p.current?.id ? (
         <PlayerPlaylistModal trackId={p.current.id} onClose={() => setShowPlModal(false)} />
       ) : null}
+      {showProfile && getToken() ? (
+        <ProfileModal
+          me={me}
+          avatarUrl={avatarUrl}
+          onClose={() => setShowProfile(false)}
+          onAvatarUpdated={async () => {
+            try {
+              const b = await auth.avatar();
+              const url = URL.createObjectURL(b);
+              setAvatarUrl((old) => {
+                if (old) URL.revokeObjectURL(old);
+                return url;
+              });
+            } catch (_) {}
+          }}
+          onLogout={() => {
+            localStorage.removeItem("musicsh_token");
+            window.location.hash = "#/login";
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
+  React.useEffect(() => {
+    const onDoc = (e) => {
+      const el = anchorRef.current;
+      if (el && el.contains(e.target)) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose, anchorRef]);
+
+  const r = anchorRef.current?.getBoundingClientRect?.();
+  const style = r
+    ? {
+        position: "fixed",
+        top: r.bottom + 8,
+        left: Math.min(window.innerWidth - 260, Math.max(8, r.left - 200)),
+        width: 240,
+        background: "#111119",
+        border: "1px solid #2a2a33",
+        borderRadius: 12,
+        padding: 8,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+        zIndex: 2500,
+      }
+    : {};
+
+  return (
+    <div style={style} role="menu" aria-label="Profile menu">
+      <div style={{ padding: "6px 8px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {name}
+      </div>
+      <button type="button" className="ghost menu-btn" onClick={onOpenProfile}>
+        Profile settings
+      </button>
+      <button type="button" className="ghost menu-btn" onClick={onLogout}>
+        Log out
+      </button>
+    </div>
+  );
+}
+
+function ProfileModal({ me, avatarUrl, onClose, onAvatarUpdated, onLogout }) {
+  const [err, setErr] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [cur, setCur] = React.useState("");
+  const [next, setNext] = React.useState("");
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Profile</h3>
+          <button className="ghost" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
+
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12 }}>
+          {avatarUrl ? <img src={avatarUrl} alt="" className="profile-avatar" /> : <div className="profile-avatar placeholder" />}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800 }}>{me?.displayName || me?.username || me?.email || "User"}</div>
+            <div className="muted" style={{ fontSize: 12 }}>
+              {me?.email || ""}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <label className="ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, cursor: "pointer" }}>
+                Upload avatar
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setErr("");
+                    setBusy(true);
+                    try {
+                      await auth.uploadAvatar(f);
+                      await onAvatarUpdated?.();
+                    } catch (x) {
+                      setErr(x?.message || "upload failed");
+                    }
+                    setBusy(false);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <h4 style={{ margin: "0 0 8px" }}>Change password</h4>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input type="password" placeholder="Current password" value={cur} onChange={(e) => setCur(e.target.value)} />
+            <input type="password" placeholder="New password (8+)" value={next} onChange={(e) => setNext(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                disabled={busy || !cur || !next}
+                onClick={async () => {
+                  setErr("");
+                  setBusy(true);
+                  try {
+                    await auth.changePassword(cur, next);
+                    setCur("");
+                    setNext("");
+                  } catch (x) {
+                    setErr(x?.message || "error");
+                  }
+                  setBusy(false);
+                }}
+              >
+                Save
+              </button>
+              <button className="ghost" type="button" onClick={onLogout} disabled={busy}>
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
+  React.useEffect(() => {
+    const onDoc = (e) => {
+      const el = anchorRef.current;
+      if (el && el.contains(e.target)) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose, anchorRef]);
+
+  const r = anchorRef.current?.getBoundingClientRect?.();
+  const style = r
+    ? {
+        position: "fixed",
+        left: Math.min(window.innerWidth - 360, Math.max(8, r.right - 340)),
+        top: Math.max(8, r.top - 320),
+        width: 340,
+        maxHeight: 300,
+        overflow: "auto",
+        background: "#111119",
+        border: "1px solid #2a2a33",
+        borderRadius: 12,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+        zIndex: 2000,
+        padding: 6,
+      }
+    : {};
+
+  return (
+    <div style={style} role="dialog" aria-label="Queue">
+      <div style={{ padding: "6px 8px", fontWeight: 800 }}>Queue</div>
+      {items.length ? (
+        items.map((it, i) => {
+          const active = i === currentIndex;
+          const title = it.title || it.label || "Track";
+          const sub = [it.artist, it.album].filter(Boolean).join(" • ");
+          return (
+            <button
+              key={it.id + ":" + i}
+              type="button"
+              className="queue-item"
+              onClick={() => {
+                onJump(i);
+                onClose();
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                padding: "8px 10px",
+                borderRadius: 10,
+                background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                border: "1px solid transparent",
+                color: "var(--text)",
+              }}
+            >
+              <div style={{ fontWeight: 700, opacity: active ? 1 : 0.95 }}>{title}</div>
+              {sub ? <div className="muted" style={{ fontSize: 12 }}>{sub}</div> : null}
+            </button>
+          );
+        })
+      ) : (
+        <div className="muted" style={{ padding: 10 }}>
+          Empty queue
+        </div>
+      )}
+    </div>
   );
 }
 

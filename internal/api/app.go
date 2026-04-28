@@ -91,6 +91,9 @@ func (a *App) Handlers() http.Handler {
 	r.Group(func(g chi.Router) {
 		g.Use(middlewareUser(a))
 		g.Get("/api/me", a.me)
+		g.Get("/api/me/avatar", a.getAvatar)
+		g.Post("/api/me/avatar", a.uploadAvatar)
+		g.Post("/api/me/password", a.changePassword)
 		g.Get("/api/artists", a.listArtists)
 		g.Get("/api/albums", a.listAlbums)
 		g.Get("/api/albums/{id}", a.getAlbum)

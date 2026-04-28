@@ -89,6 +89,17 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return u, nil
 }
 
+func (d *DB) PasswordHashByUserID(ctx context.Context, id uuid.UUID) (string, error) {
+	var h string
+	err := d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, id).Scan(&h)
+	return h, err
+}
+
+func (d *DB) UpdatePasswordHash(ctx context.Context, id uuid.UUID, newHash string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, newHash)
+	return err
+}
+
 // FindOrCreateArtist returns an artist by exact name (case-insensitive first look).
 func (d *DB) FindOrCreateArtist(ctx context.Context, name string) (uuid.UUID, error) {
 	if strings.TrimSpace(name) == "" {

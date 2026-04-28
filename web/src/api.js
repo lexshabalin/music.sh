@@ -37,6 +37,33 @@ export const auth = {
     }),
   login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
+  changePassword: (currentPassword, newPassword) =>
+    req("/api/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+  avatar: async () => {
+    const t = getToken();
+    const r = await fetch(base() + "/api/me/avatar", { headers: t ? { Authorization: `Bearer ${t}` } : {} });
+    if (!r.ok) throw new Error("no avatar");
+    return r.blob();
+  },
+  uploadAvatar: async (file) => {
+    const t = getToken();
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const r = await fetch(base() + "/api/me/avatar", {
+      method: "POST",
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+      body: fd,
+    });
+    if (!r.ok) {
+      let msg = "error";
+      try {
+        const j = await r.json();
+        if (j.error) msg = j.error;
+      } catch (_) {}
+      throw new Error(msg);
+    }
+    return r.json().catch(() => ({}));
+  },
 };
 
 export const lib = {

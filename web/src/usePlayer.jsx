@@ -34,6 +34,13 @@ export function PlayerProvider({ children }) {
         return base;
       });
     };
+    const jumpTo = (i) => {
+      const n = typeof i === "number" ? i : -1;
+      setIdx(() => {
+        if (!queue.length) return -1;
+        return Math.max(0, Math.min(queue.length - 1, n));
+      });
+    };
     const next = () => setIdx((i) => (queue.length ? Math.min(queue.length - 1, i + 1) : -1));
     const prev = () => setIdx((i) => (queue.length ? Math.max(0, i - 1) : -1));
     const setVol = (v) => {
@@ -69,6 +76,7 @@ export function PlayerProvider({ children }) {
       playQueue,
       playOne,
       playNext,
+      jumpTo,
       next,
       prev,
       setVolume: setVol,
@@ -99,6 +107,7 @@ export function usePlayer() {
       playQueue: () => {},
       playOne: () => {},
       playNext: () => {},
+      jumpTo: () => {},
       next: () => {},
       prev: () => {},
       setVolume: () => {},
