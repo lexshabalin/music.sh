@@ -259,7 +259,15 @@ function Shell({ children }) {
             onClick={() => {
               const el = p.ref.current;
               if (!el) return;
-              if (el.paused) el.play();
+              if (el.paused) {
+                const pr = el.play();
+                if (pr && typeof pr.catch === "function") {
+                  pr.catch(() => {
+                    setIsPlaying(false);
+                    setPlayErr("Playback blocked or failed.");
+                  });
+                }
+              }
               else el.pause();
             }}
             title={isPlaying ? "Pause" : "Play"}
