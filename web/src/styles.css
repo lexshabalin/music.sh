@@ -333,6 +333,31 @@ input {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--border);
 }
+.plain-list li.track-header {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(230, 230, 238, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+.plain-list li.track-header:hover {
+  background: transparent;
+}
+.track-header .track-grid--header {
+  opacity: 0.95;
+}
+.track-title-h,
+.track-artist-h,
+.track-album-h,
+.track-dur-h {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-dur-h {
+  text-align: right;
+}
 .plain-list li button {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
@@ -341,9 +366,41 @@ input {
 .track-row {
   gap: 12px;
 }
+.track-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+}
+.track-row--now:hover {
+  background: rgba(255, 99, 71, 0.16);
+}
 .track-row > :first-child {
   flex: 1;
   min-width: 0;
+}
+.track-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+.track-grid--album {
+  grid-template-columns: minmax(260px, 2.8fr) minmax(160px, 1.6fr) 72px;
+}
+.track-header .track-grid {
+  grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
+}
+.track-col {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-dur {
+  text-align: right;
+}
+.track-album--hidden {
+  display: none;
 }
 .track-row button.ghost {
   width: 32px;
@@ -369,9 +426,7 @@ input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: inline-block;
 }
 .track-title:hover {
   color: var(--text);
@@ -408,6 +463,24 @@ input {
   gap: 2px;
   flex: 0 0 auto;
   opacity: 0.95;
+}
+.track-row .np-eq {
+  margin-right: 2px;
+}
+
+.track-actions--header {
+  width: 70px;
+  height: 1px;
+}
+.track-row button.ghost {
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
+}
+.track-row:not(:hover):not(:focus-within) button.ghost {
+  opacity: 0;
+  pointer-events: none;
+}
+.track-row--now:not(:hover):not(:focus-within) .np-eq {
+  opacity: 1;
 }
 .np-eq__bar {
   width: 3px;

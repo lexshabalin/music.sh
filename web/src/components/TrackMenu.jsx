@@ -21,6 +21,7 @@ export function TrackRow({
   label,
   isNowPlaying,
   isPlaying,
+  columns = "full",
 }) {
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -32,10 +33,13 @@ export function TrackRow({
   const d = fmtDur(track?.durationMs);
   if (d) metaParts.push(d);
 
+  const artistName = track?.artist?.name || "";
+  const albumTitle = track?.album?.title || "";
+
   return (
     <>
       <li className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <div className={`track-grid${columns === "album" ? " track-grid--album" : ""}`}>
           <span
             className="track-title"
             role="button"
@@ -45,29 +49,41 @@ export function TrackRow({
               if (e.key === "Enter" || e.key === " ") onPlayAt(index);
             }}
           >
-            {isNowPlaying ? (
-              <span className="np-eq" aria-hidden="true">
-                <span className="np-eq__bar" />
-                <span className="np-eq__bar" />
-                <span className="np-eq__bar" />
-              </span>
-            ) : (
-              <span className="np-eq np-eq--off" aria-hidden="true" />
-            )}
             <span className="track-title-text">{label}</span>
           </span>
-          <div className="muted" style={{ fontSize: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+
+          <div className="track-col track-artist">
             {track?.artist?.id ? (
               <Link to={"/artist/" + track.artist.id} className="muted" style={{ textDecoration: "none" }}>
-                {track.artist.name || "Unknown Artist"}
+                {artistName || "Unknown Artist"}
               </Link>
-            ) : track?.artist?.name ? (
-              <span>{track.artist.name}</span>
-            ) : null}
-            {metaParts.length ? <span>{metaParts.join(" · ")}</span> : null}
+            ) : (
+              <span className="muted">{artistName || "—"}</span>
+            )}
+          </div>
+
+          {columns === "full" ? (
+            <div className="track-col track-album">
+              <span className="muted">{albumTitle || "—"}</span>
+            </div>
+          ) : (
+            <div className="track-col track-album track-album--hidden" aria-hidden="true" />
+          )}
+
+          <div className="track-col track-dur">
+            <span className="muted">{fmtDur(track?.durationMs) || ""}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {isNowPlaying ? (
+            <span className="np-eq" aria-hidden="true" title={isPlaying ? "Now playing" : "Paused"}>
+              <span className="np-eq__bar" />
+              <span className="np-eq__bar" />
+              <span className="np-eq__bar" />
+            </span>
+          ) : (
+            <span className="np-eq np-eq--off" aria-hidden="true" />
+          )}
           {typeof onToggleLike === "function" ? (
             <button
               className="ghost"
@@ -119,6 +135,20 @@ export function TrackRow({
         />
       ) : null}
     </>
+  );
+}
+
+export function TrackHeader({ columns = "full" }) {
+  return (
+    <li className="track-header" aria-hidden="true">
+      <div className={`track-grid track-grid--header${columns === "album" ? " track-grid--album" : ""}`}>
+        <div className="track-col track-title-h">Title</div>
+        <div className="track-col track-artist-h">Artist</div>
+        {columns === "full" ? <div className="track-col track-album-h">Album</div> : <div className="track-col track-album-h track-album--hidden" />}
+        <div className="track-col track-dur track-dur-h">Time</div>
+      </div>
+      <div className="track-actions track-actions--header" />
+    </li>
   );
 }
 

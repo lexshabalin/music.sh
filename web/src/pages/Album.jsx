@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { lib } from "../api";
 import { usePlayer } from "../usePlayer";
-import { TrackRow } from "../components/TrackMenu";
+import { TrackHeader, TrackRow } from "../components/TrackMenu";
 
 function shuffleCopy(arr) {
   const a = Array.isArray(arr) ? arr.slice() : [];
@@ -118,6 +118,7 @@ export function Album() {
         </button>
       </div>
       <ul className="plain-list">
+        <TrackHeader columns="album" />
         {tr.map((t, i) => (
           <TrackRow
             key={t.id}
@@ -130,6 +131,7 @@ export function Album() {
             label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || "Untitled"}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
+            columns="album"
           />
         ))}
       </ul>

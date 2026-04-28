@@ -1,7 +1,7 @@
 import React from "react";
 import { lib } from "../api";
 import { usePlayer } from "../usePlayer";
-import { TrackRow } from "../components/TrackMenu";
+import { TrackHeader, TrackRow } from "../components/TrackMenu";
 
 function shuffleCopy(arr) {
   const a = Array.isArray(arr) ? arr.slice() : [];
@@ -96,6 +96,7 @@ export function Songs() {
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
 
       <ul className="plain-list">
+        <TrackHeader columns="full" />
         {tracks.map((t, i) => (
           <TrackRow
             key={t.id}
@@ -108,6 +109,7 @@ export function Songs() {
             label={`${t.title || "Untitled"}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
+            columns="full"
           />
         ))}
       </ul>
