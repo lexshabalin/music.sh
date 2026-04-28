@@ -25,6 +25,18 @@ func primaryArtistForAlbumGrouping(s string) string {
 		break
 	}
 	s = strings.TrimSpace(reCollabCut.ReplaceAllString(s, ""))
+
+	// Handle common "A / B", "A & B", "A x B" style collaborations.
+	// We only split on separators that have whitespace around them to avoid breaking names like "AC/DC".
+	seps := []string{" / ", " & ", " x ", " × ", " + ", ", ", "; ", " with ", " w/ "}
+	lower := strings.ToLower(s)
+	for _, sep := range seps {
+		if i := strings.Index(lower, sep); i > 0 {
+			s = strings.TrimSpace(s[:i])
+			break
+		}
+	}
+
 	s = strings.Trim(s, " ,;-")
 	return strings.TrimSpace(s)
 }

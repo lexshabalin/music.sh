@@ -326,12 +326,17 @@ func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]A
 		base AS (
 			SELECT
 				c.*,
-				lower(trim(both ' ,;-' FROM regexp_replace(
-					COALESCE(ar.name, ''),
-					'(?i)[[:space:]]+(feat\\.?|ft\\.?|featuring|w/|vs\\.?|x|при[[:space:]]+уч\\.|под[[:space:]]+уч\\.|совместно[[:space:]]+с)\\b.*$',
-					'',
-					'g'
-				))) AS artist_key
+					lower(trim(both ' ,;-' FROM regexp_replace(
+						regexp_replace(
+							COALESCE(ar.name, ''),
+							'(?i)[[:space:]]+(feat\\.?|ft\\.?|featuring|w/|vs\\.?|при[[:space:]]+уч\\.|под[[:space:]]+уч\\.|совместно[[:space:]]+с)\\b.*$',
+							'',
+							'g'
+						),
+						'(?i)[[:space:]]+(/|&|\\+|×|x|with|w/)[[:space:]]+.*$',
+						'',
+						'g'
+					))) AS artist_key
 			FROM cand c
 			LEFT JOIN artists ar ON c.artist_id = ar.id
 			WHERE ($1 = '' OR c.title ILIKE $2 OR ar.name ILIKE $2)
