@@ -40,7 +40,7 @@ export function Playlists() {
   const player = usePlayer();
   const load = () =>
     lib
-      .playlists()
+      .playlists("")
       .then((x) => {
         setErr("");
         setList(Array.isArray(x) ? x : []);

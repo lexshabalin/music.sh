@@ -55,7 +55,7 @@ export const lib = {
     // Image requests cannot send Authorization headers; server uses HttpOnly cookie.
     return base() + "/api/albums/" + id + "/cover";
   },
-  playlists: () => req("/api/playlists"),
+  playlists: (q) => req("/api/playlists?" + new URLSearchParams({ query: q || "" })),
   playlist: (id) => req("/api/playlists/" + id),
   createPl: (name, description) =>
     req("/api/playlists", { method: "POST", body: JSON.stringify({ name, description: description || undefined }) }),

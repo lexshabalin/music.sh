@@ -614,8 +614,20 @@ func (d *DB) DeletePlaylist(ctx context.Context, userID, plID uuid.UUID) error {
 	return err
 }
 
-func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID) ([]Playlist, error) {
-	rows, err := d.Pool.Query(ctx, `SELECT id, name, description, created_at, updated_at FROM playlists WHERE user_id = $1 ORDER BY name`, userID)
+func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID, query string) ([]Playlist, error) {
+	qs := strings.TrimSpace(query)
+	like := "%" + qs + "%"
+	rows, err := d.Pool.Query(ctx, `
+		SELECT id, name, description, created_at, updated_at
+		FROM playlists
+		WHERE user_id = $1
+		  AND (
+		    $2 = '' OR
+		    name ILIKE $3 OR
+		    COALESCE(description, '') ILIKE $3
+		  )
+		ORDER BY name
+	`, userID, qs, like)
 	if err != nil {
 		return nil, err
 	}

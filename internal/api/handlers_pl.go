@@ -3,6 +3,7 @@ package api
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,7 +25,8 @@ type plAddTrack struct {
 
 func (a *App) listPl(w http.ResponseWriter, r *http.Request) {
 	uid, _ := userIDFromCtx(r.Context())
-	list, err := a.DB.ListPlaylists(r.Context(), uid)
+	q := strings.TrimSpace(r.URL.Query().Get("query"))
+	list, err := a.DB.ListPlaylists(r.Context(), uid, q)
 	if err != nil {
 		log.Printf("list playlists db error: %v", err)
 		JSONError(w, 500, "db")

@@ -178,6 +178,55 @@ input {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.search-results .card {
+  padding: 0.75rem;
+}
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 10px;
+}
+.search-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.search-item-title {
+  font-weight: 700;
+  line-height: 1.2;
+}
+.search-item-main {
+  min-width: 0;
+}
+.search-play {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-decoration: none;
+}
+.pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .pl-collage {
   width: 100%;
   aspect-ratio: 1;
