@@ -3,6 +3,7 @@ import React, { useContext, useMemo, useRef, useState } from "react";
 const Ctx = React.createContext(null);
 export function PlayerProvider({ children }) {
   const ref = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
   const [idx, setIdx] = useState(-1);
   const [volume, setVolume] = useState(1);
@@ -19,6 +20,21 @@ export function PlayerProvider({ children }) {
     const applyMuted = (m) => {
       const el = ref.current;
       if (el) el.muted = m;
+    };
+    const setAudioEl = (el) => {
+      // React calls with null on unmount. Keep both state + ref accurate.
+      ref.current = el;
+      try {
+        if (el) {
+          el.volume = volume;
+          el.muted = muted;
+          setIsPlaying(!el.paused);
+        } else {
+          setIsPlaying(false);
+        }
+      } catch (_) {
+        setIsPlaying(false);
+      }
     };
     const playQueue = (items, startIndex) => {
       setQueue(items || []);
@@ -68,6 +84,8 @@ export function PlayerProvider({ children }) {
     };
     return {
       ref,
+      isPlaying,
+      setAudioEl,
       queue,
       index: idx,
       current,
@@ -83,7 +101,29 @@ export function PlayerProvider({ children }) {
       toggleMute,
       setMute,
     };
-  }, [queue, idx, current, volume, muted, lastVolume]);
+  }, [queue, idx, current, volume, muted, lastVolume, isPlaying]);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      setIsPlaying(false);
+      return;
+    }
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    // initial
+    try {
+      setIsPlaying(!el.paused);
+    } catch (_) {
+      setIsPlaying(false);
+    }
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+    };
+  }, [current?.id]);
 
   // keep element volume in sync
   try {
@@ -104,6 +144,8 @@ export function usePlayer() {
   return (
     useContext(Ctx) || {
       ref: { current: null },
+      isPlaying: false,
+      setAudioEl: () => {},
       queue: [],
       index: -1,
       current: null,

@@ -66,6 +66,8 @@ export function Likes() {
             isLiked={likedSet.has(t.id)}
             onToggleLike={() => unlike(t.id)}
             label={`${t.title || "Untitled"}`}
+            isNowPlaying={p.current?.id === t.id}
+            isPlaying={p.isPlaying}
           />
         ))}
       </ul>

@@ -19,6 +19,8 @@ export function TrackRow({
   isLiked,
   onToggleLike,
   label,
+  isNowPlaying,
+  isPlaying,
 }) {
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -32,7 +34,7 @@ export function TrackRow({
 
   return (
     <>
-      <li className="track-row">
+      <li className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <span
             className="track-title"
@@ -43,7 +45,16 @@ export function TrackRow({
               if (e.key === "Enter" || e.key === " ") onPlayAt(index);
             }}
           >
-            {label}
+            {isNowPlaying ? (
+              <span className="np-eq" aria-hidden="true">
+                <span className="np-eq__bar" />
+                <span className="np-eq__bar" />
+                <span className="np-eq__bar" />
+              </span>
+            ) : (
+              <span className="np-eq np-eq--off" aria-hidden="true" />
+            )}
+            <span className="track-title-text">{label}</span>
           </span>
           <div className="muted" style={{ fontSize: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {track?.artist?.id ? (

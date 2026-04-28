@@ -12,6 +12,7 @@ import { Artists } from "./pages/Artists";
 import { Albums } from "./pages/Albums";
 import { Artist } from "./pages/Artist";
 import { Playlist } from "./pages/Playlist";
+import { Songs } from "./pages/Songs";
 import { lib } from "./api";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { GlobalSearch } from "./components/GlobalSearch";
@@ -287,6 +288,7 @@ function Shell({ children }) {
             </div>
             <nav className="side-nav">
               <Link to="/">Home</Link>
+              <Link to="/songs">Songs</Link>
               <Link to="/artists">Artists</Link>
               <Link to="/albums">Albums</Link>
               <Link to="/playlists">Playlists</Link>
@@ -446,7 +448,8 @@ function Shell({ children }) {
             ref={(el) => {
               // React calls the ref with null on unmount.
               // Keep ref.current accurate to avoid referencing a dead element after logout.
-              p.ref.current = el;
+              if (typeof p.setAudioEl === "function") p.setAudioEl(el);
+              else p.ref.current = el;
             }}
             src={p.current.url}
           />
@@ -706,6 +709,10 @@ export function App() {
           <Route
             path="/album/:id"
             element={!getToken() ? <Navigate to="/login" replace /> : <Album />}
+          />
+          <Route
+            path="/songs"
+            element={!getToken() ? <Navigate to="/login" replace /> : <Songs />}
           />
           <Route
             path="/artists"
