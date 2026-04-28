@@ -93,7 +93,7 @@ body {
   filter: blur(26px) saturate(1.35) contrast(1.25);
   mix-blend-mode: screen;
   opacity: 0.92;
-  animation: lavaLoop 32s linear infinite;
+  animation: lavaLoop 28s ease-in-out infinite;
   z-index: 1;
 }
 
@@ -141,27 +141,27 @@ body {
     rgba(14, 14, 18, 0.52);
 }
 
-/* Seamless loop: 0% and 100% match (360deg == 0deg) */
+/* Seamless loop: vertical “lava lamp” flow (no spinning) */
 @keyframes lavaLoop {
   0% {
-    transform: translate3d(-3%, 6%, 0) scale(1.08) rotate(0deg);
-    opacity: 0.92;
+    transform: translate3d(-2%, -10%, 0) scale(1.10);
+    opacity: 0.90;
   }
   25% {
-    transform: translate3d(4%, -8%, 0) scale(1.12) rotate(90deg);
+    transform: translate3d(3%, 2%, 0) scale(1.14);
     opacity: 0.98;
   }
   50% {
-    transform: translate3d(-2%, -18%, 0) scale(1.10) rotate(180deg);
+    transform: translate3d(-1%, 12%, 0) scale(1.11);
     opacity: 0.94;
   }
   75% {
-    transform: translate3d(-6%, -6%, 0) scale(1.13) rotate(270deg);
+    transform: translate3d(-4%, 0%, 0) scale(1.15);
     opacity: 0.98;
   }
   100% {
-    transform: translate3d(-3%, 6%, 0) scale(1.08) rotate(360deg);
-    opacity: 0.92;
+    transform: translate3d(-2%, -10%, 0) scale(1.10);
+    opacity: 0.90;
   }
 }
 
