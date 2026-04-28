@@ -21,12 +21,7 @@ build:image:
     - mediasrv
     - docker
   variables:
-    DOCKER_HOST: "tcp://docker:2375"
-    DOCKER_TLS_CERTDIR: ""
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--host=tcp://0.0.0.0:2375", "--tls=false", "--mtu=1460"]
+    DOCKER_HOST: "unix:///var/run/docker.sock"
   rules:
     - if: $CI_COMMIT_BRANCH
   before_script:
