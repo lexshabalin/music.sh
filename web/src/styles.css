@@ -82,18 +82,18 @@ body {
   /* “Molten blobs” layer: multiple glowing blobs that rise/flow */
   content: "";
   position: absolute;
-  inset: -18%;
+  inset: -10%;
   background:
     radial-gradient(circle at 20% 90%, rgba(255, 70, 35, 0.95) 0 10%, transparent 12%),
     radial-gradient(circle at 40% 95%, rgba(255, 190, 55, 0.92) 0 12%, transparent 14%),
     radial-gradient(circle at 60% 88%, rgba(255, 90, 40, 0.90) 0 11%, transparent 13%),
     radial-gradient(circle at 78% 96%, rgba(255, 210, 70, 0.86) 0 10%, transparent 12%),
-    radial-gradient(circle at 30% 60%, rgba(255, 120, 35, 0.55) 0 14%, transparent 18%),
-    radial-gradient(circle at 72% 52%, rgba(255, 200, 70, 0.42) 0 14%, transparent 20%);
-  filter: blur(26px) saturate(1.35) contrast(1.25);
-  mix-blend-mode: screen;
-  opacity: 0.92;
-  animation: lavaLoop 28s ease-in-out infinite;
+    radial-gradient(circle at 30% 62%, rgba(255, 120, 35, 0.45) 0 13%, transparent 18%);
+  /* Keep it GPU-composable: transform-only animation, lighter filters */
+  filter: blur(16px) saturate(1.20);
+  opacity: 0.86;
+  will-change: transform, opacity;
+  animation: lavaLoop 42s ease-in-out infinite;
   z-index: 1;
 }
 
@@ -103,7 +103,8 @@ body {
 
 /* Second flow layer using an extra background via box-shadow trick (keeps DOM minimal) */
 .bg-lava {
-  filter: saturate(1.12) contrast(1.15);
+  /* Avoid costly full-layer filters; keep the glow on the blobs only */
+  filter: none;
 }
 .bg-lava::before {
   box-shadow:
@@ -162,6 +163,12 @@ body {
   100% {
     transform: translate3d(-2%, -10%, 0) scale(1.10);
     opacity: 0.90;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-lava::before {
+    animation: none;
   }
 }
 

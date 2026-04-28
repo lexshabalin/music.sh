@@ -632,12 +632,15 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
   }, [onClose, anchorRef]);
 
   const r = anchorRef.current?.getBoundingClientRect?.();
+  const width = 240;
+  const pad = 8;
   const style = r
     ? {
         position: "fixed",
         top: r.bottom + 8,
-        left: Math.min(window.innerWidth - 260, Math.max(8, r.left - 200)),
-        width: 240,
+        // Anchor to the avatar button's right edge so it doesn't "drift" on layout changes.
+        left: Math.min(window.innerWidth - width - pad, Math.max(pad, r.right - width)),
+        width,
         background: "#111119",
         border: "1px solid #2a2a33",
         borderRadius: 12,
