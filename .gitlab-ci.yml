@@ -1,0 +1,55 @@
+stages:
+  - build
+  - deploy
+
+default:
+  interruptible: true
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
+build:image:
+  stage: build
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      command: ["--mtu=1460"]
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - docker version
+    - docker build --pull -t "$CI_PROJECT_NAME:$CI_COMMIT_SHA" .
+
+deploy:prod:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+  before_script:
+    - apk add --no-cache openssh-client rsync bash
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - eval "$(ssh-agent -s)"
+    # Prefer base64 form (single-line, can be masked): DEPLOY_SSH_PRIVATE_KEY_B64
+    # Fallback: raw multiline key in DEPLOY_SSH_PRIVATE_KEY (cannot be masked)
+    - |
+      if [ -n "${DEPLOY_SSH_PRIVATE_KEY_B64:-}" ]; then
+        echo "$DEPLOY_SSH_PRIVATE_KEY_B64" | base64 -d | tr -d '\r' | ssh-add -
+      else
+        echo "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      fi
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+  script:
+    # Sync repo to server (do not upload git metadata)
+    - rsync -az --delete --exclude '.git' --exclude '.gitlab-ci.yml' ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
+    # Run deploy on server
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash '$DEPLOY_DIR/scripts/deploy_remote.sh'"

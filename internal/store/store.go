@@ -160,7 +160,7 @@ func (d *DB) UpsertTrack(
 	ctx context.Context,
 	filePath string,
 	fileSize, mtimeNs int64,
-	artistName, albumTitle, title string,
+	artistName, albumArtistName, albumTitle, title string,
 	trackNo, discNo, year *int,
 	durationMS *int,
 	format *string,
@@ -170,7 +170,13 @@ func (d *DB) UpsertTrack(
 	if err != nil {
 		return
 	}
-	albID, err := d.FindOrCreateAlbum(ctx, &artistID, albumTitle, year)
+	albumArtistID := artistID
+	if strings.TrimSpace(albumArtistName) != "" && !strings.EqualFold(strings.TrimSpace(albumArtistName), strings.TrimSpace(artistName)) {
+		if aaid, e := d.FindOrCreateArtist(ctx, albumArtistName); e == nil {
+			albumArtistID = aaid
+		}
+	}
+	albID, err := d.FindOrCreateAlbum(ctx, &albumArtistID, albumTitle, year)
 	if err != nil {
 		return
 	}
@@ -183,10 +189,15 @@ func (d *DB) UpsertTrack(
 
 	var id uuid.UUID
 	var oldMtime int64
-	err2 := d.Pool.QueryRow(ctx, `SELECT id, file_mtime_ns FROM tracks WHERE file_path = $1`, filePath).Scan(&id, &oldMtime)
+	var curAlbumID, curArtistID sql.NullString
+	err2 := d.Pool.QueryRow(ctx, `SELECT id, file_mtime_ns, album_id::text, artist_id::text FROM tracks WHERE file_path = $1`, filePath).
+		Scan(&id, &oldMtime, &curAlbumID, &curArtistID)
 	if err2 == nil {
 		trackID = id
-		if oldMtime == mtimeNs {
+		// Even if mtime didn't change, the desired album mapping can change (e.g. album-artist normalization).
+		sameAlbum := curAlbumID.Valid && curAlbumID.String != "" && curAlbumID.String == albumID.String()
+		sameArtist := curArtistID.Valid && curArtistID.String != "" && curArtistID.String == artistID.String()
+		if oldMtime == mtimeNs && sameAlbum && sameArtist {
 			return trackID, albumID, false, nil
 		}
 		_, e := d.Pool.Exec(ctx, `
@@ -870,6 +881,16 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 // ResetStuckRunningJobs requeues running jobs (e.g. after crash)
 func (d *DB) ResetStuckRunningJobs(ctx context.Context) error {
 	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET status = 'pending' WHERE status = 'running'`)
+	return err
+}
+
+// CleanupOrphanAlbums deletes albums with no tracks referencing them.
+// Useful after scans that may move tracks between albums.
+func (d *DB) CleanupOrphanAlbums(ctx context.Context) error {
+	_, err := d.Pool.Exec(ctx, `
+		DELETE FROM albums a
+		WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = a.id)
+	`)
 	return err
 }
 

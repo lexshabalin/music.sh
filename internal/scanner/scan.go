@@ -32,7 +32,7 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
@@ -43,6 +43,9 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		}
 		return nil
 	})
+	// If track rows moved to a different album (e.g. because of album-artist normalization),
+	// delete now-empty albums to avoid duplicate shells in the UI.
+	_ = s.CleanupOrphanAlbums(ctx)
 	return
 }
 
@@ -54,7 +57,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		return fmt.Errorf("MUSIC_DIR empty")
 	}
 	lastReport := 0
-	return filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -69,7 +72,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		_, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
 		if e != nil {
 			return e
 		}
@@ -83,10 +86,15 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	_ = s.CleanupOrphanAlbums(ctx)
+	return nil
 }
 
 type trackMeta struct {
-	artist, album, title                string
+	artist, albumArtist, album, title   string
 	track, disc, year                  *int
 	durationMS                        *int
 	format                            *string
@@ -105,6 +113,12 @@ func readTrackMeta(p string) trackMeta {
 	}
 	out := trackMeta{title: strings.TrimSpace(m.Title())}
 	artist := strings.TrimSpace(m.Artist())
+	albumArtist := ""
+	// Not all tag formats expose album-artist; use optional interface.
+	type albumArtistGetter interface{ AlbumArtist() string }
+	if aa, ok := m.(albumArtistGetter); ok {
+		albumArtist = strings.TrimSpace(aa.AlbumArtist())
+	}
 	album := strings.TrimSpace(m.Album())
 	if out.title == "" {
 		out.title = store.BaseName(p)
@@ -112,10 +126,14 @@ func readTrackMeta(p string) trackMeta {
 	if artist == "" {
 		artist = "Unknown Artist"
 	}
+	if albumArtist == "" {
+		albumArtist = artist
+	}
 	if album == "" {
 		album = "Unknown"
 	}
 	out.artist = artist
+	out.albumArtist = albumArtist
 	out.album = album
 
 	if n, _ := m.Track(); n > 0 {
