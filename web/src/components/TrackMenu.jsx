@@ -235,13 +235,39 @@ export function TrackRow({
   );
 }
 
-export function TrackHeader({ columns = "full" }) {
+export function TrackHeader({
+  columns = "full",
+  sortKey = "",
+  sortDir = "asc",
+  onSort,
+}) {
+  const canSort = typeof onSort === "function";
+  const arrow = sortDir === "desc" ? "▼" : "▲";
+  const head = (k, label, cls) => {
+    const active = sortKey === k;
+    return (
+      <button
+        type="button"
+        className={`track-head-btn ${cls || ""} ${active ? "is-active" : ""}`}
+        onClick={canSort ? () => onSort(k) : undefined}
+        disabled={!canSort}
+        title={label}
+      >
+        <span>{label}</span>
+        {active ? <span className="track-sort-arrow" aria-hidden="true">{arrow}</span> : <span className="track-sort-arrow track-sort-arrow--off" aria-hidden="true">{arrow}</span>}
+      </button>
+    );
+  };
   return (
     <li className="track-header" aria-hidden="true">
       <div className={`track-grid track-grid--header${columns === "album" ? " track-grid--album" : ""}`}>
-        <div className="track-col track-title-h">Title</div>
-        <div className="track-col track-artist-h">Artist</div>
-        {columns === "full" ? <div className="track-col track-album-h">Album</div> : <div className="track-col track-album-h track-album--hidden" />}
+        <div className="track-col track-title-h">{head("title", "Title", "track-title-h")}</div>
+        <div className="track-col track-artist-h">{head("artist", "Artist", "track-artist-h")}</div>
+        {columns === "full" ? (
+          <div className="track-col track-album-h">{head("album", "Album", "track-album-h")}</div>
+        ) : (
+          <div className="track-col track-album-h track-album--hidden" />
+        )}
         <div className="track-col track-dur track-dur-h">
           <span className="track-time-icon" title="Time" aria-label="Time">
             <IClock size={16} />

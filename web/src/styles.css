@@ -581,6 +581,39 @@ input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.track-head-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(230, 230, 238, 0.78);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+.track-head-btn:disabled {
+  cursor: default;
+}
+.track-head-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.track-head-btn.is-active {
+  color: rgba(255, 255, 255, 0.95);
+}
+.track-sort-arrow {
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+.track-sort-arrow--off {
+  opacity: 0.12;
+}
 .track-dur-h {
   text-align: right;
 }

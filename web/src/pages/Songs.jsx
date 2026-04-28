@@ -12,10 +12,33 @@ function shuffleCopy(arr) {
   return a;
 }
 
+function sortTracks(list, key, dir) {
+  const a = Array.isArray(list) ? list.slice() : [];
+  const mult = dir === "desc" ? -1 : 1;
+  const coll = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  const get = (t) => {
+    if (key === "title") return (t?.title || "").toString();
+    if (key === "artist") return (t?.artist?.name || "").toString();
+    if (key === "album") return (t?.album?.title || "").toString();
+    return "";
+  };
+  return a
+    .map((t, i) => ({ t, i }))
+    .sort((x, y) => {
+      const ax = get(x.t);
+      const ay = get(y.t);
+      const r = coll.compare(ax, ay);
+      return r !== 0 ? r * mult : (x.i - y.i);
+    })
+    .map((x) => x.t);
+}
+
 export function Songs() {
   const [tracks, setTracks] = React.useState([]);
   const [err, setErr] = React.useState("");
   const [liked, setLiked] = React.useState(new Set());
+  const [sortKey, setSortKey] = React.useState("title");
+  const [sortDir, setSortDir] = React.useState("asc");
   const p = usePlayer();
 
   const load = React.useCallback(() => {
@@ -37,7 +60,10 @@ export function Songs() {
     load();
   }, [load]);
 
+  const sortedTracks = React.useMemo(() => sortTracks(tracks, sortKey, sortDir), [tracks, sortKey, sortDir]);
+
   const items = React.useMemo(() => {
+    // Playback order should follow the original (unsorted) library order.
     return tracks.map((t) => ({
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
@@ -96,13 +122,27 @@ export function Songs() {
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
 
       <ul className="plain-list">
-        <TrackHeader columns="full" />
-        {tracks.map((t, i) => (
+        <TrackHeader
+          columns="full"
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={(k) => {
+            if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+            else {
+              setSortKey(k);
+              setSortDir("asc");
+            }
+          }}
+        />
+        {sortedTracks.map((t) => (
           <TrackRow
             key={t.id}
             track={t}
-            index={i}
-            onPlayAt={(idx) => playAt(idx)}
+            index={0}
+            onPlayAt={() => {
+              const idx = tracks.findIndex((x) => x.id === t.id);
+              playAt(Math.max(0, idx));
+            }}
             onPlayNext={(trk) => playNext(trk)}
             isLiked={liked.has(t.id)}
             onToggleLike={(id2) => toggleLike(id2)}

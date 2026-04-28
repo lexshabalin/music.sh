@@ -13,10 +13,33 @@ function shuffleCopy(arr) {
   return a;
 }
 
+function sortTracks(list, key, dir) {
+  const a = Array.isArray(list) ? list.slice() : [];
+  const mult = dir === "desc" ? -1 : 1;
+  const coll = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  const get = (t) => {
+    if (key === "title") return (t?.title || "").toString();
+    if (key === "artist") return (t?.artist?.name || "").toString();
+    if (key === "album") return (t?.album?.title || "").toString();
+    return "";
+  };
+  return a
+    .map((t, i) => ({ t, i }))
+    .sort((x, y) => {
+      const ax = get(x.t);
+      const ay = get(y.t);
+      const r = coll.compare(ax, ay);
+      return r !== 0 ? r * mult : (x.i - y.i);
+    })
+    .map((x) => x.t);
+}
+
 export function Playlist() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const [sortKey, setSortKey] = useState("title");
+  const [sortDir, setSortDir] = useState("asc");
   const player = usePlayer();
 
   const load = () =>
@@ -36,7 +59,9 @@ export function Playlist() {
   if (!data) return <p className="muted">Loading…</p>;
 
   const tracks = Array.isArray(data.tracks) ? data.tracks : [];
+  const sortedTracks = sortTracks(tracks, sortKey, sortDir);
   const playAt = (startIdx) => {
+    // Playback order should follow playlist position (unsorted).
     const items = tracks.map((t) => ({
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
@@ -92,13 +117,27 @@ export function Playlist() {
         </button>
       </div>
       <ul className="plain-list">
-        <TrackHeader columns="full" />
-        {tracks.map((t, i) => (
+        <TrackHeader
+          columns="full"
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={(k) => {
+            if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+            else {
+              setSortKey(k);
+              setSortDir("asc");
+            }
+          }}
+        />
+        {sortedTracks.map((t) => (
           <TrackRow
             key={t.id}
             track={t}
-            index={i}
-            onPlayAt={(idx) => playAt(idx)}
+            index={0}
+            onPlayAt={() => {
+              const idx = tracks.findIndex((x) => x.id === t.id);
+              playAt(Math.max(0, idx));
+            }}
             onPlayNext={(trk) => playNext(trk)}
             isLiked={false}
             onToggleLike={null}
