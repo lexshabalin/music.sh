@@ -1,6 +1,15 @@
 import React from "react";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
-import { auth, getToken } from "./api";
+import {
+  auth,
+  getToken,
+  getPlaybackClientId,
+  lib,
+  PLAYBACK_SYNC_RELEASE_EVENT,
+  playback,
+  releasePlaybackServerSync,
+  tracksToQueueItems,
+} from "./api";
 import { usePlayer } from "./usePlayer";
 import { Login } from "./pages/Login";
 import { Library } from "./pages/Library";
@@ -13,7 +22,6 @@ import { Albums } from "./pages/Albums";
 import { Artist } from "./pages/Artist";
 import { Playlist } from "./pages/Playlist";
 import { Songs } from "./pages/Songs";
-import { lib } from "./api";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { GlobalSearch } from "./components/GlobalSearch";
 import {
@@ -116,8 +124,50 @@ function Shell({ children }) {
   });
   const userBtnRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
+  const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
 
-  const doLogout = React.useCallback(() => {
+  const skipAutoplayOnceRef = React.useRef(false);
+  const skipPlaybackPushUntilRef = React.useRef(0);
+  const restoredPlaybackRef = React.useRef(false);
+  const pendingSeekSecRef = React.useRef(null);
+  const playQueueRef = React.useRef(p.playQueue);
+  React.useEffect(() => {
+    playQueueRef.current = p.playQueue;
+  }, [p.playQueue]);
+
+  const suspendPlaybackPushRef = React.useRef(false);
+
+  const flushPlayback = React.useCallback(() => {
+    if (!getToken()) return;
+    if (suspendPlaybackPushRef.current) return;
+    if (Date.now() < skipPlaybackPushUntilRef.current) return;
+    const el = p.ref.current;
+    const q = p.queue;
+    const idx = p.index;
+    const cid = getPlaybackClientId();
+    const body =
+      !q.length || idx < 0
+        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid }
+        : {
+            trackIds: q.map((x) => x.id),
+            currentIndex: idx,
+            positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
+            isPlaying: !!(el && !el.paused),
+            clientId: cid,
+          };
+    playback.put(body).catch(() => {});
+  }, [p.queue, p.index, p.ref]);
+
+  const flushPlaybackRef = React.useRef(flushPlayback);
+  React.useEffect(() => {
+    flushPlaybackRef.current = flushPlayback;
+  }, [flushPlayback]);
+
+  const claimPlaybackSync = React.useCallback(() => {
+    releasePlaybackServerSync();
+  }, []);
+
+  const doLogout = React.useCallback(async () => {
     try {
       const el = p.ref.current;
       if (el && typeof el.pause === "function") el.pause();
@@ -126,10 +176,101 @@ function Shell({ children }) {
       if (typeof p.playQueue === "function") p.playQueue([], -1);
     } catch (_) {}
     try {
+      await playback.clear();
+    } catch (_) {}
+    restoredPlaybackRef.current = false;
+    suspendPlaybackPushRef.current = false;
+    try {
       localStorage.removeItem("musicsh_token");
     } catch (_) {}
     window.location.hash = "#/login";
   }, [p]);
+
+  React.useEffect(() => {
+    if (!getToken()) {
+      restoredPlaybackRef.current = false;
+      return;
+    }
+    if (restoredPlaybackRef.current) return;
+    restoredPlaybackRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await playback.get();
+        if (cancelled) return;
+        if (!st?.trackIds?.length) return;
+        const tracks = await lib.tracksByIds(st.trackIds);
+        if (cancelled || !tracks.length) return;
+        const origId = st.trackIds[st.currentIndex];
+        let newIdx = tracks.findIndex((t) => t.id === origId);
+        if (newIdx < 0) newIdx = 0;
+        const items = tracksToQueueItems(tracks);
+        skipPlaybackPushUntilRef.current = Date.now() + 4000;
+        if (!st.isPlaying) skipAutoplayOnceRef.current = true;
+        pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000);
+        playQueueRef.current(items, newIdx);
+      } catch (_) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [me?.id]);
+
+  React.useEffect(() => {
+    const onRelease = () => {
+      suspendPlaybackPushRef.current = false;
+    };
+    window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
+    return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
+  }, []);
+
+  React.useEffect(() => {
+    if (!getToken() || !isPlaying) return;
+    const tick = async () => {
+      if (suspendPlaybackPushRef.current) return;
+      if (Date.now() < skipPlaybackPushUntilRef.current) return;
+      const mine = getPlaybackClientId();
+      if (!mine) return;
+      try {
+        const el = p.ref.current;
+        if (!el || el.paused) return;
+        const st = await playback.get();
+        if (!st?.isPlaying || !st.clientId || st.clientId === mine) return;
+        try {
+          el.pause();
+        } catch (_) {}
+        suspendPlaybackPushRef.current = true;
+        setRemotePlayingNotice("Музыка воспроизводится на другом устройстве");
+        window.setTimeout(() => setRemotePlayingNotice(""), 9000);
+      } catch (_) {}
+    };
+    const id = window.setInterval(tick, 2500);
+    tick();
+    return () => clearInterval(id);
+  }, [isPlaying]);
+
+  React.useEffect(() => {
+    if (!getToken()) return;
+    const id = window.setInterval(() => flushPlayback(), 5000);
+    return () => clearInterval(id);
+  }, [flushPlayback]);
+
+  React.useEffect(() => {
+    const onHidden = () => flushPlayback();
+    const vis = () => {
+      if (document.visibilityState === "hidden") onHidden();
+    };
+    document.addEventListener("visibilitychange", vis);
+    window.addEventListener("pagehide", onHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", vis);
+      window.removeEventListener("pagehide", onHidden);
+    };
+  }, [flushPlayback]);
+
+  React.useEffect(() => {
+    flushPlayback();
+  }, [p.current?.id, flushPlayback]);
 
   React.useEffect(() => {
     const authed = !!getToken();
@@ -214,7 +355,12 @@ function Shell({ children }) {
     if (!el) return;
 
     const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPause = () => {
+      setIsPlaying(false);
+      try {
+        flushPlaybackRef.current();
+      } catch (_) {}
+    };
     const onTime = () => setCurT(el.currentTime || 0);
     const onMeta = () => setDur(el.duration || 0);
     const onError = async () => {
@@ -275,12 +421,33 @@ function Shell({ children }) {
   React.useEffect(() => {
     const el = p.ref.current;
     if (!el || !p.current?.id) return;
+    if (skipAutoplayOnceRef.current) {
+      skipAutoplayOnceRef.current = false;
+      return;
+    }
     const pr = el.play?.();
     if (pr && typeof pr.catch === "function") {
       pr.catch(() => {
         // Ignore: browser can block autoplay until user interaction.
       });
     }
+  }, [p.current?.id]);
+
+  // Resume position from cross-device / reload sync after metadata loads.
+  React.useEffect(() => {
+    const el = p.ref.current;
+    if (!el || !p.current?.id) return;
+    const sec = pendingSeekSecRef.current;
+    if (sec == null || !Number.isFinite(sec)) return;
+    const apply = () => {
+      try {
+        el.currentTime = Math.max(0, sec);
+      } catch (_) {}
+      pendingSeekSecRef.current = null;
+    };
+    if (el.readyState >= 1) apply();
+    else el.addEventListener("loadedmetadata", apply, { once: true });
+    return () => el.removeEventListener("loadedmetadata", apply);
   }, [p.current?.id]);
 
   React.useEffect(() => {
@@ -379,6 +546,7 @@ function Shell({ children }) {
 
     try {
       ms.setActionHandler("play", async () => {
+        releasePlaybackServerSync();
         const el = p.ref.current;
         if (!el) return;
         const pr = el.play();
@@ -392,13 +560,20 @@ function Shell({ children }) {
       });
     } catch (_) {}
     try {
-      ms.setActionHandler("nexttrack", () => p.next());
+      ms.setActionHandler("nexttrack", () => {
+        releasePlaybackServerSync();
+        p.next();
+      });
     } catch (_) {}
     try {
-      ms.setActionHandler("previoustrack", () => p.prev());
+      ms.setActionHandler("previoustrack", () => {
+        releasePlaybackServerSync();
+        p.prev();
+      });
     } catch (_) {}
     try {
       ms.setActionHandler("seekto", (details) => {
+        releasePlaybackServerSync();
         const el = p.ref.current;
         if (!el) return;
         if (details?.seekTime != null && Number.isFinite(details.seekTime)) {
@@ -436,6 +611,11 @@ function Shell({ children }) {
   return (
     <>
       <BackgroundLayer bg={bg} />
+      {remotePlayingNotice ? (
+        <div className="playback-remote-notice" role="status">
+          {remotePlayingNotice}
+        </div>
+      ) : null}
       <div
         className="layout"
         {...(getToken() && isMobile
@@ -511,7 +691,15 @@ function Shell({ children }) {
       </div>
       {p.current && getToken() && !isMobile ? (
         <div className="player">
-          <button className="player-skip" type="button" onClick={p.prev} title="Rewind">
+          <button
+            className="player-skip"
+            type="button"
+            onClick={() => {
+              claimPlaybackSync();
+              p.prev();
+            }}
+            title="Rewind"
+          >
             <IRewind />
           </button>
 
@@ -522,6 +710,7 @@ function Shell({ children }) {
               const el = p.ref.current;
               if (!el) return;
               if (el.paused) {
+                claimPlaybackSync();
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch(() => {
@@ -537,7 +726,15 @@ function Shell({ children }) {
             {isPlaying ? <IPause /> : <IPlay />}
           </button>
 
-          <button className="player-skip" type="button" onClick={p.next} title="Fast-forward">
+          <button
+            className="player-skip"
+            type="button"
+            onClick={() => {
+              claimPlaybackSync();
+              p.next();
+            }}
+            title="Fast-forward"
+          >
             <IFastForward />
           </button>
 
@@ -612,6 +809,7 @@ function Shell({ children }) {
             onChange={(e) => {
               const el = p.ref.current;
               if (!el) return;
+              claimPlaybackSync();
               const v = Number(e.target.value);
               el.currentTime = v;
               setCurT(v);
@@ -669,7 +867,16 @@ function Shell({ children }) {
               </div>
             </div>
             <div className="player-mini-controls">
-              <button className="player-skip" type="button" onClick={(e) => { e.stopPropagation(); p.prev(); }} title="Previous">
+              <button
+                className="player-skip"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  claimPlaybackSync();
+                  p.prev();
+                }}
+                title="Previous"
+              >
                 <IRewind />
               </button>
               <button
@@ -680,6 +887,7 @@ function Shell({ children }) {
                   const el = p.ref.current;
                   if (!el) return;
                   if (el.paused) {
+                    claimPlaybackSync();
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") pr.catch(() => {});
                   } else {
@@ -690,7 +898,16 @@ function Shell({ children }) {
               >
                 {isPlaying ? <IPause /> : <IPlay />}
               </button>
-              <button className="player-skip" type="button" onClick={(e) => { e.stopPropagation(); p.next(); }} title="Next">
+              <button
+                className="player-skip"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  claimPlaybackSync();
+                  p.next();
+                }}
+                title="Next"
+              >
                 <IFastForward />
               </button>
             </div>
@@ -730,6 +947,7 @@ function Shell({ children }) {
                     onChange={(e) => {
                       const el = p.ref.current;
                       if (!el) return;
+                      claimPlaybackSync();
                       const v = Number(e.target.value);
                       el.currentTime = v;
                       setCurT(v);
@@ -741,7 +959,15 @@ function Shell({ children }) {
                   </div>
                 </div>
                 <div className="mobile-player-controls">
-                  <button className="player-skip" type="button" onClick={p.prev} title="Previous">
+                  <button
+                    className="player-skip"
+                    type="button"
+                    onClick={() => {
+                      claimPlaybackSync();
+                      p.prev();
+                    }}
+                    title="Previous"
+                  >
                     <IRewind />
                   </button>
                   <button
@@ -751,6 +977,7 @@ function Shell({ children }) {
                       const el = p.ref.current;
                       if (!el) return;
                       if (el.paused) {
+                        claimPlaybackSync();
                         const pr = el.play();
                         if (pr && typeof pr.catch === "function") pr.catch(() => {});
                       } else {
@@ -761,7 +988,15 @@ function Shell({ children }) {
                   >
                     {isPlaying ? <IPause /> : <IPlay />}
                   </button>
-                  <button className="player-skip" type="button" onClick={p.next} title="Next">
+                  <button
+                    className="player-skip"
+                    type="button"
+                    onClick={() => {
+                      claimPlaybackSync();
+                      p.next();
+                    }}
+                    title="Next"
+                  >
                     <IFastForward />
                   </button>
                 </div>

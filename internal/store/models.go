@@ -88,3 +88,14 @@ type Job struct {
 	LastError *string    `json:"lastError,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
+
+// PlaybackState is persisted for cross-device resume (queue order + position).
+type PlaybackState struct {
+	TrackIDs           []uuid.UUID
+	CurrentIndex       int
+	PositionMs         int
+	IsPlaying          bool
+	SourcePlaylistID   *uuid.UUID
+	PlaybackClientID   string
+	UpdatedAt          time.Time
+}

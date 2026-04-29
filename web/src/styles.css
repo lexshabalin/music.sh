@@ -38,6 +38,27 @@ body {
   position: relative;
   z-index: 1;
 }
+
+.playback-remote-notice {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text);
+  background: var(--glass-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
 .bg-custom {
   background-size: cover;
   background-position: center;

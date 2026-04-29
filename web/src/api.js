@@ -127,4 +127,71 @@ export const lib = {
   likeIds: () => req("/api/likes"),
   like: (trackId) => req("/api/likes", { method: "POST", body: JSON.stringify({ trackId }) }),
   unlike: (trackId) => req("/api/likes/" + trackId, { method: "DELETE" }),
+  /** Ordered tracks matching `ids` (skips missing). Chunks long lists for URL limits. */
+  tracksByIds: async (orderedIds) => {
+    if (!Array.isArray(orderedIds) || !orderedIds.length) return [];
+    const chunk = 350;
+    const out = [];
+    for (let i = 0; i < orderedIds.length; i += chunk) {
+      const part = orderedIds.slice(i, i + chunk);
+      const list = await req("/api/tracks?ids=" + part.join(","));
+      const m = new Map(list.map((t) => [t.id, t]));
+      for (const id of part) {
+        const t = m.get(id);
+        if (t) out.push(t);
+      }
+    }
+    return out;
+  },
+};
+
+/** Player queue items from `/api/tracks` rows (same shape as playlist pages). */
+export function tracksToQueueItems(tracks) {
+  if (!Array.isArray(tracks)) return [];
+  return tracks.map((t) => ({
+    id: t.id,
+    label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+    url: lib.streamUrl(t.id),
+    artist: t.artist?.name || "",
+    title: t.title || "Track",
+    album: t.album?.title || "",
+    coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+  }));
+}
+
+/** Dispatched when the user explicitly takes control (play / new queue / skip). */
+export const PLAYBACK_SYNC_RELEASE_EVENT = "musicsh:release-playback-sync";
+
+/** One id per browser tab (sessionStorage); used to detect playback on another device. */
+export function getPlaybackClientId() {
+  if (typeof window === "undefined") return "";
+  try {
+    const k = "musicsh_pb_cid";
+    let id = sessionStorage.getItem(k);
+    if (!id && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(k, id);
+    }
+    return id || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+export function releasePlaybackServerSync() {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent(PLAYBACK_SYNC_RELEASE_EVENT));
+  } catch (_) {}
+}
+
+/** Cross-device playback resume (server stores last queue + position). */
+export const playback = {
+  get: () => req("/api/me/playback"),
+  put: (state) =>
+    req("/api/me/playback", {
+      method: "PUT",
+      body: JSON.stringify(state),
+    }),
+  clear: () => req("/api/me/playback", { method: "DELETE" }),
 };

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -81,6 +82,44 @@ func (a *App) coverURLFor(id uuid.UUID) *string {
 }
 
 func (a *App) listTracks(w http.ResponseWriter, r *http.Request) {
+	// Ordered batch fetch for playback restore: /api/tracks?ids=id1,id2,...
+	if idsStr := strings.TrimSpace(r.URL.Query().Get("ids")); idsStr != "" {
+		parts := strings.Split(idsStr, ",")
+		var ids []uuid.UUID
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			u, err := uuid.Parse(p)
+			if err != nil {
+				JSONError(w, 400, "invalid id in ids")
+				return
+			}
+			ids = append(ids, u)
+		}
+		if len(ids) == 0 {
+			JSON(w, 200, []store.Track{})
+			return
+		}
+		if len(ids) > 5000 {
+			JSONError(w, 400, "too many ids")
+			return
+		}
+		m, err := a.DB.ListTracksByIds(r.Context(), ids)
+		if err != nil {
+			JSONError(w, 500, "db")
+			return
+		}
+		out := make([]store.Track, 0, len(ids))
+		for _, id := range ids {
+			if t, ok := m[id]; ok {
+				out = append(out, t)
+			}
+		}
+		JSON(w, 200, out)
+		return
+	}
 	q := r.URL.Query().Get("query")
 	var albumID, artistID *uuid.UUID
 	if s := r.URL.Query().Get("albumId"); s != "" {

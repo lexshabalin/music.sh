@@ -1208,3 +1208,52 @@ func (d *DB) CountPendingMetaJobForAlbum(ctx context.Context, albumID uuid.UUID)
 	`, albumID).Scan(&c)
 	return c, err
 }
+
+// GetUserPlayback returns saved playback or empty defaults if no row.
+func (d *DB) GetUserPlayback(ctx context.Context, userID uuid.UUID) (PlaybackState, error) {
+	var st PlaybackState
+	var src sql.NullString
+	err := d.Pool.QueryRow(ctx, `
+		SELECT track_ids, current_index, position_ms, is_playing, source_playlist_id::text, playback_client_id, updated_at
+		FROM user_playback WHERE user_id = $1
+	`, userID).Scan(&st.TrackIDs, &st.CurrentIndex, &st.PositionMs, &st.IsPlaying, &src, &st.PlaybackClientID, &st.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return PlaybackState{TrackIDs: []uuid.UUID{}, UpdatedAt: time.Now()}, nil
+	}
+	if err != nil {
+		return PlaybackState{}, err
+	}
+	if src.Valid && src.String != "" {
+		u, err := uuid.Parse(src.String)
+		if err == nil {
+			st.SourcePlaylistID = &u
+		}
+	}
+	return st, nil
+}
+
+// UpsertUserPlayback replaces playback state for the user.
+func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs []uuid.UUID, idx, posMs int, playing bool, sourcePl *uuid.UUID, playbackClientID string) error {
+	if trackIDs == nil {
+		trackIDs = []uuid.UUID{}
+	}
+	_, err := d.Pool.Exec(ctx, `
+		INSERT INTO user_playback (user_id, track_ids, current_index, position_ms, is_playing, source_playlist_id, playback_client_id, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+		ON CONFLICT (user_id) DO UPDATE SET
+			track_ids = EXCLUDED.track_ids,
+			current_index = EXCLUDED.current_index,
+			position_ms = EXCLUDED.position_ms,
+			is_playing = EXCLUDED.is_playing,
+			source_playlist_id = EXCLUDED.source_playlist_id,
+			playback_client_id = EXCLUDED.playback_client_id,
+			updated_at = now()
+	`, userID, trackIDs, idx, posMs, playing, sourcePl, playbackClientID)
+	return err
+}
+
+// ClearUserPlayback removes saved state (e.g. on logout).
+func (d *DB) ClearUserPlayback(ctx context.Context, userID uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `DELETE FROM user_playback WHERE user_id = $1`, userID)
+	return err
+}

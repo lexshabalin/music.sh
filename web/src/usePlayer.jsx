@@ -1,4 +1,5 @@
 import React, { useContext, useMemo, useRef, useState } from "react";
+import { releasePlaybackServerSync } from "./api";
 
 const Ctx = React.createContext(null);
 export function PlayerProvider({ children }) {
@@ -37,12 +38,14 @@ export function PlayerProvider({ children }) {
       }
     };
     const playQueue = (items, startIndex) => {
+      releasePlaybackServerSync();
       setQueue(items || []);
       setIdx(typeof startIndex === "number" ? startIndex : 0);
     };
     const playOne = (id, label, url) => playQueue([{ id, label, url }], 0);
     const playNext = (item) => {
       if (!item) return;
+      releasePlaybackServerSync();
       setQueue((q) => {
         const base = Array.isArray(q) ? q.slice() : [];
         const insertAt = idx >= 0 ? idx + 1 : base.length;
