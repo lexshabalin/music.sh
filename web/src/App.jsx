@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import {
   auth,
@@ -110,6 +111,7 @@ function Shell({ children }) {
   const [showPlModal, setShowPlModal] = React.useState(false);
   const [showQueue, setShowQueue] = React.useState(false);
   const queueBtnRef = React.useRef(null);
+  const mobileQueueBtnRef = React.useRef(null);
   const [me, setMe] = React.useState(null);
   const [avatarUrl, setAvatarUrl] = React.useState("");
   const [showProfile, setShowProfile] = React.useState(false);
@@ -193,14 +195,13 @@ function Shell({ children }) {
     }
     if (restoredPlaybackRef.current) return;
     restoredPlaybackRef.current = true;
-    let cancelled = false;
     (async () => {
       try {
         const st = await playback.get();
-        if (cancelled) return;
+        if (!getToken()) return;
         if (!st?.trackIds?.length) return;
         const tracks = await lib.tracksByIds(st.trackIds);
-        if (cancelled || !tracks.length) return;
+        if (!getToken() || !tracks.length) return;
         const origId = st.trackIds[st.currentIndex];
         let newIdx = tracks.findIndex((t) => t.id === origId);
         if (newIdx < 0) newIdx = 0;
@@ -211,10 +212,11 @@ function Shell({ children }) {
         playQueueRef.current(items, newIdx);
       } catch (_) {}
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [me?.id]);
+
+  React.useEffect(() => {
+    if (isMobile && !showMobilePlayer) setShowQueue(false);
+  }, [isMobile, showMobilePlayer]);
 
   React.useEffect(() => {
     const onRelease = () => {
@@ -816,27 +818,16 @@ function Shell({ children }) {
             }}
           />
 
-          <div style={{ position: "relative" }}>
-            <button
-              ref={queueBtnRef}
-              className="player-skip"
-              type="button"
-              title="Queue"
-              aria-label="Queue"
-              onClick={() => setShowQueue((v) => !v)}
-            >
-              <IQueue />
-            </button>
-            {showQueue ? (
-              <QueuePopover
-                anchorRef={queueBtnRef}
-                items={Array.isArray(p.queue) ? p.queue : []}
-                currentIndex={typeof p.index === "number" ? p.index : -1}
-                onJump={(i) => p.jumpTo(i)}
-                onClose={() => setShowQueue(false)}
-              />
-            ) : null}
-          </div>
+          <button
+            ref={queueBtnRef}
+            className="player-skip"
+            type="button"
+            title="Queue"
+            aria-label="Queue"
+            onClick={() => setShowQueue((v) => !v)}
+          >
+            <IQueue />
+          </button>
 
           <div className="muted" style={{ minWidth: 64 }}>
             {fmtTime(dur)}
@@ -920,7 +911,15 @@ function Shell({ children }) {
                     Close
                   </button>
                   <div className="muted">{p.current.album || ""}</div>
-                  <button className="ghost" type="button" onClick={() => setShowQueue((v) => !v)}>
+                  <button
+                    ref={mobileQueueBtnRef}
+                    className="ghost"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowQueue((v) => !v);
+                    }}
+                  >
                     <IQueue />
                   </button>
                 </div>
@@ -1018,6 +1017,15 @@ function Shell({ children }) {
           style={{ display: "none" }}
         />
       ) : null}
+      {showQueue && p.current && getToken() ? (
+        <QueuePopover
+          anchorRef={isMobile && showMobilePlayer ? mobileQueueBtnRef : queueBtnRef}
+          items={Array.isArray(p.queue) ? p.queue : []}
+          currentIndex={typeof p.index === "number" ? p.index : -1}
+          onJump={(i) => p.jumpTo(i)}
+          onClose={() => setShowQueue(false)}
+        />
+      ) : null}
       {showPlModal && p.current?.id ? (
         <PlayerPlaylistModal trackId={p.current.id} onClose={() => setShowPlModal(false)} />
       ) : null}
@@ -1085,8 +1093,11 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
       if (menuEl && menuEl.contains(e.target)) return;
       onClose();
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    const t = setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("mousedown", onDoc);
+    };
   }, [onClose, anchorRef]);
 
   const r = anchorRef.current?.getBoundingClientRect?.();
@@ -1096,7 +1107,6 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
     ? {
         position: "fixed",
         top: r.bottom + 8,
-        // Anchor to the avatar button's right edge so it doesn't "drift" on layout changes.
         left: Math.min(window.innerWidth - width - pad, Math.max(pad, r.right - width)),
         width,
         background: "#111119",
@@ -1104,11 +1114,11 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
         borderRadius: 12,
         padding: 8,
         boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
-        zIndex: 2500,
+        zIndex: 5000,
       }
-    : {};
+    : { display: "none" };
 
-  return (
+  return createPortal(
     <div ref={menuRef} style={style} role="menu" aria-label="Profile menu">
       <div style={{ padding: "6px 8px", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {name}
@@ -1119,7 +1129,8 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
       <button type="button" className="ghost menu-btn" onClick={onLogout}>
         Log out
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1352,36 +1363,69 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
 }
 
 function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
+  const popRef = React.useRef(null);
+  const [box, setBox] = React.useState(null);
+
+  React.useLayoutEffect(() => {
+    const place = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) {
+        setBox(null);
+        return;
+      }
+      const r = anchor.getBoundingClientRect();
+      const w = 340;
+      const maxH = 300;
+      const m = 8;
+      const left = Math.min(window.innerWidth - w - m, Math.max(m, r.right - w));
+      let top = r.top - maxH - m;
+      if (top < m) top = r.bottom + m;
+      setBox({ left, top, width: w, maxHeight: maxH });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchorRef, items.length, currentIndex]);
+
   React.useEffect(() => {
     const onDoc = (e) => {
-      const el = anchorRef.current;
-      if (el && el.contains(e.target)) return;
+      if (anchorRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
       onClose();
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    const t = setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("mousedown", onDoc);
+    };
   }, [onClose, anchorRef]);
 
-  const r = anchorRef.current?.getBoundingClientRect?.();
-  const style = r
-    ? {
+  if (!box) return null;
+
+  const panel = (
+    <div
+      ref={popRef}
+      style={{
         position: "fixed",
-        left: Math.min(window.innerWidth - 360, Math.max(8, r.right - 340)),
-        top: Math.max(8, r.top - 320),
-        width: 340,
-        maxHeight: 300,
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        maxHeight: box.maxHeight,
         overflow: "auto",
         background: "#111119",
         border: "1px solid #2a2a33",
         borderRadius: 12,
         boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
-        zIndex: 2000,
+        zIndex: 5000,
         padding: 6,
-      }
-    : {};
-
-  return (
-    <div style={style} role="dialog" aria-label="Queue">
+      }}
+      role="dialog"
+      aria-label="Queue"
+    >
       <div style={{ padding: "6px 8px", fontWeight: 800 }}>Queue</div>
       {items.length ? (
         items.map((it, i) => {
@@ -1422,6 +1466,8 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
       )}
     </div>
   );
+
+  return createPortal(panel, document.body);
 }
 
 function HomeRedirect() {

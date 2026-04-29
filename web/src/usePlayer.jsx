@@ -4,6 +4,7 @@ import { releasePlaybackServerSync } from "./api";
 const Ctx = React.createContext(null);
 export function PlayerProvider({ children }) {
   const ref = useRef(null);
+  const queueRef = useRef([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
   const [idx, setIdx] = useState(-1);
@@ -12,6 +13,8 @@ export function PlayerProvider({ children }) {
   const [lastVolume, setLastVolume] = useState(1);
 
   const current = idx >= 0 && idx < queue.length ? queue[idx] : null;
+
+  queueRef.current = queue;
 
   const api = useMemo(() => {
     const applyVolume = (v) => {
@@ -55,10 +58,13 @@ export function PlayerProvider({ children }) {
     };
     const jumpTo = (i) => {
       const n = typeof i === "number" ? i : -1;
-      setIdx(() => {
-        if (!queue.length) return -1;
-        return Math.max(0, Math.min(queue.length - 1, n));
-      });
+      const q = queueRef.current;
+      const len = Array.isArray(q) ? q.length : 0;
+      if (!len) {
+        setIdx(-1);
+        return;
+      }
+      setIdx(Math.max(0, Math.min(len - 1, n)));
     };
     const next = () => setIdx((i) => (queue.length ? Math.min(queue.length - 1, i + 1) : -1));
     const prev = () => setIdx((i) => (queue.length ? Math.max(0, i - 1) : -1));
