@@ -76,7 +76,21 @@ export function Songs() {
   }, [tracks]);
 
   const playAt = (startIdx) => {
-    p.playQueue(items, startIdx);
+    if (!items.length) return;
+    const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
+    const idx = Math.max(0, Math.min(items.length - 1, raw));
+    const it = items[idx];
+    p.playQueue(items, idx);
+    // iOS Safari sometimes ignores audio.play() when called after render.
+    // Trigger it right from the click handler to guarantee the first tap.
+    try {
+      const el = p.ref.current;
+      if (el && it?.url) {
+        if (el.src !== it.url) el.src = it.url;
+        const pr = el.play?.();
+        if (pr && typeof pr.catch === "function") pr.catch(() => {});
+      }
+    } catch (_) {}
   };
 
   const playNext = (t) => {

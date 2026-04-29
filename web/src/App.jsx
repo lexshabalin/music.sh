@@ -1194,16 +1194,16 @@ function Shell({ children }) {
           ) : null}
         </>
       ) : null}
-      {p.current && getToken() ? (
+      {getToken() ? (
         <audio
-          autoPlay
+          autoPlay={!!p.current?.url}
           playsInline
           preload="auto"
           ref={(el) => {
             if (typeof p.setAudioEl === "function") p.setAudioEl(el);
             else p.ref.current = el;
           }}
-          src={p.current.url}
+          src={p.current?.url || ""}
           style={{ display: "none" }}
         />
       ) : null}

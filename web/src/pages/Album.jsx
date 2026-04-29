@@ -63,6 +63,7 @@ export function Album() {
 
   const playAt = (startIdx) => {
     // Playback order should follow album track order (unsorted).
+    if (!tr.length) return;
     const items = tr.map((t) => ({
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
@@ -72,7 +73,19 @@ export function Album() {
       album: t.album?.title || "",
       coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
     }));
-    p.playQueue(items, startIdx);
+    const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
+    const idx = Math.max(0, Math.min(items.length - 1, raw));
+    const it = items[idx];
+    p.playQueue(items, idx);
+    // iOS Safari: call play() from the click handler for guaranteed first tap.
+    try {
+      const el = p.ref.current;
+      if (el && it?.url) {
+        if (el.src !== it.url) el.src = it.url;
+        const pr = el.play?.();
+        if (pr && typeof pr.catch === "function") pr.catch(() => {});
+      }
+    } catch (_) {}
   };
 
   const shuffle = () => {

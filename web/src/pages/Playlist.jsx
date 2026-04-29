@@ -62,6 +62,7 @@ export function Playlist() {
   const sortedTracks = sortTracks(tracks, sortKey, sortDir);
   const playAt = (startIdx) => {
     // Playback order should follow playlist position (unsorted).
+    if (!tracks.length) return;
     const items = tracks.map((t) => ({
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
@@ -71,7 +72,19 @@ export function Playlist() {
       album: t.album?.title || "",
       coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
     }));
-    player.playQueue(items, startIdx);
+    const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
+    const idx = Math.max(0, Math.min(items.length - 1, raw));
+    const it = items[idx];
+    player.playQueue(items, idx);
+    // iOS Safari: call play() from the click handler for guaranteed first tap.
+    try {
+      const el = player.ref.current;
+      if (el && it?.url) {
+        if (el.src !== it.url) el.src = it.url;
+        const pr = el.play?.();
+        if (pr && typeof pr.catch === "function") pr.catch(() => {});
+      }
+    } catch (_) {}
   };
   const shuffle = () => {
     const items = tracks.map((t) => ({
