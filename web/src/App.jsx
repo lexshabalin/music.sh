@@ -402,27 +402,27 @@ function Shell({ children }) {
   return (
     <>
       <BackgroundLayer bg={bg} />
-      {getToken() ? (
-        <>
-          <button
-            type="button"
-            className="mobile-nav-toggle ghost"
-            aria-label="Toggle navigation"
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((v) => !v)}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
-          <div
-            className={`mobile-nav-scrim${mobileNavOpen ? " is-open" : ""}`}
-            onClick={() => setMobileNavOpen(false)}
-            aria-hidden="true"
-          />
-        </>
-      ) : null}
       <div className="layout">
+        {getToken() ? (
+          <>
+            <button
+              type="button"
+              className="mobile-nav-toggle ghost"
+              aria-label="Toggle navigation"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen((v) => !v)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <div
+              className={`mobile-nav-scrim${mobileNavOpen ? " is-open" : ""}`}
+              onClick={() => setMobileNavOpen(false)}
+              aria-hidden="true"
+            />
+          </>
+        ) : null}
         {getToken() ? (
           <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
             <div className="brand">

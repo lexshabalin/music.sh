@@ -29,7 +29,10 @@ body {
   z-index: 0;
   pointer-events: none;
 }
-.layout,
+/* Do not give .layout a z-index: fixed sidebar/drawer must stack above .mobile-nav-scrim */
+.layout {
+  position: relative;
+}
 .player,
 .modal-backdrop {
   position: relative;
@@ -765,12 +768,14 @@ input {
 .track-row {
   gap: 12px;
 }
-.track-row:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-}
-.track-row--now:hover {
-  background: rgba(255, 99, 71, 0.16);
+@media (hover: hover) and (pointer: fine) {
+  .track-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+  }
+  .track-row--now:hover {
+    background: rgba(255, 99, 71, 0.16);
+  }
 }
 .track-row > :first-child {
   flex: 1;
@@ -835,8 +840,10 @@ input {
   white-space: nowrap;
   display: inline-block;
 }
-.track-title:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .track-title:hover {
+    color: var(--text);
+  }
 }
 .track-title-text {
   min-width: 0;
@@ -895,6 +902,13 @@ input {
 .track-row:not(:hover):not(:focus-within) button.ghost {
   opacity: 0;
   pointer-events: none;
+}
+/* Touch: no “hover” — show actions and avoid the first tap only highlighting hover */
+@media (hover: none) {
+  .track-row:not(:focus-within) button.ghost {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .track-row--now:not(:hover):not(:focus-within) .np-eq {
   opacity: 1;
@@ -1119,8 +1133,8 @@ input {
   }
   .plain-list li.track-row {
     grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 0.55rem 0.35rem;
+    gap: 4px;
+    padding: 0.32rem 0.25rem;
   }
   .track-grid,
   .track-grid--album {
@@ -1136,28 +1150,43 @@ input {
   .track-title {
     min-width: 0;
   }
+  .track-title {
+    display: block;
+    white-space: normal;
+    overflow: visible;
+    touch-action: manipulation;
+  }
   .track-title-text {
-    font-size: 0.92rem;
+    font-size: 0.86rem;
     font-weight: 700;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .track-mobile-sub {
     display: block;
-    margin-top: 2px;
-    font-size: 0.76rem;
-    line-height: 1.25;
+    margin-top: 1px;
+    font-size: 0.7rem;
+    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .track-dur {
     justify-self: end;
-    min-width: 38px;
+    min-width: 34px;
     text-align: right;
+    font-size: 0.72rem;
+    padding-right: 0;
+  }
+  .track-row .np-eq--off {
+    display: none;
   }
   .track-actions {
     width: 100%;
     justify-content: flex-end;
-    gap: 6px;
+    gap: 4px;
   }
   .track-row button.ghost[title="Like"] {
     display: none;
