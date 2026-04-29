@@ -133,6 +133,7 @@ function Shell({ children }) {
   const remoteProgressBaseMsRef = React.useRef(0);
   const remoteProgressUpdatedAtRef = React.useRef(0);
   const remotePlaybackSeenUntilRef = React.useRef(0);
+  const remoteInactiveStreakRef = React.useRef(0);
 
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
@@ -310,6 +311,7 @@ function Shell({ children }) {
       setRemotePlaybackActive(false);
       remotePlaybackActiveRef.current = false;
       remotePlaybackSeenUntilRef.current = 0;
+      remoteInactiveStreakRef.current = 0;
       // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
         void pushTakeoverNow();
@@ -352,6 +354,7 @@ function Shell({ children }) {
       setRemotePlaybackActive(false);
       remotePlaybackActiveRef.current = false;
       remotePlaybackSeenUntilRef.current = 0;
+      remoteInactiveStreakRef.current = 0;
       return;
     }
     const syncRemote = async () => {
@@ -361,12 +364,21 @@ function Shell({ children }) {
         const mine = getPlaybackClientId();
         const activeRemote = !!(st?.isPlaying && st?.clientId && mine && st.clientId !== mine);
         if (activeRemote) {
-          remotePlaybackSeenUntilRef.current = Date.now() + 5000;
+          remoteInactiveStreakRef.current = 0;
+          remotePlaybackSeenUntilRef.current = Date.now() + 800;
           remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
           remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
           if (!remotePlaybackActiveRef.current) {
             remotePlaybackActiveRef.current = true;
             setRemotePlaybackActive(true);
+          }
+        } else {
+          remoteInactiveStreakRef.current += 1;
+          // Need 2 consecutive inactive polls to avoid flicker.
+          if (remoteInactiveStreakRef.current >= 2) {
+            remotePlaybackActiveRef.current = false;
+            setRemotePlaybackActive(false);
+            remotePlaybackSeenUntilRef.current = 0;
           }
         }
         if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
@@ -380,7 +392,7 @@ function Shell({ children }) {
         }
       } catch (_) {}
     };
-    const id = window.setInterval(syncRemote, 2000);
+    const id = window.setInterval(syncRemote, 1000);
     syncRemote();
     return () => clearInterval(id);
   }, [p.current?.id, p.index, p.queue]);
