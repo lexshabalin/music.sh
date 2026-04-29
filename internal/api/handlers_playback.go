@@ -166,7 +166,7 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 	if in.ForceTakeover && in.IsPlaying && cid != "" && cur.PlaybackClientID != "" && cur.PlaybackClientID != cid {
 		newEpoch = cur.OwnerEpoch + 1
 	}
-	ok, err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid, stoppedAt, cur.OwnerEpoch, newEpoch)
+	ok, err = a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid, stoppedAt, cur.OwnerEpoch, newEpoch)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
@@ -245,7 +245,7 @@ func (a *App) takeoverPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 	newEpoch := cur.OwnerEpoch + 1
 	// Explicit takeover always marks playback as active under this client.
-	ok, err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil, cur.OwnerEpoch, newEpoch)
+	ok, err = a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil, cur.OwnerEpoch, newEpoch)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
