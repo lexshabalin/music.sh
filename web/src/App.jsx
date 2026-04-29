@@ -147,6 +147,7 @@ function Shell({ children }) {
     moved: false,
     suppressClick: false,
   });
+  const mobileQueueTapRef = React.useRef({ x: 0, y: 0, moved: false });
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
@@ -579,6 +580,13 @@ function Shell({ children }) {
     // One page width is ~w, plus the flex gap between pages.
     return w + gap;
   }, []);
+
+  React.useEffect(() => {
+    if (!showMobilePlayer) return;
+    const step = getMobilePagesStepPx();
+    setMobilePagesTransformPx(-mobilePlayerPage * step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMobilePlayer, mobilePlayerPage]);
 
   const endMobilePlayerDrag = React.useCallback(
     (finalDyPx) => {
@@ -1422,8 +1430,8 @@ function Shell({ children }) {
                 <div
                   className="mobile-player-pages"
                   ref={mobilePlayerPagesRef}
-                  // pages width = 200% (2 screens), so each page is 50%
-                  style={mobilePlayerIsPaging ? undefined : { transform: `translateX(-${mobilePlayerPage * 50}%)` }}
+                  // transform is driven in px (step = width + gap) for exact alignment
+                  style={undefined}
                 >
                   <section className="mobile-player-page mobile-player-page--main" aria-label="Player">
                     <div className="mobile-player-cover-wrap">
@@ -1523,6 +1531,35 @@ function Shell({ children }) {
                               type="button"
                               className="mobile-queue-item"
                               style={{ background: active ? "rgba(255,255,255,0.08)" : "transparent" }}
+                              onTouchStart={(e) => {
+                                const t = e.touches?.[0];
+                                if (!t) return;
+                                mobileQueueTapRef.current.x = t.clientX;
+                                mobileQueueTapRef.current.y = t.clientY;
+                                mobileQueueTapRef.current.moved = false;
+                              }}
+                              onTouchMove={(e) => {
+                                const t = e.touches?.[0];
+                                if (!t) return;
+                                const dx = Math.abs(t.clientX - mobileQueueTapRef.current.x);
+                                const dy = Math.abs(t.clientY - mobileQueueTapRef.current.y);
+                                if (dx > 10 || dy > 10) mobileQueueTapRef.current.moved = true;
+                              }}
+                              onTouchEnd={(e) => {
+                                if (mobileQueueTapRef.current.moved) return;
+                                if (e.cancelable) e.preventDefault();
+                                e.stopPropagation();
+                                claimPlaybackSync();
+                                p.jumpTo(actualIdx);
+                                try {
+                                  const el = p.ref.current;
+                                  if (el && it?.url) {
+                                    if (el.src !== it.url) el.src = it.url;
+                                    const pr = el.play?.();
+                                    if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                                  }
+                                } catch (_) {}
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 claimPlaybackSync();
