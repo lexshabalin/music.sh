@@ -147,6 +147,10 @@ export function TrackRow({
             }}
           >
             <span className="track-title-text">{label}</span>
+            <span className="track-mobile-sub muted">
+              {artistName || "Unknown Artist"}
+              {albumTitle ? ` • ${albumTitle}` : ""}
+            </span>
           </span>
 
           <div className="track-col track-artist">

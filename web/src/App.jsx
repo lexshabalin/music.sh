@@ -107,6 +107,11 @@ function Shell({ children }) {
   const [showProfile, setShowProfile] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const [showMobilePlayer, setShowMobilePlayer] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 900px)").matches;
+  });
   const userBtnRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
 
@@ -152,6 +157,23 @@ function Shell({ children }) {
     // Close mobile sidebar on route changes.
     setMobileNavOpen(false);
   }, [location.pathname]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mq = window.matchMedia("(max-width: 900px)");
+    const onChange = (e) => setIsMobile(!!e.matches);
+    setIsMobile(!!mq.matches);
+    if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
+    else mq.addListener(onChange);
+    return () => {
+      if (typeof mq.removeEventListener === "function") mq.removeEventListener("change", onChange);
+      else mq.removeListener(onChange);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!isMobile) setShowMobilePlayer(false);
+  }, [isMobile]);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -446,7 +468,7 @@ function Shell({ children }) {
           {children}
         </main>
       </div>
-      {p.current && getToken() ? (
+      {p.current && getToken() && !isMobile ? (
         <div className="player">
           <button className="player-skip" type="button" onClick={p.prev} title="Rewind">
             <IRewind />
@@ -587,19 +609,138 @@ function Shell({ children }) {
             </div>
           ) : null}
 
-          <audio
-            autoPlay
-            playsInline
-            preload="auto"
-            ref={(el) => {
-              // React calls the ref with null on unmount.
-              // Keep ref.current accurate to avoid referencing a dead element after logout.
-              if (typeof p.setAudioEl === "function") p.setAudioEl(el);
-              else p.ref.current = el;
-            }}
-            src={p.current.url}
-          />
         </div>
+      ) : null}
+      {p.current && getToken() && isMobile ? (
+        <>
+          <div className="player player--mobile-mini" onClick={() => setShowMobilePlayer(true)}>
+            <div className="nowplaying">
+              {p.current.coverUrl ? (
+                <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
+              ) : (
+                <div className="nowplaying-art placeholder" />
+              )}
+              <div className="nowplaying-text">
+                <div className="nowplaying-line1">
+                  {p.current.title || p.current.label}
+                </div>
+                <div className="nowplaying-line2">{p.current.artist || p.current.album || ""}</div>
+              </div>
+            </div>
+            <div className="player-mini-controls">
+              <button className="player-skip" type="button" onClick={(e) => { e.stopPropagation(); p.prev(); }} title="Previous">
+                <IRewind />
+              </button>
+              <button
+                className="player-play"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const el = p.ref.current;
+                  if (!el) return;
+                  if (el.paused) {
+                    const pr = el.play();
+                    if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                  } else {
+                    el.pause();
+                  }
+                }}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? <IPause /> : <IPlay />}
+              </button>
+              <button className="player-skip" type="button" onClick={(e) => { e.stopPropagation(); p.next(); }} title="Next">
+                <IFastForward />
+              </button>
+            </div>
+          </div>
+          {showMobilePlayer ? (
+            <div className="mobile-player-overlay" onMouseDown={() => setShowMobilePlayer(false)}>
+              <div className="mobile-player-sheet" onMouseDown={(e) => e.stopPropagation()}>
+                <div className="mobile-player-top">
+                  <button className="ghost" type="button" onClick={() => setShowMobilePlayer(false)}>
+                    Close
+                  </button>
+                  <div className="muted">{p.current.album || ""}</div>
+                  <button className="ghost" type="button" onClick={() => setShowQueue((v) => !v)}>
+                    <IQueue />
+                  </button>
+                </div>
+                <div className="mobile-player-cover-wrap">
+                  {p.current.coverUrl ? (
+                    <img className="mobile-player-cover" src={p.current.coverUrl} alt="" />
+                  ) : (
+                    <div className="mobile-player-cover placeholder" />
+                  )}
+                </div>
+                <div className="mobile-player-meta">
+                  <div className="mobile-player-title">{p.current.title || p.current.label}</div>
+                  <div className="muted">{p.current.artist || ""}</div>
+                </div>
+                <div className="mobile-player-progress">
+                  <input
+                    className="range mono progress"
+                    aria-label="Seek"
+                    type="range"
+                    min="0"
+                    max={Math.max(1, dur || 0)}
+                    step="0.25"
+                    value={Math.min(curT, Math.max(1, dur || 0))}
+                    onChange={(e) => {
+                      const el = p.ref.current;
+                      if (!el) return;
+                      const v = Number(e.target.value);
+                      el.currentTime = v;
+                      setCurT(v);
+                    }}
+                  />
+                  <div className="mobile-player-times">
+                    <span className="muted">{fmtTime(curT)}</span>
+                    <span className="muted">{fmtTime(dur)}</span>
+                  </div>
+                </div>
+                <div className="mobile-player-controls">
+                  <button className="player-skip" type="button" onClick={p.prev} title="Previous">
+                    <IRewind />
+                  </button>
+                  <button
+                    className="player-play"
+                    type="button"
+                    onClick={() => {
+                      const el = p.ref.current;
+                      if (!el) return;
+                      if (el.paused) {
+                        const pr = el.play();
+                        if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                      } else {
+                        el.pause();
+                      }
+                    }}
+                    title={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? <IPause /> : <IPlay />}
+                  </button>
+                  <button className="player-skip" type="button" onClick={p.next} title="Next">
+                    <IFastForward />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {p.current && getToken() ? (
+        <audio
+          autoPlay
+          playsInline
+          preload="auto"
+          ref={(el) => {
+            if (typeof p.setAudioEl === "function") p.setAudioEl(el);
+            else p.ref.current = el;
+          }}
+          src={p.current.url}
+          style={{ display: "none" }}
+        />
       ) : null}
       {showPlModal && p.current?.id ? (
         <PlayerPlaylistModal trackId={p.current.id} onClose={() => setShowPlModal(false)} />
