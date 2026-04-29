@@ -167,16 +167,32 @@ export const PLAYBACK_SYNC_RELEASE_EVENT = "musicsh:release-playback-sync";
 /** One id per browser tab (sessionStorage); used to detect playback on another device. */
 export function getPlaybackClientId() {
   if (typeof window === "undefined") return "";
+  const makeId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `cid_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  };
+  const k = "musicsh_pb_cid";
   try {
-    const k = "musicsh_pb_cid";
     let id = sessionStorage.getItem(k);
-    if (!id && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      id = crypto.randomUUID();
+    if (!id) {
+      id = makeId();
       sessionStorage.setItem(k, id);
     }
-    return id || "";
+    return id;
   } catch (_) {
-    return "";
+    try {
+      let id = localStorage.getItem(k);
+      if (!id) {
+        id = makeId();
+        localStorage.setItem(k, id);
+      }
+      return id;
+    } catch (_) {
+      if (!window.__musicshCid) window.__musicshCid = makeId();
+      return window.__musicshCid;
+    }
   }
 }
 

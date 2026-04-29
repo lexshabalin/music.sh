@@ -256,7 +256,7 @@ function Shell({ children }) {
   }, []);
 
   React.useEffect(() => {
-    if (!getToken() || !isPlaying) return;
+    if (!getToken()) return;
     const tick = async () => {
       if (suspendPlaybackPushRef.current) return;
       if (Date.now() < skipPlaybackPushUntilRef.current) return;
@@ -270,10 +270,10 @@ function Shell({ children }) {
         takeoverRemotePlaybackUI();
       } catch (_) {}
     };
-    const id = window.setInterval(tick, 850);
+    const id = window.setInterval(tick, 600);
     tick();
     return () => clearInterval(id);
-  }, [isPlaying, takeoverRemotePlaybackUI]);
+  }, [p.current?.id, takeoverRemotePlaybackUI]);
 
   React.useEffect(() => {
     if (!getToken()) return;
