@@ -1081,14 +1081,14 @@ input {
   justify-content: stretch;
 }
 .mobile-player-sheet {
-  --mobile-player-bottom-gap: 20vh;
+  --mobile-player-bottom-gap: 5vh;
   width: 100%;
   min-height: 100%;
   background: rgba(10, 10, 14, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  /* Push the UI lower, but keep ~20% breathing room at the bottom */
-  padding: 56px 14px calc(var(--mobile-player-bottom-gap) + 18px + env(safe-area-inset-bottom));
+  /* Push the UI lower, but keep some breathing room at the bottom */
+  padding: 72px 14px calc(var(--mobile-player-bottom-gap) + 18px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1173,6 +1173,39 @@ input {
   width: 100%;
   touch-action: none;
   z-index: 2;
+}
+
+.mobile-player-pages {
+  width: 200%;
+  display: flex;
+  flex-direction: row;
+  transition: transform 220ms ease;
+  will-change: transform;
+}
+.mobile-player-sheet--dragging .mobile-player-pages,
+.mobile-player-sheet--paging .mobile-player-pages {
+  transition: none;
+}
+.mobile-player-page {
+  width: 50%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mobile-player-page--queue {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mobile-queue-page-head {
+  font-weight: 900;
+  padding: 6px 2px 10px;
+  opacity: 0.95;
+}
+.mobile-queue-page-list {
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 /* Mobile right drawer (queue) */
