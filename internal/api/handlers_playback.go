@@ -18,6 +18,7 @@ type playbackOut struct {
 	PositionMs       int      `json:"positionMs"`
 	IsPlaying        bool     `json:"isPlaying"`
 	ClientID         string   `json:"clientId,omitempty"`
+	OwnerEpoch       int64    `json:"ownerEpoch"`
 	SourcePlaylistID *string  `json:"sourcePlaylistId,omitempty"`
 	UpdatedAt        string   `json:"updatedAt"`
 }
@@ -28,8 +29,13 @@ type playbackIn struct {
 	PositionMs       int      `json:"positionMs"`
 	IsPlaying        bool     `json:"isPlaying"`
 	ClientID         *string  `json:"clientId,omitempty"`
+	OwnerEpoch       int64    `json:"ownerEpoch"`
 	ForceTakeover    bool     `json:"forceTakeover,omitempty"`
 	SourcePlaylistID *string  `json:"sourcePlaylistId,omitempty"`
+}
+
+type playbackTakeoverOut struct {
+	OwnerEpoch int64 `json:"ownerEpoch"`
 }
 
 func (a *App) getPlayback(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +54,7 @@ func (a *App) getPlayback(w http.ResponseWriter, r *http.Request) {
 		PositionMs:   st.PositionMs,
 		IsPlaying:    st.IsPlaying,
 		ClientID:     st.PlaybackClientID,
+		OwnerEpoch:   st.OwnerEpoch,
 		UpdatedAt:    st.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
 	}
 	for _, id := range st.TrackIDs {
@@ -101,6 +108,10 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "invalid position")
 		return
 	}
+	if in.OwnerEpoch < 0 {
+		JSONError(w, 400, "invalid owner epoch")
+		return
+	}
 	var srcPl *uuid.UUID
 	if in.SourcePlaylistID != nil && strings.TrimSpace(*in.SourcePlaylistID) != "" {
 		u, err := uuid.Parse(strings.TrimSpace(*in.SourcePlaylistID))
@@ -130,6 +141,10 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 409, "playback busy elsewhere")
 		return
 	}
+	if in.OwnerEpoch != cur.OwnerEpoch && !in.ForceTakeover {
+		JSONError(w, 409, "stale playback owner epoch")
+		return
+	}
 
 	var stoppedAt *time.Time
 	if in.IsPlaying {
@@ -147,8 +162,17 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid, stoppedAt); err != nil {
+	newEpoch := cur.OwnerEpoch
+	if in.ForceTakeover && in.IsPlaying && cid != "" && cur.PlaybackClientID != "" && cur.PlaybackClientID != cid {
+		newEpoch = cur.OwnerEpoch + 1
+	}
+	ok, err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid, stoppedAt, cur.OwnerEpoch, newEpoch)
+	if err != nil {
 		JSONError(w, 500, "db")
+		return
+	}
+	if !ok {
+		JSONError(w, 409, "stale playback owner epoch")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -214,12 +238,23 @@ func (a *App) takeoverPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "client id too long")
 		return
 	}
-	// Explicit takeover always marks playback as active under this client.
-	if err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil); err != nil {
+	cur, err := a.DB.GetUserPlayback(r.Context(), uid)
+	if err != nil {
 		JSONError(w, 500, "db")
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	newEpoch := cur.OwnerEpoch + 1
+	// Explicit takeover always marks playback as active under this client.
+	ok, err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil, cur.OwnerEpoch, newEpoch)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	if !ok {
+		JSONError(w, 409, "stale playback owner epoch")
+		return
+	}
+	JSON(w, 200, playbackTakeoverOut{OwnerEpoch: newEpoch})
 }
 
 func (a *App) deletePlayback(w http.ResponseWriter, r *http.Request) {

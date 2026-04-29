@@ -1218,9 +1218,9 @@ func (d *DB) GetUserPlayback(ctx context.Context, userID uuid.UUID) (PlaybackSta
 	var src sql.NullString
 	var stopped sql.NullTime
 	err := d.Pool.QueryRow(ctx, `
-		SELECT track_ids, current_index, position_ms, is_playing, source_playlist_id::text, playback_client_id, stopped_at, updated_at
+		SELECT track_ids, current_index, position_ms, is_playing, source_playlist_id::text, playback_client_id, owner_epoch, stopped_at, updated_at
 		FROM user_playback WHERE user_id = $1
-	`, userID).Scan(&st.TrackIDs, &st.CurrentIndex, &st.PositionMs, &st.IsPlaying, &src, &st.PlaybackClientID, &stopped, &st.UpdatedAt)
+	`, userID).Scan(&st.TrackIDs, &st.CurrentIndex, &st.PositionMs, &st.IsPlaying, &src, &st.PlaybackClientID, &st.OwnerEpoch, &stopped, &st.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return PlaybackState{TrackIDs: []uuid.UUID{}, UpdatedAt: time.Now()}, nil
 	}
@@ -1247,13 +1247,13 @@ func (d *DB) GetUserPlayback(ctx context.Context, userID uuid.UUID) (PlaybackSta
 
 // UpsertUserPlayback replaces playback state for the user.
 // stoppedAt is set when playing becomes false (pause); cleared when playing is true.
-func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs []uuid.UUID, idx, posMs int, playing bool, sourcePl *uuid.UUID, playbackClientID string, stoppedAt *time.Time) error {
+func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs []uuid.UUID, idx, posMs int, playing bool, sourcePl *uuid.UUID, playbackClientID string, stoppedAt *time.Time, expectedEpoch, newEpoch int64) (bool, error) {
 	if trackIDs == nil {
 		trackIDs = []uuid.UUID{}
 	}
-	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO user_playback (user_id, track_ids, current_index, position_ms, is_playing, source_playlist_id, playback_client_id, stopped_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+	res, err := d.Pool.Exec(ctx, `
+		INSERT INTO user_playback (user_id, track_ids, current_index, position_ms, is_playing, source_playlist_id, playback_client_id, owner_epoch, stopped_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 		ON CONFLICT (user_id) DO UPDATE SET
 			track_ids = EXCLUDED.track_ids,
 			current_index = EXCLUDED.current_index,
@@ -1261,10 +1261,15 @@ func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs 
 			is_playing = EXCLUDED.is_playing,
 			source_playlist_id = EXCLUDED.source_playlist_id,
 			playback_client_id = EXCLUDED.playback_client_id,
+			owner_epoch = EXCLUDED.owner_epoch,
 			stopped_at = EXCLUDED.stopped_at,
 			updated_at = now()
-	`, userID, trackIDs, idx, posMs, playing, sourcePl, playbackClientID, stoppedAt)
-	return err
+		WHERE user_playback.owner_epoch = $10
+	`, userID, trackIDs, idx, posMs, playing, sourcePl, playbackClientID, newEpoch, stoppedAt, expectedEpoch)
+	if err != nil {
+		return false, err
+	}
+	return res.RowsAffected() > 0, nil
 }
 
 // ClearUserPlayback removes saved state (e.g. on logout).

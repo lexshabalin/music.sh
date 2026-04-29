@@ -142,6 +142,7 @@ function Shell({ children }) {
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
   const takeoverGuardUntilRef = React.useRef(0);
+  const ownerEpochRef = React.useRef(0);
 
   const takeoverRemotePlaybackUI = React.useCallback(() => {
     // Important ordering: block outgoing flush BEFORE pausing, because pause
@@ -168,13 +169,22 @@ function Shell({ children }) {
     const cid = getPlaybackClientId();
     const body =
       !q.length || idx < 0
-        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid, forceTakeover: forceTakeover || takeoverRequestedRef.current }
+        ? {
+            trackIds: [],
+            currentIndex: 0,
+            positionMs: 0,
+            isPlaying: false,
+            clientId: cid,
+            ownerEpoch: ownerEpochRef.current,
+            forceTakeover: forceTakeover || takeoverRequestedRef.current,
+          }
         : {
             trackIds: q.map((x) => x.id),
             currentIndex: idx,
             positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
             isPlaying: !!(el && !el.paused),
             clientId: cid,
+            ownerEpoch: ownerEpochRef.current,
             forceTakeover: forceTakeover || takeoverRequestedRef.current,
           };
     try {
@@ -184,6 +194,7 @@ function Shell({ children }) {
       if (e?.httpStatus !== 409) return;
       try {
         const st = await playback.get();
+        ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
         const mine = getPlaybackClientId();
         if (st?.isPlaying && st.clientId && mine && st.clientId !== mine) {
           takeoverRemotePlaybackUI();
@@ -210,9 +221,11 @@ function Shell({ children }) {
       positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
       isPlaying: true,
       clientId: cid,
+      ownerEpoch: ownerEpochRef.current,
     };
     try {
-      await playback.takeover(body);
+      const r = await playback.takeover(body);
+      ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : (ownerEpochRef.current + 1);
       takeoverRequestedRef.current = false;
     } catch (_) {}
   }, [p.queue, p.index, p.ref]);
@@ -237,6 +250,7 @@ function Shell({ children }) {
     suspendPlaybackPushRef.current = false;
     takeoverRequestedRef.current = false;
     takeoverGuardUntilRef.current = 0;
+    ownerEpochRef.current = 0;
     try {
       localStorage.removeItem("musicsh_token");
     } catch (_) {}
@@ -249,6 +263,7 @@ function Shell({ children }) {
       playbackHydratedRef.current = false;
       takeoverRequestedRef.current = false;
       takeoverGuardUntilRef.current = 0;
+      ownerEpochRef.current = 0;
       return;
     }
     if (restoredPlaybackRef.current) return;
@@ -256,6 +271,7 @@ function Shell({ children }) {
     void (async () => {
       try {
         const st = await playback.get();
+        ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
         if (!getToken()) return;
         if (!st?.trackIds?.length) return;
         const tracks = await lib.tracksByIds(st.trackIds);
@@ -307,6 +323,7 @@ function Shell({ children }) {
         const el = p.ref.current;
         if (!el || el.paused) return;
         const st = await playback.get();
+        ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
         if (!st?.isPlaying || !st.clientId || st.clientId === mine) return;
         takeoverRemotePlaybackUI();
       } catch (_) {}

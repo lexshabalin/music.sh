@@ -97,6 +97,7 @@ type PlaybackState struct {
 	IsPlaying        bool
 	SourcePlaylistID *uuid.UUID
 	PlaybackClientID string
+	OwnerEpoch       int64
 	StoppedAt        *time.Time
 	UpdatedAt        time.Time
 }
