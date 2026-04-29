@@ -32,7 +32,9 @@ async function req(path, opts = {}) {
       const j = await r.json();
       if (j.error) msg = j.error;
     } catch (_) {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.httpStatus = r.status;
+    throw err;
   }
   if (r.status === 204) return null;
   const ct = r.headers.get("content-type");

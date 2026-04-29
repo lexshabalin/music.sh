@@ -91,11 +91,12 @@ type Job struct {
 
 // PlaybackState is persisted for cross-device resume (queue order + position).
 type PlaybackState struct {
-	TrackIDs           []uuid.UUID
-	CurrentIndex       int
-	PositionMs         int
-	IsPlaying          bool
-	SourcePlaylistID   *uuid.UUID
-	PlaybackClientID   string
-	UpdatedAt          time.Time
+	TrackIDs         []uuid.UUID
+	CurrentIndex     int
+	PositionMs       int
+	IsPlaying        bool
+	SourcePlaylistID *uuid.UUID
+	PlaybackClientID string
+	StoppedAt        *time.Time
+	UpdatedAt        time.Time
 }

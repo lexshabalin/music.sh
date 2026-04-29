@@ -1209,19 +1209,27 @@ func (d *DB) CountPendingMetaJobForAlbum(ctx context.Context, albumID uuid.UUID)
 	return c, err
 }
 
+// PlaybackStaleAfterStop is how long paused state remains restorable after last pause.
+const PlaybackStaleAfterStop = 12 * time.Hour
+
 // GetUserPlayback returns saved playback or empty defaults if no row.
 func (d *DB) GetUserPlayback(ctx context.Context, userID uuid.UUID) (PlaybackState, error) {
 	var st PlaybackState
 	var src sql.NullString
+	var stopped sql.NullTime
 	err := d.Pool.QueryRow(ctx, `
-		SELECT track_ids, current_index, position_ms, is_playing, source_playlist_id::text, playback_client_id, updated_at
+		SELECT track_ids, current_index, position_ms, is_playing, source_playlist_id::text, playback_client_id, stopped_at, updated_at
 		FROM user_playback WHERE user_id = $1
-	`, userID).Scan(&st.TrackIDs, &st.CurrentIndex, &st.PositionMs, &st.IsPlaying, &src, &st.PlaybackClientID, &st.UpdatedAt)
+	`, userID).Scan(&st.TrackIDs, &st.CurrentIndex, &st.PositionMs, &st.IsPlaying, &src, &st.PlaybackClientID, &stopped, &st.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return PlaybackState{TrackIDs: []uuid.UUID{}, UpdatedAt: time.Now()}, nil
 	}
 	if err != nil {
 		return PlaybackState{}, err
+	}
+	if stopped.Valid {
+		t := stopped.Time
+		st.StoppedAt = &t
 	}
 	if src.Valid && src.String != "" {
 		u, err := uuid.Parse(src.String)
@@ -1229,17 +1237,23 @@ func (d *DB) GetUserPlayback(ctx context.Context, userID uuid.UUID) (PlaybackSta
 			st.SourcePlaylistID = &u
 		}
 	}
+	// Drop stale paused snapshot (no resume after 12h since pause).
+	if !st.IsPlaying && st.StoppedAt != nil && time.Since(*st.StoppedAt) > PlaybackStaleAfterStop {
+		_ = d.ClearUserPlayback(ctx, userID)
+		return PlaybackState{TrackIDs: []uuid.UUID{}, UpdatedAt: time.Now()}, nil
+	}
 	return st, nil
 }
 
 // UpsertUserPlayback replaces playback state for the user.
-func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs []uuid.UUID, idx, posMs int, playing bool, sourcePl *uuid.UUID, playbackClientID string) error {
+// stoppedAt is set when playing becomes false (pause); cleared when playing is true.
+func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs []uuid.UUID, idx, posMs int, playing bool, sourcePl *uuid.UUID, playbackClientID string, stoppedAt *time.Time) error {
 	if trackIDs == nil {
 		trackIDs = []uuid.UUID{}
 	}
 	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO user_playback (user_id, track_ids, current_index, position_ms, is_playing, source_playlist_id, playback_client_id, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+		INSERT INTO user_playback (user_id, track_ids, current_index, position_ms, is_playing, source_playlist_id, playback_client_id, stopped_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
 		ON CONFLICT (user_id) DO UPDATE SET
 			track_ids = EXCLUDED.track_ids,
 			current_index = EXCLUDED.current_index,
@@ -1247,8 +1261,9 @@ func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs 
 			is_playing = EXCLUDED.is_playing,
 			source_playlist_id = EXCLUDED.source_playlist_id,
 			playback_client_id = EXCLUDED.playback_client_id,
+			stopped_at = EXCLUDED.stopped_at,
 			updated_at = now()
-	`, userID, trackIDs, idx, posMs, playing, sourcePl, playbackClientID)
+	`, userID, trackIDs, idx, posMs, playing, sourcePl, playbackClientID, stoppedAt)
 	return err
 }
 

@@ -139,7 +139,17 @@ function Shell({ children }) {
 
   const suspendPlaybackPushRef = React.useRef(false);
 
-  const flushPlayback = React.useCallback(() => {
+  const takeoverRemotePlaybackUI = React.useCallback(() => {
+    try {
+      const el = p.ref.current;
+      if (el) el.pause();
+    } catch (_) {}
+    suspendPlaybackPushRef.current = true;
+    setRemotePlayingNotice("Музыка воспроизводится на другом устройстве");
+    window.setTimeout(() => setRemotePlayingNotice(""), 9000);
+  }, [p.ref]);
+
+  const flushPlayback = React.useCallback(async () => {
     if (!getToken()) return;
     if (suspendPlaybackPushRef.current) return;
     if (Date.now() < skipPlaybackPushUntilRef.current) return;
@@ -157,8 +167,19 @@ function Shell({ children }) {
             isPlaying: !!(el && !el.paused),
             clientId: cid,
           };
-    playback.put(body).catch(() => {});
-  }, [p.queue, p.index, p.ref]);
+    try {
+      await playback.put(body);
+    } catch (e) {
+      if (e?.httpStatus !== 409) return;
+      try {
+        const st = await playback.get();
+        const mine = getPlaybackClientId();
+        if (st?.isPlaying && st.clientId && mine && st.clientId !== mine) {
+          takeoverRemotePlaybackUI();
+        }
+      } catch (_) {}
+    }
+  }, [p.queue, p.index, p.ref, takeoverRemotePlaybackUI]);
 
   const flushPlaybackRef = React.useRef(flushPlayback);
   React.useEffect(() => {
@@ -208,7 +229,7 @@ function Shell({ children }) {
         const items = tracksToQueueItems(tracks);
         skipPlaybackPushUntilRef.current = Date.now() + 4000;
         if (!st.isPlaying) skipAutoplayOnceRef.current = true;
-        pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000);
+        pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
       } catch (_) {}
     })();
@@ -238,18 +259,13 @@ function Shell({ children }) {
         if (!el || el.paused) return;
         const st = await playback.get();
         if (!st?.isPlaying || !st.clientId || st.clientId === mine) return;
-        try {
-          el.pause();
-        } catch (_) {}
-        suspendPlaybackPushRef.current = true;
-        setRemotePlayingNotice("Музыка воспроизводится на другом устройстве");
-        window.setTimeout(() => setRemotePlayingNotice(""), 9000);
+        takeoverRemotePlaybackUI();
       } catch (_) {}
     };
-    const id = window.setInterval(tick, 2500);
+    const id = window.setInterval(tick, 850);
     tick();
     return () => clearInterval(id);
-  }, [isPlaying]);
+  }, [isPlaying, takeoverRemotePlaybackUI]);
 
   React.useEffect(() => {
     if (!getToken()) return;

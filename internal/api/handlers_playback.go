@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -116,7 +117,35 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 400, "client id too long")
 		return
 	}
-	if err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid); err != nil {
+
+	cur, err := a.DB.GetUserPlayback(r.Context(), uid)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	// Another device/session owns active playback — do not let a stale local poll overwrite it.
+	if in.IsPlaying && cid != "" && cur.IsPlaying && cur.PlaybackClientID != "" && cur.PlaybackClientID != cid {
+		JSONError(w, 409, "playback busy elsewhere")
+		return
+	}
+
+	var stoppedAt *time.Time
+	if in.IsPlaying {
+		stoppedAt = nil
+	} else {
+		switch {
+		case cur.IsPlaying:
+			t := time.Now().UTC()
+			stoppedAt = &t
+		case cur.StoppedAt != nil:
+			stoppedAt = cur.StoppedAt
+		default:
+			t := time.Now().UTC()
+			stoppedAt = &t
+		}
+	}
+
+	if err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, in.IsPlaying, srcPl, cid, stoppedAt); err != nil {
 		JSONError(w, 500, "db")
 		return
 	}
