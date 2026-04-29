@@ -131,6 +131,8 @@ function Shell({ children }) {
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
   const restoredPlaybackRef = React.useRef(false);
+  /** After first `/api/me/playback` restore attempt finishes — blocks flush from wiping DB before hydrate. */
+  const playbackHydratedRef = React.useRef(false);
   const pendingSeekSecRef = React.useRef(null);
   const playQueueRef = React.useRef(p.playQueue);
   React.useEffect(() => {
@@ -151,6 +153,7 @@ function Shell({ children }) {
 
   const flushPlayback = React.useCallback(async () => {
     if (!getToken()) return;
+    if (!playbackHydratedRef.current) return;
     if (suspendPlaybackPushRef.current) return;
     if (Date.now() < skipPlaybackPushUntilRef.current) return;
     const el = p.ref.current;
@@ -202,6 +205,7 @@ function Shell({ children }) {
       await playback.clear();
     } catch (_) {}
     restoredPlaybackRef.current = false;
+    playbackHydratedRef.current = false;
     suspendPlaybackPushRef.current = false;
     try {
       localStorage.removeItem("musicsh_token");
@@ -212,11 +216,12 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (!getToken()) {
       restoredPlaybackRef.current = false;
+      playbackHydratedRef.current = false;
       return;
     }
     if (restoredPlaybackRef.current) return;
     restoredPlaybackRef.current = true;
-    (async () => {
+    void (async () => {
       try {
         const st = await playback.get();
         if (!getToken()) return;
@@ -231,7 +236,10 @@ function Shell({ children }) {
         if (!st.isPlaying) skipAutoplayOnceRef.current = true;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
-      } catch (_) {}
+      } catch (_) {
+      } finally {
+        playbackHydratedRef.current = true;
+      }
     })();
   }, [me?.id]);
 
