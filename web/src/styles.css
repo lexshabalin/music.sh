@@ -451,10 +451,10 @@ input {
   position: fixed;
   top: 12px;
   left: 12px;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1082,15 +1082,17 @@ input {
 
 @media (max-width: 900px) {
   :root {
-    --mobile-top-control-h: 44px;
-    --mobile-chrome-hide-dy: calc(var(--mobile-top-control-h) + 24px);
+    --mobile-top-control-h: 36px;
+    /* Smaller than the row: compact round scan button (not stretched by flex) */
+    --mobile-rescan-size: 30px;
+    --mobile-chrome-hide-dy: calc(var(--mobile-top-control-h) + 20px);
     /* One shared vertical origin for hamburger + search row (fixed, not flow/sticky) */
     --mobile-chrome-top: max(12px, env(safe-area-inset-top, 0px));
   }
   .layout {
     grid-template-columns: 1fr;
     /* Space for one fixed chrome row only (search is out of document flow on mobile) */
-    padding-top: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-control-h) + 14px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-control-h) + 10px);
     transition: padding-top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .layout[data-mobile-chrome="hidden"] {
@@ -1123,27 +1125,38 @@ input {
     pointer-events: none;
   }
   .gsearch-row {
-    gap: 0.4rem;
-    align-items: stretch;
+    gap: 0.35rem;
+    align-items: center;
     min-height: var(--mobile-top-control-h);
   }
   .gsearch-input {
     min-height: var(--mobile-top-control-h);
     height: var(--mobile-top-control-h);
-    padding: 0 0.65rem;
+    padding: 0 0.55rem;
     box-sizing: border-box;
+    font-size: 0.9rem;
   }
-  .rescan-icon-btn {
-    width: var(--mobile-top-control-h);
-    min-width: var(--mobile-top-control-h);
-    height: var(--mobile-top-control-h);
+  .gsearch .rescan-icon-btn {
+    width: var(--mobile-rescan-size);
+    min-width: var(--mobile-rescan-size);
+    max-width: var(--mobile-rescan-size);
+    height: var(--mobile-rescan-size);
+    min-height: var(--mobile-rescan-size);
+    max-height: var(--mobile-rescan-size);
     padding: 0;
+    margin: 0;
     border-radius: 50%;
     box-sizing: border-box;
+    flex: 0 0 var(--mobile-rescan-size);
+    align-self: center;
+    aspect-ratio: 1 / 1;
+    line-height: 0;
+    overflow: hidden;
   }
-  .rescan-ecg {
-    width: 1.65rem;
-    height: 0.82rem;
+  .gsearch .rescan-ecg {
+    width: 1.2rem;
+    height: 0.58rem;
+    display: block;
   }
   .mobile-nav-scrim.is-open {
     display: block;
