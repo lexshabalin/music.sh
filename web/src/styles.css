@@ -1090,9 +1090,11 @@ input {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transform: translateY(18px);
+  position: relative;
+  overflow: hidden;
+  transform: translateY(10px);
   opacity: 0;
-  animation: mobilePlayerSheetIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+  animation: mobilePlayerSheetIn 160ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
   will-change: transform;
 }
 .mobile-player-sheet--dragging {
@@ -1108,7 +1110,7 @@ input {
 @keyframes mobilePlayerSheetIn {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -1120,26 +1122,61 @@ input {
   height: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.22);
-  margin: 2px auto -6px;
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  margin: 0;
   touch-action: none;
 }
 .mobile-player-handle:active {
   background: rgba(255, 255, 255, 0.32);
 }
 
+/* Two-screen indicator (main vs queue) */
+.mobile-player-tabs {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 4;
+}
+.mobile-player-tab-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0;
+}
+.mobile-player-tab-dot.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
+}
+.mobile-player-tab-dot:active {
+  transform: translateX(0) scale(0.95);
+}
+
 /* Larger (invisible) drag zone, but visible handle stays small. */
 .mobile-player-drag-zone {
   /* Increase swipe-to-close area without enlarging the visible handle. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   height: min(420px, calc(100vw - 28px));
   width: 100%;
   touch-action: none;
+  z-index: 2;
 }
 
 /* Mobile right drawer (queue) */
 .mobile-queue-scrim {
   position: fixed;
   inset: 0;
-  z-index: 1240;
+  z-index: 1400;
   background: rgba(0, 0, 0, 0.25);
 }
 .mobile-queue-drawer {
@@ -1147,7 +1184,7 @@ input {
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 1241;
+  z-index: 1401;
   width: min(360px, 86vw);
   background: rgba(10, 10, 14, 0.96);
   backdrop-filter: blur(14px);
@@ -1202,7 +1239,7 @@ input {
   gap: 8px;
 }
 .mobile-player-cover-wrap {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .mobile-player-cover {
   width: 100%;

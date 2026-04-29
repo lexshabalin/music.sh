@@ -555,6 +555,7 @@ function Shell({ children }) {
         setMobilePlayerTransform(window.innerHeight);
         window.setTimeout(() => {
           setMobilePlayerIsClosing(false);
+          setMobileQueueDrawerOpen(false);
           setShowMobilePlayer(false);
           setMobilePlayerTransform(0);
         }, 180);
@@ -1267,6 +1268,7 @@ function Shell({ children }) {
               onMouseDown={() => {
                 // Close with animation (avoid abrupt unmount).
                 setMobilePlayerIsClosing(true);
+                setMobileQueueDrawerOpen(false);
                 setMobilePlayerTransform(window.innerHeight);
                 window.setTimeout(() => {
                   setMobilePlayerIsClosing(false);
@@ -1276,6 +1278,7 @@ function Shell({ children }) {
               }}
               onTouchStart={() => {
                 setMobilePlayerIsClosing(true);
+                setMobileQueueDrawerOpen(false);
                 setMobilePlayerTransform(window.innerHeight);
                 window.setTimeout(() => {
                   setMobilePlayerIsClosing(false);
@@ -1395,6 +1398,31 @@ function Shell({ children }) {
                   >
                     <IFastForward />
                   </button>
+                </div>
+
+                <div className="mobile-player-tabs" role="tablist" aria-label="Player screens">
+                  <button
+                    type="button"
+                    className={`mobile-player-tab-dot${!mobileQueueDrawerOpen ? " is-active" : ""}`}
+                    aria-label="Main"
+                    role="tab"
+                    aria-selected={!mobileQueueDrawerOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMobileQueueDrawerOpen(false);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={`mobile-player-tab-dot${mobileQueueDrawerOpen ? " is-active" : ""}`}
+                    aria-label="Queue"
+                    role="tab"
+                    aria-selected={mobileQueueDrawerOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMobileQueueDrawerOpen(true);
+                    }}
+                  />
                 </div>
               </div>
             </div>
