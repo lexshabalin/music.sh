@@ -121,6 +121,9 @@ function Shell({ children }) {
   const [mobileTopChromeHidden, setMobileTopChromeHidden] = React.useState(false);
   const lastScrollYRef = React.useRef(0);
   const [showMobilePlayer, setShowMobilePlayer] = React.useState(false);
+  const [mobilePlayerIsDragging, setMobilePlayerIsDragging] = React.useState(false);
+  const mobilePlayerSheetRef = React.useRef(null);
+  const mobilePlayerDragRef = React.useRef({ active: false, startY: 0, dy: 0 });
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
@@ -523,6 +526,28 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (!isMobile) setShowMobilePlayer(false);
   }, [isMobile]);
+
+  const setMobilePlayerTransform = React.useCallback((dyPx) => {
+    const el = mobilePlayerSheetRef.current;
+    if (!el) return;
+    el.style.transform = `translateY(${dyPx}px)`;
+  }, []);
+
+  const endMobilePlayerDrag = React.useCallback(
+    (finalDyPx) => {
+      const dy = Math.max(0, Number.isFinite(finalDyPx) ? finalDyPx : 0);
+      const threshold = Math.max(100, Math.round(window.innerHeight * 0.18));
+      setMobilePlayerIsDragging(false);
+      mobilePlayerDragRef.current.active = false;
+      mobilePlayerDragRef.current.dy = 0;
+      if (dy > threshold) {
+        setShowMobilePlayer(false);
+      } else {
+        setMobilePlayerTransform(0);
+      }
+    },
+    [setMobilePlayerTransform]
+  );
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -1095,7 +1120,43 @@ function Shell({ children }) {
           </div>
           {showMobilePlayer ? (
             <div className="mobile-player-overlay" onMouseDown={() => setShowMobilePlayer(false)}>
-              <div className="mobile-player-sheet" onMouseDown={(e) => e.stopPropagation()}>
+              <div
+                className={`mobile-player-sheet${mobilePlayerIsDragging ? " mobile-player-sheet--dragging" : ""}`}
+                ref={mobilePlayerSheetRef}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="mobile-player-handle"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Collapse player"
+                  onTouchStart={(e) => {
+                    if (!e.touches || e.touches.length !== 1) return;
+                    const t = e.touches[0];
+                    mobilePlayerDragRef.current.active = true;
+                    mobilePlayerDragRef.current.startY = t.clientY;
+                    mobilePlayerDragRef.current.dy = 0;
+                    setMobilePlayerIsDragging(true);
+                  }}
+                  onTouchMove={(e) => {
+                    if (!mobilePlayerDragRef.current.active) return;
+                    if (!e.touches || e.touches.length !== 1) return;
+                    const t = e.touches[0];
+                    const dy = Math.max(0, t.clientY - mobilePlayerDragRef.current.startY);
+                    mobilePlayerDragRef.current.dy = dy;
+                    setMobilePlayerTransform(Math.min(dy, 240));
+                    if (e.cancelable) e.preventDefault();
+                  }}
+                  onTouchEnd={(e) => {
+                    const dy = mobilePlayerDragRef.current.dy || 0;
+                    endMobilePlayerDrag(dy);
+                  }}
+                  onTouchCancel={() => endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0)}
+                  onClick={(e) => {
+                    // Ignore clicks triggered after touch drags.
+                    if (mobilePlayerIsDragging) e.preventDefault();
+                  }}
+                />
                 <div className="mobile-player-top">
                   <button className="ghost" type="button" onClick={() => setShowMobilePlayer(false)}>
                     Close

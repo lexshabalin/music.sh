@@ -1090,6 +1090,23 @@ input {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  transform: translateY(0);
+  transition: transform 220ms ease;
+  will-change: transform;
+}
+.mobile-player-sheet--dragging {
+  transition: none;
+}
+.mobile-player-handle {
+  width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  margin: 2px auto -6px;
+  touch-action: none;
+}
+.mobile-player-handle:active {
+  background: rgba(255, 255, 255, 0.32);
 }
 .mobile-player-top {
   display: grid;
