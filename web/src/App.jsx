@@ -1024,6 +1024,11 @@ function Shell({ children }) {
               </div>
             </div>
             <div className="player-mini-controls">
+              {remotePlaybackActive ? (
+                <span className="player-remote-indicator player-remote-indicator--mini" title="Playing on another device" aria-label="Playing on another device">
+                  <IRemoteDevice />
+                </span>
+              ) : null}
               <button
                 className="player-skip"
                 type="button"
