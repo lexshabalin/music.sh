@@ -1168,8 +1168,8 @@ input {
   top: 0;
   left: 0;
   right: 0;
-  /* Cover art height (square) + some extra above */
-  height: calc(min(420px, calc(100vw - 28px)) + 54px);
+  /* Cover art height (square) + some extra above + track title/artist area */
+  height: calc(min(420px, calc(100vw - 28px)) + 180px);
   width: 100%;
   touch-action: none;
   z-index: 2;
@@ -1179,7 +1179,7 @@ input {
   width: 200%;
   display: flex;
   flex-direction: row;
-  gap: 14px;
+  gap: 42px;
   transition: transform 220ms ease;
   will-change: transform;
 }
@@ -1188,11 +1188,18 @@ input {
   transition: none;
 }
 .mobile-player-page {
-  width: calc(50% - 7px);
+  width: calc(50% - 21px);
   padding: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+.mobile-player-page--main {
+  align-items: center;
+  text-align: center;
+}
+.mobile-player-page--queue {
+  align-items: stretch;
 }
 .mobile-player-page--queue {
   border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -1201,6 +1208,7 @@ input {
   font-weight: 900;
   padding: 6px 2px 10px;
   opacity: 0.95;
+  text-align: center;
 }
 .mobile-queue-page-list {
   overflow-y: auto;
