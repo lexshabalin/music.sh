@@ -451,10 +451,10 @@ input {
   position: fixed;
   top: 12px;
   left: 12px;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1081,24 +1081,58 @@ input {
 }
 
 @media (max-width: 900px) {
+  :root {
+    --mobile-top-control-h: 44px;
+    --mobile-chrome-hide-dy: calc(var(--mobile-top-control-h) + 24px);
+  }
   .layout {
     grid-template-columns: 1fr;
-    padding-top: 3.75rem;
+    padding-top: max(3.5rem, calc(env(safe-area-inset-top, 0px) + var(--mobile-top-control-h) + 20px));
+    transition: padding-top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .layout[data-mobile-chrome="hidden"] {
+    padding-top: max(0.35rem, env(safe-area-inset-top, 0px));
   }
   .mobile-nav-toggle {
     display: inline-flex;
+    width: var(--mobile-top-control-h);
+    height: var(--mobile-top-control-h);
+    top: max(12px, env(safe-area-inset-top, 0px));
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
   }
   .gsearch {
-    padding-left: 52px;
+    padding-left: calc(12px + var(--mobile-top-control-h) + 8px);
+    top: max(12px, env(safe-area-inset-top, 0px));
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+  }
+  .layout[data-mobile-chrome="hidden"] .mobile-nav-toggle,
+  .layout[data-mobile-chrome="hidden"] .gsearch {
+    transform: translateY(calc(-1 * var(--mobile-chrome-hide-dy)));
+    opacity: 0;
+    pointer-events: none;
   }
   .gsearch-row {
     gap: 0.4rem;
+    align-items: stretch;
+    min-height: var(--mobile-top-control-h);
+  }
+  .gsearch-input {
+    min-height: var(--mobile-top-control-h);
+    height: var(--mobile-top-control-h);
+    padding: 0 0.65rem;
+    box-sizing: border-box;
   }
   .rescan-icon-btn {
-    width: 40px;
-    min-width: 40px;
-    height: 36px;
-    padding: 0 8px;
+    width: var(--mobile-top-control-h);
+    min-width: var(--mobile-top-control-h);
+    height: var(--mobile-top-control-h);
+    padding: 0;
+    border-radius: 50%;
+    box-sizing: border-box;
+  }
+  .rescan-ecg {
+    width: 1.65rem;
+    height: 0.82rem;
   }
   .mobile-nav-scrim.is-open {
     display: block;

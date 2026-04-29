@@ -107,6 +107,8 @@ function Shell({ children }) {
   const [showProfile, setShowProfile] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const [mobileTopChromeHidden, setMobileTopChromeHidden] = React.useState(false);
+  const lastScrollYRef = React.useRef(0);
   const [showMobilePlayer, setShowMobilePlayer] = React.useState(false);
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") return false;
@@ -156,7 +158,39 @@ function Shell({ children }) {
   React.useEffect(() => {
     // Close mobile sidebar on route changes.
     setMobileNavOpen(false);
+    setMobileTopChromeHidden(false);
   }, [location.pathname]);
+
+  React.useEffect(() => {
+    if (mobileNavOpen) setMobileTopChromeHidden(false);
+  }, [mobileNavOpen]);
+
+  React.useEffect(() => {
+    if (!isMobile || !getToken()) {
+      setMobileTopChromeHidden(false);
+      return undefined;
+    }
+    lastScrollYRef.current = window.scrollY || 0;
+    const onScroll = () => {
+      if (mobileNavOpen) {
+        lastScrollYRef.current = window.scrollY || 0;
+        return;
+      }
+      const y = window.scrollY || 0;
+      const prev = lastScrollYRef.current;
+      const delta = y - prev;
+      lastScrollYRef.current = y;
+      if (y < 48) {
+        setMobileTopChromeHidden(false);
+        return;
+      }
+      const t = 10;
+      if (delta > t) setMobileTopChromeHidden(true);
+      else if (delta < -t) setMobileTopChromeHidden(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isMobile, mobileNavOpen]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -402,7 +436,14 @@ function Shell({ children }) {
   return (
     <>
       <BackgroundLayer bg={bg} />
-      <div className="layout">
+      <div
+        className="layout"
+        {...(getToken() && isMobile
+          ? {
+              "data-mobile-chrome": mobileTopChromeHidden && !mobileNavOpen ? "hidden" : "visible",
+            }
+          : {})}
+      >
         {getToken() ? (
           <>
             <button
