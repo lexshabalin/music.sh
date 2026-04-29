@@ -125,6 +125,14 @@ function Shell({ children }) {
   const [mobilePlayerIsClosing, setMobilePlayerIsClosing] = React.useState(false);
   const mobilePlayerSheetRef = React.useRef(null);
   const mobilePlayerDragRef = React.useRef({ active: false, startY: 0, dy: 0 });
+  const mobilePlayerGestureRef = React.useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    dx: 0,
+    dy: 0,
+    mode: "", // "" | "h" | "v"
+  });
   const [mobileQueueDrawerOpen, setMobileQueueDrawerOpen] = React.useState(false);
   const mobileMiniSwipeRef = React.useRef({
     startX: 0,
@@ -1301,6 +1309,12 @@ function Shell({ children }) {
                   onTouchStart={(e) => {
                     if (!e.touches || e.touches.length !== 1) return;
                     const t = e.touches[0];
+                    mobilePlayerGestureRef.current.active = true;
+                    mobilePlayerGestureRef.current.startX = t.clientX;
+                    mobilePlayerGestureRef.current.startY = t.clientY;
+                    mobilePlayerGestureRef.current.dx = 0;
+                    mobilePlayerGestureRef.current.dy = 0;
+                    mobilePlayerGestureRef.current.mode = "";
                     mobilePlayerDragRef.current.active = true;
                     mobilePlayerDragRef.current.startY = t.clientY;
                     mobilePlayerDragRef.current.dy = 0;
@@ -1310,14 +1324,53 @@ function Shell({ children }) {
                     if (!mobilePlayerDragRef.current.active) return;
                     if (!e.touches || e.touches.length !== 1) return;
                     const t = e.touches[0];
-                    const dy = Math.max(0, t.clientY - mobilePlayerDragRef.current.startY);
-                    mobilePlayerDragRef.current.dy = dy;
-                    setMobilePlayerTransform(Math.min(dy, 240));
-                    if (e.cancelable) e.preventDefault();
+                    const dx = t.clientX - mobilePlayerGestureRef.current.startX;
+                    const dy = t.clientY - mobilePlayerGestureRef.current.startY;
+                    mobilePlayerGestureRef.current.dx = dx;
+                    mobilePlayerGestureRef.current.dy = dy;
+
+                    // Decide gesture direction once.
+                    if (!mobilePlayerGestureRef.current.mode) {
+                      if (Math.abs(dx) > Math.abs(dy) + 10 && Math.abs(dx) > 14) {
+                        mobilePlayerGestureRef.current.mode = "h";
+                      } else if (dy > 10 && Math.abs(dy) > Math.abs(dx) + 6) {
+                        mobilePlayerGestureRef.current.mode = "v";
+                      }
+                    }
+
+                    // Horizontal: swipe right-to-left opens queue drawer.
+                    if (mobilePlayerGestureRef.current.mode === "h") {
+                      setMobilePlayerIsDragging(false);
+                      mobilePlayerDragRef.current.active = false;
+                      mobilePlayerDragRef.current.dy = 0;
+                      setMobilePlayerTransform(0);
+                      if (dx < -70 && Math.abs(dx) > Math.abs(dy) + 20) {
+                        setMobileQueueDrawerOpen(true);
+                      }
+                      return;
+                    }
+
+                    // Vertical: drag down to collapse.
+                    if (mobilePlayerGestureRef.current.mode === "v") {
+                      const ddy = Math.max(0, t.clientY - mobilePlayerDragRef.current.startY);
+                      mobilePlayerDragRef.current.dy = ddy;
+                      setMobilePlayerTransform(Math.min(ddy, 260));
+                      if (e.cancelable) e.preventDefault();
+                    }
                   }}
                   onTouchEnd={() => {
-                    const dy = mobilePlayerDragRef.current.dy || 0;
-                    endMobilePlayerDrag(dy);
+                    const mode = mobilePlayerGestureRef.current.mode;
+                    mobilePlayerGestureRef.current.active = false;
+                    if (mode === "v") {
+                      const dy = mobilePlayerDragRef.current.dy || 0;
+                      endMobilePlayerDrag(dy);
+                      return;
+                    }
+                    // Non-vertical gestures: reset.
+                    setMobilePlayerIsDragging(false);
+                    mobilePlayerDragRef.current.active = false;
+                    mobilePlayerDragRef.current.dy = 0;
+                    setMobilePlayerTransform(0);
                   }}
                   onTouchCancel={() => endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0)}
                 >

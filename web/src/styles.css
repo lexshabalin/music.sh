@@ -1081,15 +1081,17 @@ input {
   justify-content: stretch;
 }
 .mobile-player-sheet {
+  --mobile-player-bottom-gap: 20vh;
   width: 100%;
   min-height: 100%;
   background: rgba(10, 10, 14, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+  /* Push the UI lower, but keep ~20% breathing room at the bottom */
+  padding: 56px 14px calc(var(--mobile-player-bottom-gap) + 18px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   position: relative;
   overflow: hidden;
   transform: translateY(10px);
@@ -1137,7 +1139,7 @@ input {
 .mobile-player-tabs {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: calc(var(--mobile-player-bottom-gap) + 12px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
@@ -1166,7 +1168,8 @@ input {
   top: 0;
   left: 0;
   right: 0;
-  height: min(420px, calc(100vw - 28px));
+  /* Cover art height (square) + some extra above */
+  height: calc(min(420px, calc(100vw - 28px)) + 54px);
   width: 100%;
   touch-action: none;
   z-index: 2;
