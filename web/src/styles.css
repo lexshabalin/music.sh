@@ -1187,6 +1187,8 @@ input {
   gap: 0;
   transition: transform 220ms ease;
   will-change: transform;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .mobile-player-sheet--dragging .mobile-player-pages,
 .mobile-player-sheet--paging .mobile-player-pages {
@@ -1198,6 +1200,8 @@ input {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
 }
 .mobile-player-page--main {
   padding-right: 15px; /* half of visual gap */
@@ -1218,6 +1222,7 @@ input {
   flex: 1;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  min-height: 0;
 }
 
 /* Mobile right drawer (queue) */
@@ -1330,6 +1335,7 @@ input {
 .mobile-player-page--main .mobile-player-controls {
   margin-top: auto;
   padding-top: 10px;
+  z-index: 3;
 }
 
 .player button svg {
