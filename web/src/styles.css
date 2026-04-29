@@ -1342,6 +1342,13 @@ input {
     width: 38px;
     height: 38px;
   }
+
+  /* Mobile: remove hover-revealed play button on album/playlist tiles.
+     On touch devices it can take the first tap to reveal the button,
+     causing "icon appears on 1st tap, playback starts on 2nd". */
+  .tile-play-btn {
+    display: none !important;
+  }
 }
 .player audio {
   display: none;
