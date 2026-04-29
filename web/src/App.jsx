@@ -129,6 +129,7 @@ function Shell({ children }) {
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
   const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
   const [remotePlaybackActive, setRemotePlaybackActive] = React.useState(false);
+  const remotePlaybackActiveRef = React.useRef(false);
   const remoteProgressBaseMsRef = React.useRef(0);
   const remoteProgressUpdatedAtRef = React.useRef(0);
   const remotePlaybackSeenUntilRef = React.useRef(0);
@@ -307,6 +308,7 @@ function Shell({ children }) {
       // Give explicit user takeover a short priority window.
       takeoverGuardUntilRef.current = Date.now() + 3000;
       setRemotePlaybackActive(false);
+      remotePlaybackActiveRef.current = false;
       remotePlaybackSeenUntilRef.current = 0;
       // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
@@ -342,8 +344,13 @@ function Shell({ children }) {
   }, [p.current?.id, takeoverRemotePlaybackUI]);
 
   React.useEffect(() => {
+    remotePlaybackActiveRef.current = remotePlaybackActive;
+  }, [remotePlaybackActive]);
+
+  React.useEffect(() => {
     if (!getToken() || !p.current?.id) {
       setRemotePlaybackActive(false);
+      remotePlaybackActiveRef.current = false;
       remotePlaybackSeenUntilRef.current = 0;
       return;
     }
@@ -354,12 +361,13 @@ function Shell({ children }) {
         const mine = getPlaybackClientId();
         const activeRemote = !!(st?.isPlaying && st?.clientId && mine && st.clientId !== mine);
         if (activeRemote) {
-          remotePlaybackSeenUntilRef.current = Date.now() + 2500;
+          remotePlaybackSeenUntilRef.current = Date.now() + 5000;
           remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
           remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
-          if (!remotePlaybackActive) setRemotePlaybackActive(true);
-        } else if (Date.now() > remotePlaybackSeenUntilRef.current) {
-          setRemotePlaybackActive(false);
+          if (!remotePlaybackActiveRef.current) {
+            remotePlaybackActiveRef.current = true;
+            setRemotePlaybackActive(true);
+          }
         }
         if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
         const remoteTrackId = st.trackIds[st.currentIndex];
@@ -375,7 +383,18 @@ function Shell({ children }) {
     const id = window.setInterval(syncRemote, 2000);
     syncRemote();
     return () => clearInterval(id);
-  }, [p.current?.id, p.index, p.queue, remotePlaybackActive]);
+  }, [p.current?.id, p.index, p.queue]);
+
+  React.useEffect(() => {
+    if (!remotePlaybackActive) return;
+    const tick = () => {
+      if (Date.now() <= remotePlaybackSeenUntilRef.current) return;
+      remotePlaybackActiveRef.current = false;
+      setRemotePlaybackActive(false);
+    };
+    const id = window.setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [remotePlaybackActive]);
 
   React.useEffect(() => {
     if (!remotePlaybackActive) return;
