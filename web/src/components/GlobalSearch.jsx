@@ -165,6 +165,15 @@ export function GlobalSearch() {
                             coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
                           };
                           player.playQueue([item], 0);
+                          // iOS Safari: call play() from the click handler to avoid "needs 2 taps".
+                          try {
+                            const el = player.ref.current;
+                            if (el && item.url) {
+                              if (el.src !== item.url) el.src = item.url;
+                              const pr = el.play?.();
+                              if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                            }
+                          } catch (_) {}
                           setOpen(false);
                         }}
                       >
