@@ -1509,7 +1509,38 @@ function Shell({ children }) {
 
                   <section className="mobile-player-page mobile-player-page--queue" aria-label="Queue">
                     <div className="mobile-queue-page-head">Up next</div>
-                    <div className="mobile-queue-page-list">
+                    <div
+                      className="mobile-queue-page-list"
+                      onTouchStart={(e) => {
+                        const t = e.touches?.[0];
+                        if (!t) return;
+                        mobileQueueTapRef.current.x = t.clientX;
+                        mobileQueueTapRef.current.y = t.clientY;
+                        mobileQueueTapRef.current.moved = false;
+                      }}
+                      onTouchMove={(e) => {
+                        const t = e.touches?.[0];
+                        if (!t) return;
+                        const dx = t.clientX - mobileQueueTapRef.current.x;
+                        const dy = t.clientY - mobileQueueTapRef.current.y;
+                        // Horizontal swipe on queue page: go back to main.
+                        if (dx > 14 && Math.abs(dx) > Math.abs(dy) + 10) {
+                          mobileQueueTapRef.current.moved = true;
+                          if (e.cancelable) e.preventDefault();
+                        }
+                      }}
+                      onTouchEnd={(e) => {
+                        // If user swiped right, return to main page.
+                        if (!mobileQueueTapRef.current.moved) return;
+                        const changed = e.changedTouches?.[0];
+                        if (!changed) return;
+                        const dx = changed.clientX - mobileQueueTapRef.current.x;
+                        const dy = changed.clientY - mobileQueueTapRef.current.y;
+                        if (dx > 70 && Math.abs(dx) > Math.abs(dy) + 20) {
+                          setMobilePlayerPage(0);
+                        }
+                      }}
+                    >
                       {(() => {
                         const q = Array.isArray(p.queue) ? p.queue : [];
                         const start = typeof p.index === "number" && p.index >= 0 ? p.index : 0;
