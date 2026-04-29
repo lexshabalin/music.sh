@@ -1316,6 +1316,11 @@ input {
   .track-row button.ghost[title="Like"] {
     display: none;
   }
+  /* Keep "More" (⋯) hidden on mobile; open context menu via long-press instead. */
+  .track-row button.ghost[title="More"] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
   .player {
     left: 0;
     right: 0;

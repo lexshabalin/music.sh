@@ -119,6 +119,68 @@ export function TrackRow({
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const btnRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const longPressTimerRef = useRef(null);
+  const longPressFiredRef = useRef(false);
+  const touchStartRef = useRef({ x: 0, y: 0 });
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const onLiTouchStart = (e) => {
+    // Only handle single-finger long press.
+    if (!e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    longPressFiredRef.current = false;
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      suppressClickRef.current = true; // prevent subsequent click from playing
+      setOpen(true);
+    }, 650);
+  };
+
+  const onLiTouchMove = (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - touchStartRef.current.x);
+    const dy = Math.abs(t.clientY - touchStartRef.current.y);
+    if (dx > 12 || dy > 12) {
+      // If user is scrolling, cancel long-press.
+      clearLongPress();
+    }
+  };
+
+  const onLiTouchEnd = (e) => {
+    clearLongPress();
+    if (longPressFiredRef.current) {
+      // Long-press opened the context menu; don't start playback.
+      suppressClickRef.current = true;
+      try { e.preventDefault(); } catch (_) {}
+      try { e.stopPropagation(); } catch (_) {}
+      return;
+    }
+
+    const target = e.target;
+    const moreBtn = target?.closest?.('button[title="More"]');
+    const likeBtn = target?.closest?.('button[title="Like"]');
+    if (moreBtn || likeBtn) return;
+
+    suppressClickRef.current = true;
+    onPlayAt(index);
+    try { e.preventDefault(); } catch (_) {}
+    try { e.stopPropagation(); } catch (_) {}
+    setOpen(false);
+  };
+
+  const onLiTouchCancel = () => {
+    clearLongPress();
+  };
 
   const metaParts = [];
   if (track?.format) metaParts.push(String(track.format).toUpperCase());
@@ -135,12 +197,22 @@ export function TrackRow({
       <li
         ref={rowRef}
         className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}
+        onTouchStart={onLiTouchStart}
+        onTouchMove={onLiTouchMove}
+        onTouchEnd={onLiTouchEnd}
+        onTouchCancel={onLiTouchCancel}
       >
         <div className={`track-grid${columns === "album" ? " track-grid--album" : ""}`}>
           <button
             type="button"
             className="track-title track-title-btn"
-            onClick={() => onPlayAt(index)}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              onPlayAt(index);
+            }}
             aria-label={`Play ${label}`}
           >
             <span className="track-title-text">{label}</span>
