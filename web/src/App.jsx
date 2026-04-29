@@ -374,8 +374,8 @@ function Shell({ children }) {
           }
         } else {
           remoteInactiveStreakRef.current += 1;
-          // Need 2 consecutive inactive polls to avoid flicker.
-          if (remoteInactiveStreakRef.current >= 2) {
+          // Hide only after N consecutive inactive polls to avoid flicker.
+          if (remoteInactiveStreakRef.current >= 3) {
             remotePlaybackActiveRef.current = false;
             setRemotePlaybackActive(false);
             remotePlaybackSeenUntilRef.current = 0;
@@ -400,9 +400,11 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (!remotePlaybackActive) return;
     const tick = () => {
-      if (Date.now() <= remotePlaybackSeenUntilRef.current) return;
+      // Do not auto-hide based on wall-clock only; rely on consecutive inactive polls.
+      if (remoteInactiveStreakRef.current < 3) return;
       remotePlaybackActiveRef.current = false;
       setRemotePlaybackActive(false);
+      remotePlaybackSeenUntilRef.current = 0;
     };
     const id = window.setInterval(tick, 500);
     return () => clearInterval(id);
