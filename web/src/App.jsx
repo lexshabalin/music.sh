@@ -141,6 +141,7 @@ function Shell({ children }) {
 
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
+  const takeoverGuardUntilRef = React.useRef(0);
 
   const takeoverRemotePlaybackUI = React.useCallback(() => {
     // Important ordering: block outgoing flush BEFORE pausing, because pause
@@ -213,6 +214,7 @@ function Shell({ children }) {
     playbackHydratedRef.current = false;
     suspendPlaybackPushRef.current = false;
     takeoverRequestedRef.current = false;
+    takeoverGuardUntilRef.current = 0;
     try {
       localStorage.removeItem("musicsh_token");
     } catch (_) {}
@@ -224,6 +226,7 @@ function Shell({ children }) {
       restoredPlaybackRef.current = false;
       playbackHydratedRef.current = false;
       takeoverRequestedRef.current = false;
+      takeoverGuardUntilRef.current = 0;
       return;
     }
     if (restoredPlaybackRef.current) return;
@@ -258,6 +261,12 @@ function Shell({ children }) {
     const onRelease = () => {
       suspendPlaybackPushRef.current = false;
       takeoverRequestedRef.current = true;
+      // Give explicit user takeover a short priority window.
+      takeoverGuardUntilRef.current = Date.now() + 3000;
+      // Push takeover immediately; do not wait for 5s heartbeat.
+      try {
+        flushPlaybackRef.current();
+      } catch (_) {}
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
@@ -267,6 +276,7 @@ function Shell({ children }) {
     if (!getToken()) return;
     const tick = async () => {
       if (suspendPlaybackPushRef.current) return;
+      if (Date.now() < takeoverGuardUntilRef.current) return;
       if (Date.now() < skipPlaybackPushUntilRef.current) return;
       const mine = getPlaybackClientId();
       if (!mine) return;
