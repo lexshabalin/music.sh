@@ -207,6 +207,19 @@ function Shell({ children }) {
     };
   }, [p.current?.id]);
 
+  // iOS Safari in background is more reliable when we keep one audio element
+  // and explicitly resume playback after source switch.
+  React.useEffect(() => {
+    const el = p.ref.current;
+    if (!el || !p.current?.id) return;
+    const pr = el.play?.();
+    if (pr && typeof pr.catch === "function") {
+      pr.catch(() => {
+        // Ignore: browser can block autoplay until user interaction.
+      });
+    }
+  }, [p.current?.id]);
+
   React.useEffect(() => {
     const authed = !!getToken();
 
@@ -548,8 +561,9 @@ function Shell({ children }) {
           ) : null}
 
           <audio
-            key={p.current.id}
             autoPlay
+            playsInline
+            preload="auto"
             ref={(el) => {
               // React calls the ref with null on unmount.
               // Keep ref.current accurate to avoid referencing a dead element after logout.
