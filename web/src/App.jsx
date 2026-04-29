@@ -1312,7 +1312,7 @@ function Shell({ children }) {
                       mobilePlayerDragRef.current.dy = 0;
                       setMobilePlayerTransform(0);
                       const pagesEl = mobilePlayerPagesRef.current;
-                      const w = pagesEl?.getBoundingClientRect?.().width ? pagesEl.getBoundingClientRect().width / 2 : window.innerWidth;
+                      const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
                       const baseX = -mobilePlayerPage * w;
                       const off = Math.max(-w, Math.min(w, dx));
                       // Clamp within [0..-w]
@@ -1335,8 +1335,7 @@ function Shell({ children }) {
                     const mode = mobilePlayerGestureRef.current.mode;
                     mobilePlayerGestureRef.current.active = false;
                     if (mode === "h") {
-                      const pagesEl = mobilePlayerPagesRef.current;
-                      const w = pagesEl?.getBoundingClientRect?.().width ? pagesEl.getBoundingClientRect().width / 2 : window.innerWidth;
+                      const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
                       const dx = mobilePlayerGestureRef.current.dx;
                       const dt = Math.max(1, Date.now() - (mobilePlayerGestureRef.current.startT || Date.now()));
                       const vx = dx / dt; // px/ms
@@ -1368,7 +1367,8 @@ function Shell({ children }) {
                 <div
                   className="mobile-player-pages"
                   ref={mobilePlayerPagesRef}
-                  style={mobilePlayerIsPaging ? undefined : { transform: `translateX(-${mobilePlayerPage * 100}%)` }}
+                  // pages width = 200% (2 screens), so each page is 50%
+                  style={mobilePlayerIsPaging ? undefined : { transform: `translateX(-${mobilePlayerPage * 50}%)` }}
                 >
                   <section className="mobile-player-page mobile-player-page--main" aria-label="Player">
                     <div className="mobile-player-cover-wrap">
