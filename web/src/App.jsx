@@ -1296,7 +1296,7 @@ function Shell({ children }) {
               <div
                 className={`mobile-player-sheet${
                   mobilePlayerIsDragging ? " mobile-player-sheet--dragging" : ""
-                }${mobilePlayerIsPaging ? " mobile-player-sheet--paging" : ""}${mobilePlayerIsClosing ? " mobile-player-sheet--closing" : ""}`}
+                }${mobilePlayerIsPaging ? " mobile-player-sheet--paging" : ""}${mobilePlayerIsClosing ? " mobile-player-sheet--closing" : ""}${mobilePlayerPage === 1 ? " mobile-player-sheet--queuepage" : ""}`}
                 ref={mobilePlayerSheetRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}

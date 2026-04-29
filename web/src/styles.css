@@ -1175,6 +1175,11 @@ input {
   z-index: 2;
 }
 
+/* Queue page: don't block taps on the list; keep only a small swipe zone near the top */
+.mobile-player-sheet--queuepage .mobile-player-drag-zone {
+  height: 68px;
+}
+
 .mobile-player-pages {
   width: 200%;
   display: flex;
