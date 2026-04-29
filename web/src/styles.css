@@ -1326,6 +1326,12 @@ input {
   gap: 16px;
 }
 
+/* Main (left) page: push controls lower to reduce empty space */
+.mobile-player-page--main .mobile-player-controls {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
 .player button svg {
   display: block;
 }
