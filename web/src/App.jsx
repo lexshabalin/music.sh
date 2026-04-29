@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, Link, Navigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import { auth, getToken } from "./api";
 import { usePlayer } from "./usePlayer";
 import { Login } from "./pages/Login";
@@ -92,6 +92,7 @@ function BrandIcon() {
 }
 
 function Shell({ children }) {
+  const location = useLocation();
   const p = usePlayer();
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [curT, setCurT] = React.useState(0);
@@ -105,6 +106,7 @@ function Shell({ children }) {
   const [avatarUrl, setAvatarUrl] = React.useState("");
   const [showProfile, setShowProfile] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const userBtnRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
 
@@ -145,6 +147,11 @@ function Shell({ children }) {
       cancelled = true;
     };
   }, [!!getToken()]);
+
+  React.useEffect(() => {
+    // Close mobile sidebar on route changes.
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -373,9 +380,29 @@ function Shell({ children }) {
   return (
     <>
       <BackgroundLayer bg={bg} />
+      {getToken() ? (
+        <>
+          <button
+            type="button"
+            className="mobile-nav-toggle ghost"
+            aria-label="Toggle navigation"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+          <div
+            className={`mobile-nav-scrim${mobileNavOpen ? " is-open" : ""}`}
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+        </>
+      ) : null}
       <div className="layout">
         {getToken() ? (
-          <aside className="sidebar">
+          <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
             <div className="brand">
               <BrandIcon />
               <span>music.sh</span>
@@ -405,12 +432,12 @@ function Shell({ children }) {
               ) : null}
             </div>
             <nav className="side-nav">
-              <Link to="/">Home</Link>
-              <Link to="/songs">Songs</Link>
-              <Link to="/artists">Artists</Link>
-              <Link to="/albums">Albums</Link>
-              <Link to="/playlists">Playlists</Link>
-              <Link to="/likes">Likes</Link>
+              <Link to="/" onClick={() => setMobileNavOpen(false)}>Home</Link>
+              <Link to="/songs" onClick={() => setMobileNavOpen(false)}>Songs</Link>
+              <Link to="/artists" onClick={() => setMobileNavOpen(false)}>Artists</Link>
+              <Link to="/albums" onClick={() => setMobileNavOpen(false)}>Albums</Link>
+              <Link to="/playlists" onClick={() => setMobileNavOpen(false)}>Playlists</Link>
+              <Link to="/likes" onClick={() => setMobileNavOpen(false)}>Likes</Link>
             </nav>
           </aside>
         ) : null}
