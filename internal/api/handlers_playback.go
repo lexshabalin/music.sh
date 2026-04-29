@@ -28,6 +28,7 @@ type playbackIn struct {
 	PositionMs       int      `json:"positionMs"`
 	IsPlaying        bool     `json:"isPlaying"`
 	ClientID         *string  `json:"clientId,omitempty"`
+	ForceTakeover    bool     `json:"forceTakeover,omitempty"`
 	SourcePlaylistID *string  `json:"sourcePlaylistId,omitempty"`
 }
 
@@ -123,8 +124,9 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 500, "db")
 		return
 	}
-	// Another device/session owns active playback — do not let a stale local poll overwrite it.
-	if in.IsPlaying && cid != "" && cur.IsPlaying && cur.PlaybackClientID != "" && cur.PlaybackClientID != cid {
+	// Another device/session owns active playback. Allow explicit user takeover,
+	// but keep rejecting passive stale heartbeats.
+	if in.IsPlaying && cid != "" && cur.IsPlaying && cur.PlaybackClientID != "" && cur.PlaybackClientID != cid && !in.ForceTakeover {
 		JSONError(w, 409, "playback busy elsewhere")
 		return
 	}

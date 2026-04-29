@@ -140,13 +140,16 @@ function Shell({ children }) {
   }, [p.playQueue]);
 
   const suspendPlaybackPushRef = React.useRef(false);
+  const takeoverRequestedRef = React.useRef(false);
 
   const takeoverRemotePlaybackUI = React.useCallback(() => {
+    // Important ordering: block outgoing flush BEFORE pausing, because pause
+    // event handler triggers an immediate flush.
+    suspendPlaybackPushRef.current = true;
     try {
       const el = p.ref.current;
       if (el) el.pause();
     } catch (_) {}
-    suspendPlaybackPushRef.current = true;
     setRemotePlayingNotice("Музыка воспроизводится на другом устройстве");
     window.setTimeout(() => setRemotePlayingNotice(""), 9000);
   }, [p.ref]);
@@ -162,16 +165,18 @@ function Shell({ children }) {
     const cid = getPlaybackClientId();
     const body =
       !q.length || idx < 0
-        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid }
+        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid, forceTakeover: false }
         : {
             trackIds: q.map((x) => x.id),
             currentIndex: idx,
             positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
             isPlaying: !!(el && !el.paused),
             clientId: cid,
+            forceTakeover: takeoverRequestedRef.current,
           };
     try {
       await playback.put(body);
+      takeoverRequestedRef.current = false;
     } catch (e) {
       if (e?.httpStatus !== 409) return;
       try {
@@ -207,6 +212,7 @@ function Shell({ children }) {
     restoredPlaybackRef.current = false;
     playbackHydratedRef.current = false;
     suspendPlaybackPushRef.current = false;
+    takeoverRequestedRef.current = false;
     try {
       localStorage.removeItem("musicsh_token");
     } catch (_) {}
@@ -217,6 +223,7 @@ function Shell({ children }) {
     if (!getToken()) {
       restoredPlaybackRef.current = false;
       playbackHydratedRef.current = false;
+      takeoverRequestedRef.current = false;
       return;
     }
     if (restoredPlaybackRef.current) return;
@@ -250,6 +257,7 @@ function Shell({ children }) {
   React.useEffect(() => {
     const onRelease = () => {
       suspendPlaybackPushRef.current = false;
+      takeoverRequestedRef.current = true;
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
