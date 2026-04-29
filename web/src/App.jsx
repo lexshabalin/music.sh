@@ -129,6 +129,9 @@ function Shell({ children }) {
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
   const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
   const [remotePlaybackActive, setRemotePlaybackActive] = React.useState(false);
+  const remoteProgressBaseMsRef = React.useRef(0);
+  const remoteProgressUpdatedAtRef = React.useRef(0);
+  const remotePlaybackSeenUntilRef = React.useRef(0);
 
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
@@ -304,6 +307,7 @@ function Shell({ children }) {
       // Give explicit user takeover a short priority window.
       takeoverGuardUntilRef.current = Date.now() + 3000;
       setRemotePlaybackActive(false);
+      remotePlaybackSeenUntilRef.current = 0;
       // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
         void pushTakeoverNow();
@@ -340,6 +344,7 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (!getToken() || !p.current?.id) {
       setRemotePlaybackActive(false);
+      remotePlaybackSeenUntilRef.current = 0;
       return;
     }
     const syncRemote = async () => {
@@ -348,7 +353,14 @@ function Shell({ children }) {
         ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
         const mine = getPlaybackClientId();
         const activeRemote = !!(st?.isPlaying && st?.clientId && mine && st.clientId !== mine);
-        setRemotePlaybackActive(activeRemote);
+        if (activeRemote) {
+          remotePlaybackSeenUntilRef.current = Date.now() + 2500;
+          remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
+          remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
+          if (!remotePlaybackActive) setRemotePlaybackActive(true);
+        } else if (Date.now() > remotePlaybackSeenUntilRef.current) {
+          setRemotePlaybackActive(false);
+        }
         if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
         const remoteTrackId = st.trackIds[st.currentIndex];
         if (!remoteTrackId) return;
@@ -358,17 +370,25 @@ function Shell({ children }) {
           skipAutoplayOnceRef.current = true;
           p.jumpTo(remoteIdx);
         }
-        const updatedMs = Date.parse(st.updatedAt || "");
-        const baseMs = Math.max(0, Number(st.positionMs) || 0);
-        const elapsedMs = Number.isFinite(updatedMs) ? Math.max(0, Date.now() - updatedMs) : 0;
-        const nextSec = Math.max(0, (baseMs + elapsedMs) / 1000);
-        setCurT(nextSec);
       } catch (_) {}
     };
-    const id = window.setInterval(syncRemote, 1000);
+    const id = window.setInterval(syncRemote, 2000);
     syncRemote();
     return () => clearInterval(id);
-  }, [p.current?.id, p.index, p.queue]);
+  }, [p.current?.id, p.index, p.queue, remotePlaybackActive]);
+
+  React.useEffect(() => {
+    if (!remotePlaybackActive) return;
+    const tick = () => {
+      const baseMs = remoteProgressBaseMsRef.current;
+      const updatedAt = remoteProgressUpdatedAtRef.current || Date.now();
+      const nextSec = Math.max(0, (baseMs + Math.max(0, Date.now() - updatedAt)) / 1000);
+      setCurT(nextSec);
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [remotePlaybackActive, p.current?.id]);
 
   React.useEffect(() => {
     if (!getToken()) return;
@@ -915,16 +935,17 @@ function Shell({ children }) {
             <IPlus />
           </button>
 
+          {remotePlaybackActive ? (
+            <span className="player-remote-indicator" title="Playing on another device" aria-label="Playing on another device">
+              <IRemoteDevice />
+            </span>
+          ) : null}
+
           <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
             {fmtTime(curT)}
           </div>
 
           <div className="player-progress-wrap">
-            {remotePlaybackActive ? (
-              <span className="player-remote-indicator" title="Playing on another device" aria-label="Playing on another device">
-                <IRemoteDevice />
-              </span>
-            ) : null}
             <input
               className="range mono progress"
               aria-label="Seek"
