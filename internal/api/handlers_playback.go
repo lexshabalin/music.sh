@@ -154,6 +154,74 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// takeoverPlayback performs explicit user-initiated ownership transfer.
+// Unlike passive heartbeat PUTs, this endpoint always allows takeover.
+func (a *App) takeoverPlayback(w http.ResponseWriter, r *http.Request) {
+	uid, ok := userIDFromCtx(r.Context())
+	if !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	var in playbackIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	if len(in.TrackIDs) > maxPlaybackQueueTracks {
+		JSONError(w, 400, "queue too large")
+		return
+	}
+	var ids []uuid.UUID
+	for _, s := range in.TrackIDs {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		u, err := uuid.Parse(s)
+		if err != nil {
+			JSONError(w, 400, "invalid track id")
+			return
+		}
+		ids = append(ids, u)
+	}
+	if len(ids) == 0 {
+		JSONError(w, 400, "empty queue")
+		return
+	}
+	idx := in.CurrentIndex
+	if idx < 0 || idx >= len(ids) {
+		JSONError(w, 400, "invalid index")
+		return
+	}
+	if in.PositionMs < 0 {
+		JSONError(w, 400, "invalid position")
+		return
+	}
+	var srcPl *uuid.UUID
+	if in.SourcePlaylistID != nil && strings.TrimSpace(*in.SourcePlaylistID) != "" {
+		u, err := uuid.Parse(strings.TrimSpace(*in.SourcePlaylistID))
+		if err != nil {
+			JSONError(w, 400, "invalid playlist id")
+			return
+		}
+		srcPl = &u
+	}
+	cid := ""
+	if in.ClientID != nil {
+		cid = strings.TrimSpace(*in.ClientID)
+	}
+	if len(cid) > 128 {
+		JSONError(w, 400, "client id too long")
+		return
+	}
+	// Explicit takeover always marks playback as active under this client.
+	if err := a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *App) deletePlayback(w http.ResponseWriter, r *http.Request) {
 	uid, ok := userIDFromCtx(r.Context())
 	if !ok {

@@ -197,6 +197,26 @@ function Shell({ children }) {
     flushPlaybackRef.current = flushPlayback;
   }, [flushPlayback]);
 
+  const pushTakeoverNow = React.useCallback(async () => {
+    if (!getToken()) return;
+    const q = p.queue;
+    const idx = p.index;
+    if (!Array.isArray(q) || !q.length || idx < 0 || idx >= q.length) return;
+    const el = p.ref.current;
+    const cid = getPlaybackClientId();
+    const body = {
+      trackIds: q.map((x) => x.id),
+      currentIndex: idx,
+      positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
+      isPlaying: true,
+      clientId: cid,
+    };
+    try {
+      await playback.takeover(body);
+      takeoverRequestedRef.current = false;
+    } catch (_) {}
+  }, [p.queue, p.index, p.ref]);
+
   const claimPlaybackSync = React.useCallback(() => {
     releasePlaybackServerSync();
   }, []);
@@ -265,14 +285,15 @@ function Shell({ children }) {
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
       takeoverGuardUntilRef.current = Date.now() + 3000;
-      // Push takeover immediately; do not wait for 5s heartbeat.
+      // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
+        void pushTakeoverNow();
         flushPlaybackRef.current({ forceNow: true, forceTakeover: true });
       } catch (_) {}
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
-  }, []);
+  }, [pushTakeoverNow]);
 
   React.useEffect(() => {
     if (!getToken()) return;

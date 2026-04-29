@@ -100,6 +100,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/me/password", a.changePassword)
 		g.Get("/api/me/playback", a.getPlayback)
 		g.Put("/api/me/playback", a.putPlayback)
+		g.Post("/api/me/playback/takeover", a.takeoverPlayback)
 		g.Delete("/api/me/playback", a.deletePlayback)
 		g.Get("/api/artists", a.listArtists)
 		g.Get("/api/albums", a.listAlbums)

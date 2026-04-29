@@ -211,5 +211,10 @@ export const playback = {
       method: "PUT",
       body: JSON.stringify(state),
     }),
+  takeover: (state) =>
+    req("/api/me/playback/takeover", {
+      method: "POST",
+      body: JSON.stringify(state),
+    }),
   clear: () => req("/api/me/playback", { method: "DELETE" }),
 };
