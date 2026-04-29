@@ -137,21 +137,18 @@ export function TrackRow({
         className={`track-row${isNowPlaying ? " track-row--now" : ""}${isNowPlaying && isPlaying ? " track-row--playing" : ""}`}
       >
         <div className={`track-grid${columns === "album" ? " track-grid--album" : ""}`}>
-          <span
-            className="track-title"
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
+            className="track-title track-title-btn"
             onClick={() => onPlayAt(index)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onPlayAt(index);
-            }}
+            aria-label={`Play ${label}`}
           >
             <span className="track-title-text">{label}</span>
             <span className="track-mobile-sub muted">
               {artistName || "Unknown Artist"}
               {albumTitle ? ` • ${albumTitle}` : ""}
             </span>
-          </span>
+          </button>
 
           <div className="track-col track-artist">
             {track?.artist?.id ? (

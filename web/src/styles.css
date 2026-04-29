@@ -864,6 +864,16 @@ input {
   white-space: nowrap;
   display: inline-block;
 }
+.track-title-btn {
+  /* When .track-title is used on a <button> (mobile tap), remove native button chrome */
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
 @media (hover: hover) and (pointer: fine) {
   .track-title:hover {
     color: var(--text);
