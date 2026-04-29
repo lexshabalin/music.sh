@@ -1233,7 +1233,8 @@ function Shell({ children }) {
           {showMobilePlayer ? (
             <div
               className="mobile-player-overlay"
-              onMouseDown={() => {
+              onMouseDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 // Close with animation (avoid abrupt unmount).
                 setMobilePlayerIsClosing(true);
                 setMobilePlayerPage(0);
@@ -1244,7 +1245,8 @@ function Shell({ children }) {
                   setMobilePlayerTransform(0);
                 }, 180);
               }}
-              onTouchStart={() => {
+              onTouchStart={(e) => {
+                if (e.target !== e.currentTarget) return;
                 setMobilePlayerIsClosing(true);
                 setMobilePlayerPage(0);
                 setMobilePlayerTransform(window.innerHeight);
@@ -1297,7 +1299,7 @@ function Shell({ children }) {
 
                     // Decide gesture direction once.
                     if (!mobilePlayerGestureRef.current.mode) {
-                      if (Math.abs(dx) > Math.abs(dy) + 10 && Math.abs(dx) > 14) {
+                      if (Math.abs(dx) > Math.abs(dy) + 6 && Math.abs(dx) > 10) {
                         mobilePlayerGestureRef.current.mode = "h";
                       } else if (dy > 10 && Math.abs(dy) > Math.abs(dx) + 6) {
                         mobilePlayerGestureRef.current.mode = "v";
@@ -1360,7 +1362,25 @@ function Shell({ children }) {
                     mobilePlayerDragRef.current.dy = 0;
                     setMobilePlayerTransform(0);
                   }}
-                  onTouchCancel={() => endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0)}
+                  onTouchCancel={() => {
+                    const mode = mobilePlayerGestureRef.current.mode;
+                    mobilePlayerGestureRef.current.active = false;
+                    if (mode === "h") {
+                      const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
+                      const dx = mobilePlayerGestureRef.current.dx;
+                      const dt = Math.max(1, Date.now() - (mobilePlayerGestureRef.current.startT || Date.now()));
+                      const vx = dx / dt;
+                      let target = mobilePlayerPage;
+                      const thresh = w * 0.22;
+                      if (dx < -thresh || vx < -0.65) target = 1;
+                      else if (dx > thresh || vx > 0.65) target = 0;
+                      setMobilePlayerPage(target);
+                      clearMobilePagesInlineTransform();
+                      setMobilePlayerIsPaging(false);
+                      return;
+                    }
+                    endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0);
+                  }}
                 >
                   <div className="mobile-player-handle" />
                 </div>
