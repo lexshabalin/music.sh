@@ -572,13 +572,8 @@ function Shell({ children }) {
   }, []);
 
   const getMobilePagesStepPx = React.useCallback(() => {
-    const pagesEl = mobilePlayerPagesRef.current;
-    const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
-    if (!pagesEl) return w;
-    const cs = window.getComputedStyle(pagesEl);
-    const gap = parseFloat(cs.columnGap || cs.gap || "0") || 0;
-    // One page width is ~w, plus the flex gap between pages.
-    return w + gap;
+    // Pages are exactly 1 screen wide each. Visual "gap" is done via inner padding.
+    return mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
   }, []);
 
   React.useEffect(() => {
