@@ -314,7 +314,9 @@ function Shell({ children }) {
         if (newIdx < 0) newIdx = 0;
         const items = tracksToQueueItems(tracks);
         skipPlaybackPushUntilRef.current = Date.now() + 4000;
-        if (!st.isPlaying) skipAutoplayOnceRef.current = true;
+        // After refresh/reload we restore queue + position but DO NOT auto-play.
+        // iOS Safari + UX: user should explicitly resume.
+        skipAutoplayOnceRef.current = true;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
       } catch (_) {
@@ -1366,7 +1368,7 @@ function Shell({ children }) {
                 <div
                   className="mobile-player-pages"
                   ref={mobilePlayerPagesRef}
-                  style={{ transform: `translateX(-${mobilePlayerPage * 100}%)` }}
+                  style={mobilePlayerIsPaging ? undefined : { transform: `translateX(-${mobilePlayerPage * 100}%)` }}
                 >
                   <section className="mobile-player-page mobile-player-page--main" aria-label="Player">
                     <div className="mobile-player-cover-wrap">
@@ -1521,7 +1523,7 @@ function Shell({ children }) {
       ) : null}
       {getToken() ? (
         <audio
-          autoPlay={!!p.current?.url}
+          autoPlay={false}
           playsInline
           preload="auto"
           ref={(el) => {
