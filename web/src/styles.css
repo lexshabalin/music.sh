@@ -1108,6 +1108,13 @@ input {
 .mobile-player-handle:active {
   background: rgba(255, 255, 255, 0.32);
 }
+
+/* Larger (invisible) drag zone, but visible handle stays small. */
+.mobile-player-drag-zone {
+  height: 42px;
+  width: 100%;
+  touch-action: none;
+}
 .mobile-player-top {
   display: grid;
   grid-template-columns: auto 1fr auto;

@@ -550,6 +550,19 @@ function Shell({ children }) {
   );
 
   React.useEffect(() => {
+    if (!mobilePlayerIsDragging) return undefined;
+    // Prevent iOS from scrolling the page underneath while dragging.
+    const onTouchMove = (e) => {
+      if (!mobilePlayerDragRef.current.active) return;
+      try {
+        e.preventDefault();
+      } catch (_) {}
+    };
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => window.removeEventListener("touchmove", onTouchMove);
+  }, [mobilePlayerIsDragging]);
+
+  React.useEffect(() => {
     const el = p.ref.current;
     if (!el) return;
 
@@ -1126,10 +1139,8 @@ function Shell({ children }) {
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div
-                  className="mobile-player-handle"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Collapse player"
+                  className="mobile-player-drag-zone"
+                  aria-hidden="true"
                   onTouchStart={(e) => {
                     if (!e.touches || e.touches.length !== 1) return;
                     const t = e.touches[0];
@@ -1147,16 +1158,14 @@ function Shell({ children }) {
                     setMobilePlayerTransform(Math.min(dy, 240));
                     if (e.cancelable) e.preventDefault();
                   }}
-                  onTouchEnd={(e) => {
+                  onTouchEnd={() => {
                     const dy = mobilePlayerDragRef.current.dy || 0;
                     endMobilePlayerDrag(dy);
                   }}
                   onTouchCancel={() => endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0)}
-                  onClick={(e) => {
-                    // Ignore clicks triggered after touch drags.
-                    if (mobilePlayerIsDragging) e.preventDefault();
-                  }}
-                />
+                >
+                  <div className="mobile-player-handle" />
+                </div>
                 <div className="mobile-player-top">
                   <button className="ghost" type="button" onClick={() => setShowMobilePlayer(false)}>
                     Close
