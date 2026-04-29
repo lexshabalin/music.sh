@@ -1090,12 +1090,30 @@ input {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transform: translateY(0);
-  transition: transform 220ms ease;
+  transform: translateY(18px);
+  opacity: 0;
+  animation: mobilePlayerSheetIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
   will-change: transform;
 }
 .mobile-player-sheet--dragging {
-  transition: none;
+  animation: none;
+  opacity: 1;
+}
+.mobile-player-sheet--closing {
+  animation: none;
+  opacity: 1;
+  transition: transform 180ms ease;
+}
+
+@keyframes mobilePlayerSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .mobile-player-handle {
   width: 56px;
@@ -1111,9 +1129,71 @@ input {
 
 /* Larger (invisible) drag zone, but visible handle stays small. */
 .mobile-player-drag-zone {
-  height: 42px;
+  /* Increase swipe-to-close area without enlarging the visible handle. */
+  height: min(420px, calc(100vw - 28px));
   width: 100%;
   touch-action: none;
+}
+
+/* Mobile right drawer (queue) */
+.mobile-queue-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1240;
+  background: rgba(0, 0, 0, 0.25);
+}
+.mobile-queue-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1241;
+  width: min(360px, 86vw);
+  background: rgba(10, 10, 14, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+  display: flex;
+  flex-direction: column;
+  animation: mobileQueueDrawerIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+@keyframes mobileQueueDrawerIn {
+  from {
+    transform: translateX(14%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.mobile-queue-drawer-head {
+  padding: 12px 14px;
+  font-weight: 900;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mobile-queue-drawer-list {
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.mobile-queue-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: block;
+}
+.mobile-queue-item-title {
+  font-weight: 800;
+}
+.mobile-queue-item-sub {
+  font-size: 12px;
+  margin-top: 2px;
 }
 .mobile-player-top {
   display: grid;

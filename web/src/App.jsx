@@ -122,8 +122,18 @@ function Shell({ children }) {
   const lastScrollYRef = React.useRef(0);
   const [showMobilePlayer, setShowMobilePlayer] = React.useState(false);
   const [mobilePlayerIsDragging, setMobilePlayerIsDragging] = React.useState(false);
+  const [mobilePlayerIsClosing, setMobilePlayerIsClosing] = React.useState(false);
   const mobilePlayerSheetRef = React.useRef(null);
   const mobilePlayerDragRef = React.useRef({ active: false, startY: 0, dy: 0 });
+  const [mobileQueueDrawerOpen, setMobileQueueDrawerOpen] = React.useState(false);
+  const mobileMiniSwipeRef = React.useRef({
+    startX: 0,
+    startY: 0,
+    dx: 0,
+    dy: 0,
+    moved: false,
+    suppressClick: false,
+  });
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
@@ -541,10 +551,14 @@ function Shell({ children }) {
       mobilePlayerDragRef.current.active = false;
       mobilePlayerDragRef.current.dy = 0;
       if (dy > threshold) {
-        setShowMobilePlayer(false);
-      } else {
-        setMobilePlayerTransform(0);
-      }
+        setMobilePlayerIsClosing(true);
+        setMobilePlayerTransform(window.innerHeight);
+        window.setTimeout(() => {
+          setMobilePlayerIsClosing(false);
+          setShowMobilePlayer(false);
+          setMobilePlayerTransform(0);
+        }, 180);
+      } else setMobilePlayerTransform(0);
     },
     [setMobilePlayerTransform]
   );
@@ -561,6 +575,19 @@ function Shell({ children }) {
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     return () => window.removeEventListener("touchmove", onTouchMove);
   }, [mobilePlayerIsDragging]);
+
+  React.useEffect(() => {
+    if (!mobilePlayerIsClosing) return undefined;
+    // Disable background scroll during closing animation.
+    const onTouchMove = (e) => {
+      if (!mobilePlayerIsClosing) return;
+      try {
+        e.preventDefault();
+      } catch (_) {}
+    };
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => window.removeEventListener("touchmove", onTouchMove);
+  }, [mobilePlayerIsClosing]);
 
   React.useEffect(() => {
     const el = p.ref.current;
@@ -1066,7 +1093,52 @@ function Shell({ children }) {
       ) : null}
       {p.current && getToken() && isMobile ? (
         <>
-          <div className="player player--mobile-mini" onClick={() => setShowMobilePlayer(true)}>
+          <div
+            className="player player--mobile-mini"
+            onClick={() => {
+              if (mobileMiniSwipeRef.current.suppressClick) {
+                mobileMiniSwipeRef.current.suppressClick = false;
+                return;
+              }
+              setMobileQueueDrawerOpen(false);
+              setShowMobilePlayer(true);
+            }}
+            onTouchStart={(e) => {
+              if (mobileQueueDrawerOpen) return;
+              const t = e.touches?.[0];
+              if (!t) return;
+              mobileMiniSwipeRef.current.startX = t.clientX;
+              mobileMiniSwipeRef.current.startY = t.clientY;
+              mobileMiniSwipeRef.current.dx = 0;
+              mobileMiniSwipeRef.current.dy = 0;
+              mobileMiniSwipeRef.current.moved = false;
+              mobileMiniSwipeRef.current.suppressClick = false;
+            }}
+            onTouchMove={(e) => {
+              const t = e.touches?.[0];
+              if (!t) return;
+              const dx = t.clientX - mobileMiniSwipeRef.current.startX;
+              const dy = t.clientY - mobileMiniSwipeRef.current.startY;
+              mobileMiniSwipeRef.current.dx = dx;
+              mobileMiniSwipeRef.current.dy = dy;
+              if (Math.abs(dx) > 10 || Math.abs(dy) > 10) mobileMiniSwipeRef.current.moved = true;
+            }}
+            onTouchEnd={() => {
+              if (mobileQueueDrawerOpen) return;
+              const dx = mobileMiniSwipeRef.current.dx;
+              const dy = mobileMiniSwipeRef.current.dy;
+              const moved = mobileMiniSwipeRef.current.moved;
+              if (!moved) return;
+              // Swipe right-to-left (dx < 0) opens queue drawer.
+              if (dx < -70 && Math.abs(dx) > Math.abs(dy) + 20) {
+                setMobileQueueDrawerOpen(true);
+                mobileMiniSwipeRef.current.suppressClick = true;
+                window.setTimeout(() => {
+                  mobileMiniSwipeRef.current.suppressClick = false;
+                }, 280);
+              }
+            }}
+          >
             <div className="nowplaying">
               {p.current.coverUrl ? (
                 <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
@@ -1131,12 +1203,94 @@ function Shell({ children }) {
               </button>
             </div>
           </div>
-          {showMobilePlayer ? (
-            <div className="mobile-player-overlay" onMouseDown={() => setShowMobilePlayer(false)}>
+          {mobileQueueDrawerOpen ? (
+            <>
               <div
-                className={`mobile-player-sheet${mobilePlayerIsDragging ? " mobile-player-sheet--dragging" : ""}`}
+                className="mobile-queue-scrim"
+                onMouseDown={() => setMobileQueueDrawerOpen(false)}
+                onTouchStart={() => setMobileQueueDrawerOpen(false)}
+                aria-hidden="true"
+              />
+              <aside className="mobile-queue-drawer" role="dialog" aria-label="Playback queue">
+                <div className="mobile-queue-drawer-head">Up next</div>
+                <div className="mobile-queue-drawer-list">
+                  {(() => {
+                    const q = Array.isArray(p.queue) ? p.queue : [];
+                    const start = typeof p.index === "number" && p.index >= 0 ? p.index : 0;
+                    const view = q.slice(start);
+                    if (!view.length) {
+                      return <div className="muted" style={{ padding: 10 }}>Empty queue</div>;
+                    }
+                    return view.map((it, i) => {
+                      const actualIdx = start + i;
+                      const active = actualIdx === p.index;
+                      const title = it.title || it.label || "Track";
+                      const sub = [it.artist, it.album].filter(Boolean).join(" • ");
+                      return (
+                        <button
+                          key={it.id + ":" + actualIdx}
+                          type="button"
+                          className="mobile-queue-item"
+                          style={{
+                            background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            claimPlaybackSync();
+                            p.jumpTo(actualIdx);
+                            // iOS Safari: ensure play on click.
+                            try {
+                              const el = p.ref.current;
+                              if (el && it?.url) {
+                                if (el.src !== it.url) el.src = it.url;
+                                const pr = el.play?.();
+                                if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                              }
+                            } catch (_) {}
+                            setMobileQueueDrawerOpen(false);
+                          }}
+                        >
+                          <div className="mobile-queue-item-title">{title}</div>
+                          {sub ? <div className="mobile-queue-item-sub muted">{sub}</div> : null}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              </aside>
+            </>
+          ) : null}
+
+          {showMobilePlayer ? (
+            <div
+              className="mobile-player-overlay"
+              onMouseDown={() => {
+                // Close with animation (avoid abrupt unmount).
+                setMobilePlayerIsClosing(true);
+                setMobilePlayerTransform(window.innerHeight);
+                window.setTimeout(() => {
+                  setMobilePlayerIsClosing(false);
+                  setShowMobilePlayer(false);
+                  setMobilePlayerTransform(0);
+                }, 180);
+              }}
+              onTouchStart={() => {
+                setMobilePlayerIsClosing(true);
+                setMobilePlayerTransform(window.innerHeight);
+                window.setTimeout(() => {
+                  setMobilePlayerIsClosing(false);
+                  setShowMobilePlayer(false);
+                  setMobilePlayerTransform(0);
+                }, 180);
+              }}
+            >
+              <div
+                className={`mobile-player-sheet${
+                  mobilePlayerIsDragging ? " mobile-player-sheet--dragging" : ""
+                }${mobilePlayerIsClosing ? " mobile-player-sheet--closing" : ""}`}
                 ref={mobilePlayerSheetRef}
                 onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
               >
                 <div
                   className="mobile-player-drag-zone"
@@ -1165,23 +1319,6 @@ function Shell({ children }) {
                   onTouchCancel={() => endMobilePlayerDrag(mobilePlayerDragRef.current.dy || 0)}
                 >
                   <div className="mobile-player-handle" />
-                </div>
-                <div className="mobile-player-top">
-                  <button className="ghost" type="button" onClick={() => setShowMobilePlayer(false)}>
-                    Close
-                  </button>
-                  <div className="muted">{p.current.album || ""}</div>
-                  <button
-                    ref={mobileQueueBtnRef}
-                    className="ghost"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowQueue((v) => !v);
-                    }}
-                  >
-                    <IQueue />
-                  </button>
                 </div>
                 <div className="mobile-player-cover-wrap">
                   {p.current.coverUrl ? (
