@@ -618,6 +618,29 @@ function Shell({ children }) {
   }, [mobilePlayerIsClosing]);
 
   React.useEffect(() => {
+    if (!showMobilePlayer) return undefined;
+    // Block background scroll while the fullscreen player is open.
+    const prevOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    const onTouchMove = (e) => {
+      // Allow scrolling inside the queue list if user is on that page.
+      const t = e.target;
+      const inQueueScroll = t && typeof t.closest === "function" && t.closest(".mobile-queue-page-list");
+      if (inQueueScroll) return;
+      if (e.cancelable) e.preventDefault();
+    };
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      document.documentElement.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+    };
+  }, [showMobilePlayer]);
+
+  React.useEffect(() => {
     const el = p.ref.current;
     if (!el) return;
 
@@ -1287,7 +1310,7 @@ function Shell({ children }) {
                     setMobilePlayerIsPaging(false);
                   }}
                   onTouchMove={(e) => {
-                    if (!mobilePlayerDragRef.current.active) return;
+                    if (!mobilePlayerGestureRef.current.active) return;
                     if (!e.touches || e.touches.length !== 1) return;
                     const t = e.touches[0];
                     const dx = t.clientX - mobilePlayerGestureRef.current.startX;
@@ -1310,6 +1333,7 @@ function Shell({ children }) {
                     if (mobilePlayerGestureRef.current.mode === "h") {
                       setMobilePlayerIsDragging(false);
                       setMobilePlayerIsPaging(true);
+                      // keep gesture active; disable vertical drag bookkeeping only
                       mobilePlayerDragRef.current.active = false;
                       mobilePlayerDragRef.current.dy = 0;
                       setMobilePlayerTransform(0);
