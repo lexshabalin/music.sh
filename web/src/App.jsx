@@ -155,25 +155,27 @@ function Shell({ children }) {
     window.setTimeout(() => setRemotePlayingNotice(""), 9000);
   }, [p.ref]);
 
-  const flushPlayback = React.useCallback(async () => {
+  const flushPlayback = React.useCallback(async (opts = {}) => {
+    const forceNow = !!opts.forceNow;
+    const forceTakeover = !!opts.forceTakeover;
     if (!getToken()) return;
-    if (!playbackHydratedRef.current) return;
-    if (suspendPlaybackPushRef.current) return;
-    if (Date.now() < skipPlaybackPushUntilRef.current) return;
+    if (!forceNow && !playbackHydratedRef.current) return;
+    if (!forceNow && suspendPlaybackPushRef.current) return;
+    if (!forceNow && Date.now() < skipPlaybackPushUntilRef.current) return;
     const el = p.ref.current;
     const q = p.queue;
     const idx = p.index;
     const cid = getPlaybackClientId();
     const body =
       !q.length || idx < 0
-        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid, forceTakeover: false }
+        ? { trackIds: [], currentIndex: 0, positionMs: 0, isPlaying: false, clientId: cid, forceTakeover: forceTakeover || takeoverRequestedRef.current }
         : {
             trackIds: q.map((x) => x.id),
             currentIndex: idx,
             positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
             isPlaying: !!(el && !el.paused),
             clientId: cid,
-            forceTakeover: takeoverRequestedRef.current,
+            forceTakeover: forceTakeover || takeoverRequestedRef.current,
           };
     try {
       await playback.put(body);
@@ -265,7 +267,7 @@ function Shell({ children }) {
       takeoverGuardUntilRef.current = Date.now() + 3000;
       // Push takeover immediately; do not wait for 5s heartbeat.
       try {
-        flushPlaybackRef.current();
+        flushPlaybackRef.current({ forceNow: true, forceTakeover: true });
       } catch (_) {}
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
