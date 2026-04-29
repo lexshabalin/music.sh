@@ -32,6 +32,7 @@ import {
   IPlay,
   IPlus,
   IQueue,
+  IRemoteDevice,
   IRewind,
   ISpeaker,
   ISpeakerOff,
@@ -127,6 +128,7 @@ function Shell({ children }) {
   const userBtnRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
   const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
+  const [remotePlaybackActive, setRemotePlaybackActive] = React.useState(false);
 
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
@@ -301,6 +303,7 @@ function Shell({ children }) {
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
       takeoverGuardUntilRef.current = Date.now() + 3000;
+      setRemotePlaybackActive(false);
       // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
         void pushTakeoverNow();
@@ -325,6 +328,7 @@ function Shell({ children }) {
         const st = await playback.get();
         ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
         if (!st?.isPlaying || !st.clientId || st.clientId === mine) return;
+        setRemotePlaybackActive(true);
         takeoverRemotePlaybackUI();
       } catch (_) {}
     };
@@ -332,6 +336,39 @@ function Shell({ children }) {
     tick();
     return () => clearInterval(id);
   }, [p.current?.id, takeoverRemotePlaybackUI]);
+
+  React.useEffect(() => {
+    if (!getToken() || !p.current?.id) {
+      setRemotePlaybackActive(false);
+      return;
+    }
+    const syncRemote = async () => {
+      try {
+        const st = await playback.get();
+        ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
+        const mine = getPlaybackClientId();
+        const activeRemote = !!(st?.isPlaying && st?.clientId && mine && st.clientId !== mine);
+        setRemotePlaybackActive(activeRemote);
+        if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
+        const remoteTrackId = st.trackIds[st.currentIndex];
+        if (!remoteTrackId) return;
+        const q = Array.isArray(p.queue) ? p.queue : [];
+        const remoteIdx = q.findIndex((x) => x?.id === remoteTrackId);
+        if (remoteIdx >= 0 && remoteIdx !== p.index) {
+          skipAutoplayOnceRef.current = true;
+          p.jumpTo(remoteIdx);
+        }
+        const updatedMs = Date.parse(st.updatedAt || "");
+        const baseMs = Math.max(0, Number(st.positionMs) || 0);
+        const elapsedMs = Number.isFinite(updatedMs) ? Math.max(0, Date.now() - updatedMs) : 0;
+        const nextSec = Math.max(0, (baseMs + elapsedMs) / 1000);
+        setCurT(nextSec);
+      } catch (_) {}
+    };
+    const id = window.setInterval(syncRemote, 1000);
+    syncRemote();
+    return () => clearInterval(id);
+  }, [p.current?.id, p.index, p.queue]);
 
   React.useEffect(() => {
     if (!getToken()) return;
@@ -882,23 +919,30 @@ function Shell({ children }) {
             {fmtTime(curT)}
           </div>
 
-          <input
-            className="range mono progress"
-            aria-label="Seek"
-            type="range"
-            min="0"
-            max={Math.max(1, dur || 0)}
-            step="0.25"
-            value={Math.min(curT, Math.max(1, dur || 0))}
-            onChange={(e) => {
-              const el = p.ref.current;
-              if (!el) return;
-              claimPlaybackSync();
-              const v = Number(e.target.value);
-              el.currentTime = v;
-              setCurT(v);
-            }}
-          />
+          <div className="player-progress-wrap">
+            {remotePlaybackActive ? (
+              <span className="player-remote-indicator" title="Playing on another device" aria-label="Playing on another device">
+                <IRemoteDevice />
+              </span>
+            ) : null}
+            <input
+              className="range mono progress"
+              aria-label="Seek"
+              type="range"
+              min="0"
+              max={Math.max(1, dur || 0)}
+              step="0.25"
+              value={Math.min(curT, Math.max(1, dur || 0))}
+              onChange={(e) => {
+                const el = p.ref.current;
+                if (!el) return;
+                claimPlaybackSync();
+                const v = Number(e.target.value);
+                el.currentTime = v;
+                setCurT(v);
+              }}
+            />
+          </div>
 
           <button
             ref={queueBtnRef}

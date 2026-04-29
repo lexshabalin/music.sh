@@ -90,3 +90,12 @@ export const IClock = (p) => (
   </S>
 );
 
+export const IRemoteDevice = (p) => (
+  <S {...p}>
+    <rect x="3" y="5" width="14" height="10" rx="2" />
+    <path d="M8 19h4" />
+    <path d="M20 9a3 3 0 0 1 0 6" />
+    <path d="M21.5 6.5a6 6 0 0 1 0 11" />
+  </S>
+);
+
