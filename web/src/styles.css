@@ -1084,10 +1084,13 @@ input {
   :root {
     --mobile-top-control-h: 44px;
     --mobile-chrome-hide-dy: calc(var(--mobile-top-control-h) + 24px);
+    /* One shared vertical origin for hamburger + search row (fixed, not flow/sticky) */
+    --mobile-chrome-top: max(12px, env(safe-area-inset-top, 0px));
   }
   .layout {
     grid-template-columns: 1fr;
-    padding-top: max(3.5rem, calc(env(safe-area-inset-top, 0px) + var(--mobile-top-control-h) + 20px));
+    /* Space for one fixed chrome row only (search is out of document flow on mobile) */
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-control-h) + 14px);
     transition: padding-top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .layout[data-mobile-chrome="hidden"] {
@@ -1097,12 +1100,20 @@ input {
     display: inline-flex;
     width: var(--mobile-top-control-h);
     height: var(--mobile-top-control-h);
-    top: max(12px, env(safe-area-inset-top, 0px));
+    top: var(--mobile-chrome-top);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
   }
+  /* Fixed like the sandwich: avoids misalignment at scroll top (sticky sat in flow under padding) */
   .gsearch {
-    padding-left: calc(12px + var(--mobile-top-control-h) + 8px);
-    top: max(12px, env(safe-area-inset-top, 0px));
+    position: fixed;
+    left: calc(12px + var(--mobile-top-control-h) + 8px);
+    right: 12px;
+    top: var(--mobile-chrome-top);
+    width: auto;
+    max-width: none;
+    margin-bottom: 0;
+    padding-left: 0;
+    z-index: 1190;
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
   }
   .layout[data-mobile-chrome="hidden"] .mobile-nav-toggle,
