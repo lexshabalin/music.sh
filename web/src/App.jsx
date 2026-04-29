@@ -533,7 +533,12 @@ function Shell({ children }) {
         flushPlaybackRef.current();
       } catch (_) {}
     };
-    const onTime = () => setCurT(el.currentTime || 0);
+    const onTime = () => {
+      // When remote playback is active, we drive progress from server-updated base+updatedAt.
+      // Prevent audio timeupdate events from fighting and causing UI "jitter".
+      if (remotePlaybackActiveRef.current) return;
+      setCurT(el.currentTime || 0);
+    };
     const onMeta = () => setDur(el.duration || 0);
     const onError = async () => {
       // Don't auto-skip: browsers can mark the media as ended after a failed load.
