@@ -570,6 +570,16 @@ function Shell({ children }) {
     el.style.transform = "";
   }, []);
 
+  const getMobilePagesStepPx = React.useCallback(() => {
+    const pagesEl = mobilePlayerPagesRef.current;
+    const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
+    if (!pagesEl) return w;
+    const cs = window.getComputedStyle(pagesEl);
+    const gap = parseFloat(cs.columnGap || cs.gap || "0") || 0;
+    // One page width is ~w, plus the flex gap between pages.
+    return w + gap;
+  }, []);
+
   const endMobilePlayerDrag = React.useCallback(
     (finalDyPx) => {
       const dy = Math.max(0, Number.isFinite(finalDyPx) ? finalDyPx : 0);
@@ -1337,12 +1347,12 @@ function Shell({ children }) {
                       mobilePlayerDragRef.current.active = false;
                       mobilePlayerDragRef.current.dy = 0;
                       setMobilePlayerTransform(0);
-                      const pagesEl = mobilePlayerPagesRef.current;
                       const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
-                      const baseX = -mobilePlayerPage * w;
+                      const step = getMobilePagesStepPx();
+                      const baseX = -mobilePlayerPage * step;
                       const off = Math.max(-w, Math.min(w, dx));
-                      // Clamp within [0..-w]
-                      const nextX = Math.max(-w, Math.min(0, baseX + off));
+                      // Clamp within [0..-step]
+                      const nextX = Math.max(-step, Math.min(0, baseX + off));
                       setMobilePagesTransformPx(nextX);
                       if (e.cancelable) e.preventDefault();
                       return;
@@ -1361,6 +1371,7 @@ function Shell({ children }) {
                     const mode = mobilePlayerGestureRef.current.mode;
                     mobilePlayerGestureRef.current.active = false;
                     if (mode === "h") {
+                      const step = getMobilePagesStepPx();
                       const w = mobilePlayerSheetRef.current?.getBoundingClientRect?.().width || window.innerWidth;
                       const dx = mobilePlayerGestureRef.current.dx;
                       const dt = Math.max(1, Date.now() - (mobilePlayerGestureRef.current.startT || Date.now()));

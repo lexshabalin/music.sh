@@ -1179,6 +1179,7 @@ input {
   width: 200%;
   display: flex;
   flex-direction: row;
+  gap: 14px;
   transition: transform 220ms ease;
   will-change: transform;
 }
@@ -1187,7 +1188,7 @@ input {
   transition: none;
 }
 .mobile-player-page {
-  width: 50%;
+  width: calc(50% - 7px);
   padding: 0;
   display: flex;
   flex-direction: column;
