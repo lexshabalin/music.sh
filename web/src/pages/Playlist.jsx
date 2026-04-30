@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
@@ -38,10 +38,15 @@ function sortTracks(list, key, dir) {
 export function Playlist() {
   const { t } = useI18n();
   const { id } = useParams();
+  const nav = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [sortKey, setSortKey] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [busyDelete, setBusyDelete] = useState(false);
+  const menuBtnRef = useRef(null);
   const player = usePlayer();
 
   const load = () =>
@@ -56,6 +61,16 @@ export function Playlist() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e) => {
+      if (menuBtnRef.current && menuBtnRef.current.contains(e.target)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [menuOpen]);
 
   if (err) return <p style={{ color: "tomato" }}>{err}</p>;
   if (!data) return <p className="muted">{t("common.loading")}</p>;
@@ -127,10 +142,80 @@ export function Playlist() {
           <h2 style={{ margin: 0 }}>{data.name}</h2>
           {data.description ? <p className="muted">{data.description}</p> : null}
         </div>
-        <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
-          {t("tracks.shuffle")}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
+            {t("tracks.shuffle")}
+          </button>
+          <button
+            ref={menuBtnRef}
+            type="button"
+            className="ghost"
+            title={t("playlist.more")}
+            aria-label={t("playlist.more")}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            ⋯
+          </button>
+          {menuOpen ? (
+            <div
+              style={(() => {
+                const r = menuBtnRef.current?.getBoundingClientRect?.();
+                if (!r) return {};
+                const w = 220;
+                const pad = 8;
+                const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
+                const top = r.bottom + 6;
+                return {
+                  position: "fixed",
+                  top,
+                  left,
+                  width: w,
+                  background: "#18181f",
+                  border: "1px solid #2a2a33",
+                  borderRadius: 10,
+                  padding: 6,
+                  zIndex: 2000,
+                };
+              })()}
+              role="menu"
+              aria-label={t("playlist.more")}
+            >
+              <button
+                type="button"
+                className="ghost"
+                style={{ width: "100%", justifyContent: "flex-start", display: "flex", padding: "8px 10px", color: "tomato" }}
+                onClick={async () => {
+                  setMenuOpen(false);
+                  setConfirmDeleteOpen(true);
+                }}
+              >
+                {t("playlist.delete")}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
+      {confirmDeleteOpen ? (
+        <ConfirmModal
+          title={t("playlist.delete")}
+          text={t("playlist.deleteConfirm")}
+          dangerText={t("playlist.delete")}
+          busy={busyDelete}
+          onClose={() => setConfirmDeleteOpen(false)}
+          onConfirm={async () => {
+            setBusyDelete(true);
+            setErr("");
+            try {
+              await lib.deletePl(id);
+              nav("/playlists", { replace: true });
+            } catch (e) {
+              setErr(e?.message || "error");
+            }
+            setBusyDelete(false);
+            setConfirmDeleteOpen(false);
+          }}
+        />
+      ) : null}
       <ul className="plain-list">
         <TrackHeader
           columns="full"
@@ -164,6 +249,26 @@ export function Playlist() {
           />
         ))}
       </ul>
+    </div>
+  );
+}
+
+function ConfirmModal({ title, text, dangerText, busy, onClose, onConfirm }) {
+  const { t } = useI18n();
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>{title}</h3>
+        <p className="muted">{text}</p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <button className="ghost" type="button" onClick={onClose} disabled={busy}>
+            {t("common.cancel")}
+          </button>
+          <button type="button" onClick={onConfirm} disabled={busy} style={{ borderColor: "tomato", color: "tomato" }}>
+            {dangerText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

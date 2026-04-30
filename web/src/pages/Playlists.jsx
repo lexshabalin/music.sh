@@ -39,6 +39,9 @@ export function Playlists() {
   const [desc, setDesc] = useState("");
   const [err, setErr] = useState("");
   const [covers, setCovers] = useState({});
+  const [menu, setMenu] = useState(null); // { id, left, top }
+  const [confirmId, setConfirmId] = useState("");
+  const [busyDelete, setBusyDelete] = useState(false);
   const player = usePlayer();
   const load = () =>
     lib
@@ -51,6 +54,13 @@ export function Playlists() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onDoc = () => setMenu(null);
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [menu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +124,34 @@ export function Playlists() {
                 </div>
                 <button
                   type="button"
+                  className="ghost"
+                  title={t("playlist.more")}
+                  aria-label={t("playlist.more")}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    const w = 220;
+                    const pad = 8;
+                    const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
+                    const top = r.bottom + 6;
+                    setMenu({ id: p.id, left, top });
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: 8,
+                    padding: "6px 10px",
+                    borderRadius: 10,
+                    background: "rgba(0,0,0,0.35)",
+                    borderColor: "rgba(255,255,255,0.15)",
+                    color: "var(--text)",
+                  }}
+                >
+                  ⋯
+                </button>
+                <button
+                  type="button"
                   className="tile-play-btn"
                   title={t("playlist.play")}
                   aria-label={t("playlist.play")}
@@ -150,6 +188,80 @@ export function Playlists() {
             </div>
           </Link>
         ))}
+      </div>
+      {menu ? (
+        <div
+          style={{
+            position: "fixed",
+            left: menu.left,
+            top: menu.top,
+            width: 220,
+            background: "#18181f",
+            border: "1px solid #2a2a33",
+            borderRadius: 10,
+            padding: 6,
+            zIndex: 2500,
+          }}
+          role="menu"
+          aria-label={t("playlist.more")}
+          onClick={(e) => {
+            // keep clicks inside menu from bubbling to document (which closes it)
+            try { e.stopPropagation(); } catch (_) {}
+          }}
+        >
+          <button
+            type="button"
+            className="ghost"
+            style={{ width: "100%", justifyContent: "flex-start", display: "flex", padding: "8px 10px", color: "tomato" }}
+            onClick={() => {
+              setMenu(null);
+              setConfirmId(menu.id);
+            }}
+          >
+            {t("playlist.delete")}
+          </button>
+        </div>
+      ) : null}
+      {confirmId ? (
+        <ConfirmModal
+          title={t("playlist.delete")}
+          text={t("playlist.deleteConfirm")}
+          dangerText={t("playlist.delete")}
+          busy={busyDelete}
+          onClose={() => setConfirmId("")}
+          onConfirm={async () => {
+            setBusyDelete(true);
+            setErr("");
+            try {
+              await lib.deletePl(confirmId);
+              setConfirmId("");
+              await load();
+            } catch (e) {
+              setErr(e?.message || "error");
+            }
+            setBusyDelete(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ConfirmModal({ title, text, dangerText, busy, onClose, onConfirm }) {
+  const { t } = useI18n();
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>{title}</h3>
+        <p className="muted">{text}</p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <button className="ghost" type="button" onClick={onClose} disabled={busy}>
+            {t("common.cancel")}
+          </button>
+          <button type="button" onClick={onConfirm} disabled={busy} style={{ borderColor: "tomato", color: "tomato" }}>
+            {dangerText}
+          </button>
+        </div>
       </div>
     </div>
   );

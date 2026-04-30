@@ -156,6 +156,7 @@ export const lib = {
   createPl: (name, description) =>
     req("/api/playlists", { method: "POST", body: JSON.stringify({ name, description: description || undefined }) }),
   addToPl: (plId, trackId) => req("/api/playlists/" + plId + "/tracks", { method: "POST", body: JSON.stringify({ trackId }) }),
+  deletePl: (plId) => req("/api/playlists/" + plId, { method: "DELETE" }),
   likeIds: () => req("/api/likes"),
   like: (trackId) => req("/api/likes", { method: "POST", body: JSON.stringify({ trackId }) }),
   unlike: (trackId) => req("/api/likes/" + trackId, { method: "DELETE" }),

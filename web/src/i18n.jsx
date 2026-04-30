@@ -165,6 +165,9 @@ const dict = {
     "playlist.descriptionOptional": "Описание (необязательно)",
     "playlist.create": "Создать",
     "playlist.play": "Воспроизвести плейлист",
+    "playlist.more": "Ещё",
+    "playlist.delete": "Удалить плейлист",
+    "playlist.deleteConfirm": "Удалить плейлист? Это действие нельзя отменить.",
 
     "likes.title": "Любимое",
 
@@ -339,6 +342,9 @@ const dict = {
     "playlist.descriptionOptional": "Description (optional)",
     "playlist.create": "Create",
     "playlist.play": "Play playlist",
+    "playlist.more": "More",
+    "playlist.delete": "Delete playlist",
+    "playlist.deleteConfirm": "Delete this playlist? This cannot be undone.",
 
     "likes.title": "Likes",
 
