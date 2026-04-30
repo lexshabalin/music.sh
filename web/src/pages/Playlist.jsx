@@ -148,7 +148,7 @@ export function Playlist() {
           <h2 style={{ margin: 0 }}>{data.name}</h2>
           {data.description ? <p className="muted">{data.description}</p> : null}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "relative" }}>
           <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
             {t("tracks.shuffle")}
           </button>
@@ -172,25 +172,18 @@ export function Playlist() {
           {menuOpen ? (
             <div
               ref={menuRef}
-              style={(() => {
-                const r = menuBtnRef.current?.getBoundingClientRect?.();
-                if (!r) return {};
-                const w = 220;
-                const pad = 8;
-                const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
-                const top = r.bottom + 6;
-                return {
-                  position: "fixed",
-                  top,
-                  left,
-                  width: w,
-                  background: "#18181f",
-                  border: "1px solid #2a2a33",
-                  borderRadius: 10,
-                  padding: 6,
-                  zIndex: 2000,
-                };
-              })()}
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                width: 220,
+                background: "#18181f",
+                border: "1px solid #2a2a33",
+                borderRadius: 10,
+                padding: 6,
+                zIndex: 2000,
+                boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+              }}
               role="menu"
               aria-label={t("playlist.more")}
               onClick={(e) => {
