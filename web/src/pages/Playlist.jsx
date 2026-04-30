@@ -70,8 +70,12 @@ export function Playlist() {
       if (menuRef.current && menuRef.current.contains(e.target)) return;
       setMenuOpen(false);
     };
-    document.addEventListener("click", onDoc);
-    return () => document.removeEventListener("click", onDoc);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, [menuOpen]);
 
   if (err) return <p style={{ color: "tomato" }}>{err}</p>;
@@ -154,7 +158,14 @@ export function Playlist() {
             className="ghost playlist-more-btn"
             title={t("playlist.more")}
             aria-label={t("playlist.more")}
-            onClick={() => setMenuOpen((v) => !v)}
+            onMouseDown={(e) => {
+              try { e.stopPropagation(); } catch (_) {}
+              setMenuOpen((v) => !v);
+            }}
+            onTouchStart={(e) => {
+              try { e.stopPropagation(); } catch (_) {}
+              setMenuOpen((v) => !v);
+            }}
           >
             ⋯
           </button>
@@ -184,6 +195,12 @@ export function Playlist() {
               aria-label={t("playlist.more")}
               onClick={(e) => {
                 // Prevent bubbling to document click handler.
+                try { e.stopPropagation(); } catch (_) {}
+              }}
+              onMouseDown={(e) => {
+                try { e.stopPropagation(); } catch (_) {}
+              }}
+              onTouchStart={(e) => {
                 try { e.stopPropagation(); } catch (_) {}
               }}
             >
