@@ -33,8 +33,7 @@ body {
 .layout {
   position: relative;
 }
-.player,
-.modal-backdrop {
+.player {
   position: relative;
   z-index: 1;
 }
@@ -1020,7 +1019,8 @@ select.lang-select {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* Must be above sidebar, player, mobile overlays, etc. */
+  z-index: 10000;
   padding: 16px;
 }
 .modal {
@@ -1031,6 +1031,8 @@ select.lang-select {
   padding: 14px;
   backdrop-filter: blur(calc(var(--glass-blur) + 4px));
   -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px));
+  position: relative;
+  z-index: 10001;
 }
 .player {
   position: fixed;
