@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { auth, setToken } from "../api";
+import { useI18n } from "../i18n";
 
 export function Register() {
+  const { t } = useI18n();
   const [username, setU] = useState("");
   const [email, setE] = useState("");
   const [pw, setP] = useState("");
@@ -21,10 +23,10 @@ export function Register() {
   };
   return (
     <form onSubmit={submit} className="card" style={{ maxWidth: 360, margin: "2rem auto" }}>
-      <h2>Register</h2>
+      <h2>{t("auth.register")}</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <p>
-        <label>Username</label>
+        <label>{t("auth.username")}</label>
         <input
           value={username}
           onChange={(e) => setU(e.target.value)}
@@ -35,20 +37,20 @@ export function Register() {
         />
       </p>
       <p>
-        <label>Display name (optional)</label>
+        <label>{t("auth.displayNameOptional")}</label>
         <input value={name} onChange={(e) => setN(e.target.value)} />
       </p>
       <p>
-        <label>Email</label>
+        <label>{t("auth.email")}</label>
         <input value={email} onChange={(e) => setE(e.target.value)} type="email" required />
       </p>
       <p>
-        <label>Password (8+)</label>
+        <label>{t("auth.password8")}</label>
         <input value={pw} onChange={(e) => setP(e.target.value)} type="password" minLength={8} required />
       </p>
-      <button type="submit">Create account</button>
+      <button type="submit">{t("auth.createAccount")}</button>
       <p className="muted">
-        <Link to="/login">Back to login</Link>
+        <Link to="/login">{t("auth.backToLogin")}</Link>
       </p>
     </form>
   );

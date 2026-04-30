@@ -10,6 +10,29 @@ import (
 	"musicsh/internal/auth"
 )
 
+type uiLangBody struct {
+	Lang string `json:"lang"`
+}
+
+func (a *App) setUILang(w http.ResponseWriter, r *http.Request) {
+	uid, _ := userIDFromCtx(r.Context())
+	var b uiLangBody
+	if err := ReadJSON(r, &b); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	lang := strings.ToLower(strings.TrimSpace(b.Lang))
+	if lang != "ru" && lang != "en" {
+		JSONError(w, 400, "invalid lang")
+		return
+	}
+	if err := a.DB.SetUserUILang(r.Context(), uid, lang); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, map[string]any{"ok": true, "uiLang": lang})
+}
+
 type changePasswordBody struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`

@@ -53,6 +53,7 @@ export const auth = {
     }),
   login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
+  setUILang: (lang) => req("/api/me/ui/lang", { method: "POST", body: JSON.stringify({ lang }) }),
   changePassword: (currentPassword, newPassword) =>
     req("/api/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   avatar: async () => {
@@ -110,6 +111,9 @@ export const lib = {
   artists: (q) => req("/api/artists?" + new URLSearchParams({ query: q || "" })),
   albums: (q, artistId) => req("/api/albums?" + new URLSearchParams({ query: q || "", ...(artistId && { artistId }) })),
   album: (id) => req("/api/albums/" + id),
+  albumImprintDryRun: (id) => req("/api/albums/" + id + "/imprint/dry-run", { method: "POST", body: "{}" }),
+  albumImprintApply: (id, body) => req("/api/albums/" + id + "/imprint/apply", { method: "POST", body: JSON.stringify(body ?? {}) }),
+  job: (id) => req("/api/jobs/" + id),
   /** PATCH album metadata (pinned fields; cover lock via upload or clear). */
   patchAlbumMeta: (id, body) =>
     req("/api/albums/" + id, { method: "PATCH", body: JSON.stringify(body ?? {}) }),

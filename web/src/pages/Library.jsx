@@ -2,9 +2,11 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
+import { useI18n } from "../i18n";
 import { IPlay } from "../components/icons";
 
 export function Library() {
+  const { t } = useI18n();
   // Global search + rescan live in the app shell now.
   // Home page only shows the album grid.
   const [albums, setA] = React.useState([]);
@@ -29,8 +31,8 @@ export function Library() {
                 <button
                   type="button"
                   className="tile-play-btn"
-                  title="Play album"
-                  aria-label="Play album"
+                  title={t("library.playAlbum")}
+                  aria-label={t("library.playAlbum")}
                   onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -38,10 +40,10 @@ export function Library() {
                       const tr = await lib.tracks("", a.id);
                       const items = (Array.isArray(tr) ? tr : []).map((t) => ({
                         id: t.id,
-                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
                         url: lib.streamUrl(t.id),
                         artist: t.artist?.name || "",
-                        title: t.title || "Track",
+                        title: t.title || t("common.track"),
                         album: t.album?.title || a.title || "",
                         coverUrl: effectiveTrackCoverUrl(t) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
                       }));

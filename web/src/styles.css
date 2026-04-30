@@ -373,6 +373,14 @@ input {
   background: #12121a;
   color: var(--text);
 }
+select.lang-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #12121a;
+  color: var(--text);
+}
 .layout {
   max-width: 1200px;
   margin: 0 auto;
@@ -850,7 +858,7 @@ input {
   width: 18px;
   height: 18px;
 }
-.track-row button.ghost[title="More"] {
+.track-row button.ghost[data-action="more"] {
   font-size: 18px;
   line-height: 1;
 }
@@ -1514,11 +1522,11 @@ input {
     justify-content: flex-end;
     gap: 4px;
   }
-  .track-row button.ghost[title="Like"] {
+  .track-row button.ghost[data-action="like"] {
     display: none;
   }
   /* Keep "More" (⋯) hidden on mobile; open context menu via long-press instead. */
-  .track-row button.ghost[title="More"] {
+  .track-row button.ghost[data-action="more"] {
     opacity: 0 !important;
     pointer-events: none !important;
   }

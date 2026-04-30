@@ -1,0 +1,411 @@
+import React from "react";
+
+const LS_LANG = "musicsh_ui_lang";
+
+export const LANGS = [
+  { id: "ru", flag: "🇷🇺", label: "Русский" },
+  { id: "en", flag: "🇺🇸", label: "English" },
+];
+
+export function normalizeLang(x) {
+  const s = String(x || "").toLowerCase().trim();
+  return s === "en" ? "en" : "ru";
+}
+
+export function getStoredLang() {
+  try {
+    return normalizeLang(localStorage.getItem(LS_LANG));
+  } catch (_) {
+    return "ru";
+  }
+}
+
+export function storeLang(lang) {
+  try {
+    localStorage.setItem(LS_LANG, normalizeLang(lang));
+  } catch (_) {}
+}
+
+const dict = {
+  ru: {
+    "auth.login": "Вход",
+    "auth.register": "Регистрация",
+    "auth.usernameOrEmail": "Имя пользователя или email",
+    "auth.username": "Имя пользователя",
+    "auth.displayNameOptional": "Отображаемое имя (необязательно)",
+    "auth.email": "Email",
+    "auth.password": "Пароль",
+    "auth.password8": "Пароль (8+)",
+    "auth.createAccount": "Создать аккаунт",
+    "auth.backToLogin": "Назад к входу",
+    "auth.noAccount": "Нет аккаунта?",
+
+    "search.placeholder": "Поиск",
+    "search.results": "Результаты поиска",
+    "search.clear": "Очистить",
+    "search.noMatches": "Нет совпадений",
+    "search.songs": "Треки",
+    "search.albums": "Альбомы",
+    "search.artists": "Артисты",
+    "search.playlists": "Плейлисты",
+    "search.play": "Играть",
+    "search.rescan": "Пересканировать библиотеку",
+    "search.scannedFiles": "Просканировано файлов",
+    "search.foundTracks": "Найдено треков",
+
+    "library.playAlbum": "Воспроизвести альбом",
+
+    "nav.home": "Главная",
+    "nav.songs": "Треки",
+    "nav.artists": "Артисты",
+    "nav.albums": "Альбомы",
+    "nav.playlists": "Плейлисты",
+    "nav.likes": "Любимое",
+
+    "menu.profile": "Профиль",
+    "menu.profileSettings": "Настройки профиля",
+    "menu.logout": "Выйти",
+    "menu.toggleNav": "Открыть меню",
+
+    "err.uiCrashed": "Интерфейс сломался",
+    "err.openConsole": "Открой DevTools Console, чтобы увидеть ошибку.",
+    "err.tryAgain": "Попробовать снова",
+
+    "player.queue": "Очередь",
+    "player.upNext": "Далее",
+    "player.emptyQueue": "Очередь пуста",
+    "player.playingRemote": "Музыка воспроизводится на другом устройстве",
+    "player.playingOnAnotherDevice": "Воспроизводится на другом устройстве",
+    "player.prev": "Предыдущий",
+    "player.next": "Следующий",
+    "player.rewind": "Назад",
+    "player.fastForward": "Вперед",
+    "player.play": "Играть",
+    "player.pause": "Пауза",
+    "player.mute": "Выключить звук",
+    "player.unmute": "Включить звук",
+    "player.seek": "Перемотка",
+    "player.volume": "Громкость",
+    "player.like": "Нравится",
+    "player.unlike": "Не нравится",
+    "player.addToPlaylist": "Добавить в плейлист",
+
+    "profile.title": "Профиль",
+    "profile.close": "Закрыть",
+    "profile.uploadAvatar": "Загрузить аватар",
+    "profile.background": "Фон",
+    "profile.bg.none": "Нет",
+    "profile.bg.lava": "Лава",
+    "profile.bg.grain": "Зерно",
+    "profile.bg.grid": "Сетка",
+    "profile.bg.waves": "Волны",
+    "profile.bg.upload": "Загрузить",
+    "profile.bg.hint": "Пресеты применяются сразу. Загрузка поддерживает изображения, GIF и короткие видео.",
+    "profile.password.title": "Сменить пароль",
+    "profile.password.current": "Текущий пароль",
+    "profile.password.new": "Новый пароль (8+)",
+    "profile.save": "Сохранить",
+    "profile.language": "Язык интерфейса",
+
+    "common.user": "Пользователь",
+    "common.track": "Трек",
+    "common.untitled": "Без названия",
+    "common.loading": "Загрузка…",
+    "common.clear": "Очистить",
+    "common.cancel": "Отмена",
+    "common.deleteFile": "Удалить файл",
+    "common.save": "Сохранить",
+    "common.error": "Ошибка",
+    "common.unknownArtist": "Неизвестный исполнитель",
+    "common.unknown": "—",
+
+    "tracks.title": "Название",
+    "tracks.artist": "Исполнитель",
+    "tracks.album": "Альбом",
+    "tracks.time": "Длительность",
+    "tracks.like": "Нравится",
+    "tracks.more": "Ещё",
+    "tracks.nowPlaying": "Сейчас играет",
+    "tracks.paused": "Пауза",
+    "tracks.shuffle": "Перемешать",
+    "tracks.actions": "Действия с треком",
+    "tracks.playAria": "Воспроизвести",
+    "tracks.playNow": "Играть сейчас",
+    "tracks.playNext": "Играть следующим",
+    "tracks.addToPlaylist": "Добавить в плейлист",
+    "tracks.editMeta": "Править метаданные",
+
+    "playlist.playlists": "Плейлисты",
+    "playlist.newPlaylist": "Новый плейлист",
+    "playlist.descriptionOptional": "Описание (необязательно)",
+    "playlist.create": "Создать",
+    "playlist.play": "Воспроизвести плейлист",
+
+    "likes.title": "Любимое",
+
+    "artists.searchArtists": "Искать артистов…",
+    "artists.albumsArrow": "Альбомы →",
+    "artists.back": "← Артисты",
+    "artists.searchAlbums": "Искать альбомы…",
+
+    "plmodal.title": "Добавить в плейлист",
+    "plmodal.help": "Выбери существующий плейлист или создай новый.",
+    "plmodal.existing": "Существующий",
+    "plmodal.select": "— Выбрать —",
+    "plmodal.add": "Добавить",
+    "plmodal.new": "Новый плейлист",
+    "plmodal.name": "Название",
+    "plmodal.desc": "Описание",
+    "plmodal.myPlaylist": "Мой плейлист",
+    "plmodal.optional": "Необязательно",
+    "plmodal.createAdd": "Создать и добавить",
+
+    "trackmeta.coverHint": "JPEG, PNG или WebP. Не заменяет обложку альбома для других треков. Сканирование библиотеки не удаляет свою обложку.",
+    "trackmeta.uploadError": "Ошибка загрузки",
+    "trackmeta.title": "Метаданные трека",
+    "trackmeta.help": "Сначала укажите исполнителя — подгрузятся альбомы из библиотеки для этого исполнителя. Можно выбрать готовый альбом (трек унаследует его название, год и обложку) или ввести альбом вручную. Текстовые поля и своя обложка не перезаписываются при повторном сканировании.",
+    "trackmeta.loading": "Загрузка…",
+    "trackmeta.field.title": "Название",
+    "trackmeta.field.artist": "Исполнитель",
+    "trackmeta.field.album": "Альбом",
+    "trackmeta.album.pick": "— выберите альбом из библиотеки —",
+    "trackmeta.album.custom": "Другой альбом (ввести вручную)…",
+    "trackmeta.album.title": "Название альбома",
+    "trackmeta.album.artist": "Исполнитель альбома (если отличается)",
+    "trackmeta.year": "Год",
+    "trackmeta.year.keepAlbum": "Как у альбома, если не менять",
+    "trackmeta.year.example": "Напр. 2020",
+    "trackmeta.year.hint": "Берётся из альбома. Измените поле, чтобы зафиксировать свой год для трека.",
+    "trackmeta.trackNo": "№ трека",
+    "trackmeta.discNo": "№ диска",
+    "trackmeta.cover": "Обложка",
+    "trackmeta.err.needTitle": "Укажите название трека",
+    "trackmeta.err.pickAlbumOrCustom": "Выберите альбом из списка или переключитесь на ввод вручную",
+    "trackmeta.err.badYear": "Некорректный год",
+    "trackmeta.err.badTrackNo": "Некорректный номер трека",
+    "trackmeta.err.badDiscNo": "Некорректный номер диска",
+    "trackmeta.err.saveFailed": "Ошибка сохранения",
+    "trackmeta.optional": "Необязательно",
+
+    "album.editTitle": "Альбом",
+    "album.meta.help": "Название, исполнитель и год для всех треков этого альбома в библиотеке. Своя обложка не заменяется автоматически из MusicBrainz. «Сбросить» возвращает значение из тегов / снимает закрепление.",
+    "album.meta.title": "Название",
+    "album.meta.artist": "Исполнитель",
+    "album.meta.year": "Год",
+    "album.meta.cover": "Обложка",
+    "album.meta.yearExample": "Напр. 2020",
+    "album.meta.reset": "Сбросить",
+    "album.meta.needTitle": "Укажите название альбома",
+    "album.meta.badYear": "Некорректный год",
+    "album.meta.saveError": "Ошибка сохранения",
+    "album.meta.uploadError": "Ошибка загрузки",
+    "album.editButton": "Редактировать альбом",
+  },
+  en: {
+    "auth.login": "Log in",
+    "auth.register": "Register",
+    "auth.usernameOrEmail": "Username or email",
+    "auth.username": "Username",
+    "auth.displayNameOptional": "Display name (optional)",
+    "auth.email": "Email",
+    "auth.password": "Password",
+    "auth.password8": "Password (8+)",
+    "auth.createAccount": "Create account",
+    "auth.backToLogin": "Back to login",
+    "auth.noAccount": "No account?",
+
+    "search.placeholder": "Search",
+    "search.results": "Search results",
+    "search.clear": "Clear",
+    "search.noMatches": "No matches",
+    "search.songs": "Songs",
+    "search.albums": "Albums",
+    "search.artists": "Artists",
+    "search.playlists": "Playlists",
+    "search.play": "Play",
+    "search.rescan": "Rescan library",
+    "search.scannedFiles": "Scanned files",
+    "search.foundTracks": "Found tracks",
+
+    "library.playAlbum": "Play album",
+
+    "nav.home": "Home",
+    "nav.songs": "Songs",
+    "nav.artists": "Artists",
+    "nav.albums": "Albums",
+    "nav.playlists": "Playlists",
+    "nav.likes": "Likes",
+
+    "menu.profile": "Profile",
+    "menu.profileSettings": "Profile settings",
+    "menu.logout": "Log out",
+    "menu.toggleNav": "Toggle navigation",
+
+    "err.uiCrashed": "UI crashed",
+    "err.openConsole": "Open DevTools Console to see the error.",
+    "err.tryAgain": "Try again",
+
+    "player.queue": "Queue",
+    "player.upNext": "Up next",
+    "player.emptyQueue": "Empty queue",
+    "player.playingRemote": "Music is playing on another device",
+    "player.playingOnAnotherDevice": "Playing on another device",
+    "player.prev": "Previous",
+    "player.next": "Next",
+    "player.rewind": "Rewind",
+    "player.fastForward": "Fast-forward",
+    "player.play": "Play",
+    "player.pause": "Pause",
+    "player.mute": "Mute",
+    "player.unmute": "Unmute",
+    "player.seek": "Seek",
+    "player.volume": "Volume",
+    "player.like": "Like",
+    "player.unlike": "Unlike",
+    "player.addToPlaylist": "Add to playlist",
+
+    "profile.title": "Profile",
+    "profile.close": "Close",
+    "profile.uploadAvatar": "Upload avatar",
+    "profile.background": "Background",
+    "profile.bg.none": "None",
+    "profile.bg.lava": "Lava",
+    "profile.bg.grain": "Grain",
+    "profile.bg.grid": "Grid",
+    "profile.bg.waves": "Waves",
+    "profile.bg.upload": "Upload",
+    "profile.bg.hint": "Presets apply instantly. Upload supports images, GIFs, and short videos.",
+    "profile.password.title": "Change password",
+    "profile.password.current": "Current password",
+    "profile.password.new": "New password (8+)",
+    "profile.save": "Save",
+    "profile.language": "Interface language",
+
+    "common.user": "User",
+    "common.track": "Track",
+    "common.untitled": "Untitled",
+    "common.loading": "Loading…",
+    "common.clear": "Clear",
+    "common.cancel": "Cancel",
+    "common.deleteFile": "Delete file",
+    "common.save": "Save",
+    "common.error": "Error",
+    "common.unknownArtist": "Unknown Artist",
+    "common.unknown": "—",
+
+    "tracks.title": "Title",
+    "tracks.artist": "Artist",
+    "tracks.album": "Album",
+    "tracks.time": "Time",
+    "tracks.like": "Like",
+    "tracks.more": "More",
+    "tracks.nowPlaying": "Now playing",
+    "tracks.paused": "Paused",
+    "tracks.shuffle": "Shuffle",
+    "tracks.actions": "Track actions",
+    "tracks.playAria": "Play",
+    "tracks.playNow": "Play now",
+    "tracks.playNext": "Play next",
+    "tracks.addToPlaylist": "Add to playlist",
+    "tracks.editMeta": "Edit metadata",
+
+    "playlist.playlists": "Playlists",
+    "playlist.newPlaylist": "New playlist",
+    "playlist.descriptionOptional": "Description (optional)",
+    "playlist.create": "Create",
+    "playlist.play": "Play playlist",
+
+    "likes.title": "Likes",
+
+    "artists.searchArtists": "Search artists…",
+    "artists.albumsArrow": "Albums →",
+    "artists.back": "← Artists",
+    "artists.searchAlbums": "Search albums…",
+
+    "plmodal.title": "Add to playlist",
+    "plmodal.help": "Pick an existing playlist, or create a new one.",
+    "plmodal.existing": "Existing",
+    "plmodal.select": "— Select —",
+    "plmodal.add": "Add",
+    "plmodal.new": "New playlist",
+    "plmodal.name": "Name",
+    "plmodal.desc": "Description",
+    "plmodal.myPlaylist": "My playlist",
+    "plmodal.optional": "Optional",
+    "plmodal.createAdd": "Create & add",
+
+    "trackmeta.coverHint": "JPEG, PNG, or WebP. Does not replace the album cover for other tracks. Library rescan will not remove your custom cover.",
+    "trackmeta.uploadError": "Upload failed",
+    "trackmeta.title": "Track metadata",
+    "trackmeta.help": "Start by setting the artist — albums from your library will load for this artist. You can pick an existing album (the track will inherit its title, year, and cover) or enter album info manually. Text fields and your custom cover are not overwritten on rescan.",
+    "trackmeta.loading": "Loading…",
+    "trackmeta.field.title": "Title",
+    "trackmeta.field.artist": "Artist",
+    "trackmeta.field.album": "Album",
+    "trackmeta.album.pick": "— choose an album from library —",
+    "trackmeta.album.custom": "Other album (enter manually)…",
+    "trackmeta.album.title": "Album title",
+    "trackmeta.album.artist": "Album artist (if different)",
+    "trackmeta.year": "Year",
+    "trackmeta.year.keepAlbum": "Same as album unless changed",
+    "trackmeta.year.example": "e.g. 2020",
+    "trackmeta.year.hint": "Inherited from the album. Change it to pin a custom year for this track.",
+    "trackmeta.trackNo": "Track #",
+    "trackmeta.discNo": "Disc #",
+    "trackmeta.cover": "Cover",
+    "trackmeta.err.needTitle": "Please provide a track title",
+    "trackmeta.err.pickAlbumOrCustom": "Pick an album from the list or switch to manual entry",
+    "trackmeta.err.badYear": "Invalid year",
+    "trackmeta.err.badTrackNo": "Invalid track number",
+    "trackmeta.err.badDiscNo": "Invalid disc number",
+    "trackmeta.err.saveFailed": "Save failed",
+    "trackmeta.optional": "Optional",
+
+    "album.editTitle": "Album",
+    "album.meta.help": "Title, artist and year for all tracks of this album in your library. Custom cover is not auto-replaced from MusicBrainz. “Reset” restores values from tags / unpins the field.",
+    "album.meta.title": "Title",
+    "album.meta.artist": "Artist",
+    "album.meta.year": "Year",
+    "album.meta.cover": "Cover",
+    "album.meta.yearExample": "e.g. 2020",
+    "album.meta.reset": "Reset",
+    "album.meta.needTitle": "Please provide an album title",
+    "album.meta.badYear": "Invalid year",
+    "album.meta.saveError": "Save failed",
+    "album.meta.uploadError": "Upload failed",
+    "album.editButton": "Edit album",
+  },
+};
+
+export const I18nContext = React.createContext({
+  lang: "ru",
+  setLang: () => {},
+  t: (k) => k,
+});
+
+export function I18nProvider({ initialLang, children }) {
+  const [lang, setLangState] = React.useState(normalizeLang(initialLang || getStoredLang()));
+
+  const setLang = React.useCallback((next) => {
+    const l = normalizeLang(next);
+    setLangState(l);
+    storeLang(l);
+  }, []);
+
+  const t = React.useCallback(
+    (key) => {
+      const l = normalizeLang(lang);
+      return dict?.[l]?.[key] ?? dict?.en?.[key] ?? String(key);
+    },
+    [lang]
+  );
+
+  const value = React.useMemo(() => ({ lang: normalizeLang(lang), setLang, t }), [lang, setLang, t]);
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n() {
+  return React.useContext(I18nContext);
+}
+

@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
+import { useI18n } from "../i18n";
 import { IPlay } from "./icons";
 
 function ResultSection({ title, children }) {
@@ -14,6 +15,7 @@ function ResultSection({ title, children }) {
 }
 
 export function GlobalSearch() {
+  const { t } = useI18n();
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const [res, setRes] = React.useState({ songs: [], albums: [], artists: [], playlists: [] });
@@ -78,7 +80,7 @@ export function GlobalSearch() {
       <div className="gsearch-row">
         <input
           className="gsearch-input"
-          placeholder="Search"
+          placeholder={t("search.placeholder")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => {
@@ -97,8 +99,8 @@ export function GlobalSearch() {
           type="button"
           className={`rescan-icon-btn${scanning ? " rescan-icon-btn--scanning" : ""}`}
           disabled={scanning}
-          title="Rescan library"
-          aria-label="Rescan library"
+          title={t("search.rescan")}
+          aria-label={t("search.rescan")}
           onClick={async () => {
             setScanning(true);
             try {
@@ -118,7 +120,7 @@ export function GlobalSearch() {
       {scanning && scanState ? (
         <div className="gsearch-scan">
           <div className="muted" style={{ marginBottom: 6 }}>
-            Scanned files: <b>{scanState.scannedFiles}</b> • Found tracks: <b>{scanState.foundTracks}</b>
+            {t("search.scannedFiles")}: <b>{scanState.scannedFiles}</b> • {t("search.foundTracks")}: <b>{scanState.foundTracks}</b>
           </div>
           <div style={{ height: 6, background: "#2a2a33", borderRadius: 999 }}>
             <div
@@ -137,7 +139,7 @@ export function GlobalSearch() {
         <div
           className="gsearch-popover"
           role="dialog"
-          aria-label="Search results"
+          aria-label={t("search.results")}
           onMouseDown={(e) => {
             // keep focus on input when clicking inside
             e.preventDefault();
@@ -145,22 +147,22 @@ export function GlobalSearch() {
         >
           {hasAny ? (
             <>
-              <ResultSection title="Songs">
+              <ResultSection title={t("search.songs")}>
                 {res.songs.length ? (
                   res.songs.map((t) => (
                     <div key={t.id} className="search-item">
                       <button
                         type="button"
                         className="ghost search-play"
-                        title="Play"
-                        aria-label="Play"
+                        title={t("search.play")}
+                        aria-label={t("search.play")}
                         onClick={() => {
                           const item = {
                             id: t.id,
-                            label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+                            label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
                             url: lib.streamUrl(t.id),
                             artist: t.artist?.name || "",
-                            title: t.title || "Track",
+                            title: t.title || t("common.track"),
                             album: t.album?.title || "",
                             coverUrl: effectiveTrackCoverUrl(t),
                           };
@@ -180,7 +182,7 @@ export function GlobalSearch() {
                         <IPlay size={16} />
                       </button>
                       <div className="search-item-main">
-                        <div className="search-item-title">{t.title || "Track"}</div>
+                        <div className="search-item-title">{t.title || t("common.track")}</div>
                         <div className="muted" style={{ fontSize: 12 }}>
                           {t.artist?.name || "—"} {t.album?.title ? `• ${t.album.title}` : ""}
                         </div>
@@ -188,10 +190,10 @@ export function GlobalSearch() {
                     </div>
                   ))
                 ) : (
-                  <div className="muted">No matches</div>
+                  <div className="muted">{t("search.noMatches")}</div>
                 )}
               </ResultSection>
-              <ResultSection title="Albums">
+              <ResultSection title={t("search.albums")}>
                 {res.albums.length ? (
                   <div className="pill-row">
                     {res.albums.map((a) => (
@@ -206,10 +208,10 @@ export function GlobalSearch() {
                     ))}
                   </div>
                 ) : (
-                  <div className="muted">No matches</div>
+                  <div className="muted">{t("search.noMatches")}</div>
                 )}
               </ResultSection>
-              <ResultSection title="Artists">
+              <ResultSection title={t("search.artists")}>
                 {res.artists.length ? (
                   <div className="pill-row">
                     {res.artists.map((a) => (
@@ -224,10 +226,10 @@ export function GlobalSearch() {
                     ))}
                   </div>
                 ) : (
-                  <div className="muted">No matches</div>
+                  <div className="muted">{t("search.noMatches")}</div>
                 )}
               </ResultSection>
-              <ResultSection title="Playlists">
+              <ResultSection title={t("search.playlists")}>
                 {res.playlists.length ? (
                   <div className="pill-row">
                     {res.playlists.map((p) => (
@@ -242,13 +244,13 @@ export function GlobalSearch() {
                     ))}
                   </div>
                 ) : (
-                  <div className="muted">No matches</div>
+                  <div className="muted">{t("search.noMatches")}</div>
                 )}
               </ResultSection>
             </>
           ) : (
             <div style={{ padding: 10 }} className="muted">
-              No matches
+              {t("search.noMatches")}
             </div>
           )}
 
@@ -262,7 +264,7 @@ export function GlobalSearch() {
                 nav("/");
               }}
             >
-              Clear
+              {t("search.clear")}
             </button>
           </div>
         </div>

@@ -3,8 +3,10 @@ import { useParams, Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
+import { useI18n } from "../i18n";
 
 function ResetPinButton({ onClick, busy }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -16,12 +18,13 @@ function ResetPinButton({ onClick, busy }) {
         onClick();
       }}
     >
-      Сбросить
+      {t("album.meta.reset")}
     </button>
   );
 }
 
 function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [title, setTitle] = useState(album?.title || "");
@@ -43,14 +46,14 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
       await lib.patchAlbumMeta(albumId, { clear: [field] });
       onRefresh();
     } catch (e) {
-      setErr(e.message || "Ошибка");
+      setErr(e.message || t("common.error"));
     }
     setBusy(false);
   };
 
   const save = async () => {
     if (!title.trim()) {
-      setErr("Укажите название альбома");
+      setErr(t("album.meta.needTitle"));
       return;
     }
     setBusy(true);
@@ -65,14 +68,14 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
       };
       if (year.trim()) {
         const y = parseInt(year, 10);
-        if (!Number.isFinite(y)) throw new Error("Некорректный год");
+        if (!Number.isFinite(y)) throw new Error(t("album.meta.badYear"));
         body.year = y;
       }
       await lib.patchAlbumMeta(albumId, body);
       onRefresh();
       onClose();
     } catch (e) {
-      setErr(e.message || "Ошибка сохранения");
+      setErr(e.message || t("album.meta.saveError"));
     }
     setBusy(false);
   };
@@ -80,33 +83,32 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>Альбом</h3>
+        <h3 style={{ marginTop: 0 }}>{t("album.editTitle")}</h3>
         <p className="muted" style={{ fontSize: "0.9rem", marginTop: "-0.5rem" }}>
-          Название, исполнитель и год для всех треков этого альбома в библиотеке. Своя обложка не заменяется
-          автоматически из MusicBrainz. «Сбросить» возвращает значение из тегов / снимает закрепление.
+          {t("album.meta.help")}
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
         <p>
           <label>
-            Название {m.title ? <ResetPinButton onClick={() => resetField("title")} busy={busy} /> : null}
+            {t("album.meta.title")} {m.title ? <ResetPinButton onClick={() => resetField("title")} busy={busy} /> : null}
           </label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} />
         </p>
         <p>
           <label>
-            Исполнитель {m.artist ? <ResetPinButton onClick={() => resetField("artist")} busy={busy} /> : null}
+            {t("album.meta.artist")} {m.artist ? <ResetPinButton onClick={() => resetField("artist")} busy={busy} /> : null}
           </label>
           <input value={artist} onChange={(e) => setArtist(e.target.value)} />
         </p>
         <p>
           <label>
-            Год {m.year ? <ResetPinButton onClick={() => resetField("year")} busy={busy} /> : null}
+            {t("album.meta.year")} {m.year ? <ResetPinButton onClick={() => resetField("year")} busy={busy} /> : null}
           </label>
-          <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Напр. 2020" />
+          <input value={year} onChange={(e) => setYear(e.target.value)} placeholder={t("album.meta.yearExample")} />
         </p>
         <p>
           <label>
-            Обложка {m.cover ? <ResetPinButton onClick={() => resetField("cover")} busy={busy} /> : null}
+            {t("album.meta.cover")} {m.cover ? <ResetPinButton onClick={() => resetField("cover")} busy={busy} /> : null}
           </label>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
             {album?.coverUrl || m.cover ? (
@@ -132,7 +134,7 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
                   await lib.uploadAlbumCover(albumId, file);
                   onRefresh();
                 } catch (ex) {
-                  setErr(ex.message || "Ошибка загрузки");
+                  setErr(ex.message || t("album.meta.uploadError"));
                 }
                 setBusy(false);
               }}
@@ -154,19 +156,219 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
                   setBusy(false);
                 }}
               >
-                Удалить файл
+                {t("common.deleteFile")}
               </button>
             )}
           </div>
         </p>
         <p style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <button type="button" className="ghost" disabled={busy} onClick={onClose}>
-            Отмена
+            {t("common.cancel")}
           </button>
           <button type="button" disabled={busy} onClick={save}>
-            Сохранить
+            {t("common.save")}
           </button>
         </p>
+      </div>
+    </div>
+  );
+}
+
+function ImprintModal({ albumId, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [dry, setDry] = useState(null);
+  const [sel, setSel] = useState({}); // trackId -> field -> bool
+  const [jobId, setJobId] = useState("");
+  const [job, setJob] = useState(null);
+  const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr("");
+      setResults(null);
+      try {
+        const d = await lib.albumImprintDryRun(albumId);
+        if (cancelled) return;
+        setDry(d);
+        const next = {};
+        for (const tr of Array.isArray(d?.tracks) ? d.tracks : []) {
+          const m = {};
+          for (const it of Array.isArray(tr?.diff) ? tr.diff : []) {
+            if (it?.supported) m[it.field] = true;
+          }
+          next[tr.trackId] = m;
+        }
+        setSel(next);
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Ошибка dry-run");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [albumId]);
+
+  const toggle = (trackId, field) => {
+    setSel((s) => ({ ...s, [trackId]: { ...(s[trackId] || {}), [field]: !(s?.[trackId]?.[field]) } }));
+  };
+
+  const apply = async () => {
+    if (!dry?.tracks?.length) {
+      setErr("Нет треков");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      const tracks = [];
+      for (const tr of dry.tracks) {
+        const m = sel?.[tr.trackId] || {};
+        const fields = Object.entries(m)
+          .filter(([, v]) => !!v)
+          .map(([k]) => k);
+        if (fields.length) tracks.push({ trackId: tr.trackId, fields });
+      }
+      if (!tracks.length) throw new Error("Ничего не выбрано");
+      const r = await lib.albumImprintApply(albumId, { confirm: true, tracks });
+      setJobId(r?.jobId || "");
+    } catch (e) {
+      setErr(e.message || "Ошибка imprint");
+    }
+    setBusy(false);
+  };
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    setResults(null);
+    setJob(null);
+    const tick = async () => {
+      try {
+        const j = await lib.job(jobId);
+        if (cancelled) return;
+        setJob(j);
+        if (j?.status === "done" || j?.status === "failed") {
+          if (j?.result) setResults(j.result);
+          return true;
+        }
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Ошибка статуса job");
+        return true;
+      }
+      return false;
+    };
+    tick();
+    const tmr = setInterval(async () => {
+      const done = await tick();
+      if (done) clearInterval(tmr);
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearInterval(tmr);
+    };
+  }, [jobId]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal" style={{ maxWidth: 860 }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Imprint metadata</h3>
+        <p className="muted" style={{ marginTop: "-0.5rem" }}>
+          Предпросмотр изменений перед записью тегов в файлы. По умолчанию выбраны все поддерживаемые поля.
+        </p>
+        {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
+        {loading ? (
+          <p className="muted">Загрузка…</p>
+        ) : (
+          <>
+            {jobId ? (
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <strong>Job</strong>
+                  <span className="muted" style={{ fontSize: "0.9rem" }}>
+                    {jobId}
+                  </span>
+                </div>
+                <div className="muted" style={{ marginTop: 6 }}>
+                  Статус: {job?.status || "…"}
+                  {typeof job?.progressDone === "number" && typeof job?.progressTotal === "number"
+                    ? ` · ${job.progressDone}/${job.progressTotal}`
+                    : ""}
+                  {job?.progressMsg ? ` · ${job.progressMsg}` : ""}
+                </div>
+                {typeof job?.progressDone === "number" && typeof job?.progressTotal === "number" && job.progressTotal > 0 ? (
+                  <div style={{ marginTop: 8, height: 8, background: "rgba(255,255,255,0.08)", borderRadius: 999 }}>
+                    <div
+                      style={{
+                        height: 8,
+                        width: `${Math.min(100, Math.max(0, Math.round((job.progressDone / job.progressTotal) * 100)))}%`,
+                        background: "rgba(255,255,255,0.35)",
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {job?.lastError ? <div style={{ color: "tomato", marginTop: 8 }}>{job.lastError}</div> : null}
+              </div>
+            ) : null}
+            <div style={{ maxHeight: "55vh", overflow: "auto", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }}>
+              {(dry?.tracks || []).map((tr) => (
+                <div key={tr.trackId} style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <strong style={{ fontSize: "0.95rem" }}>{tr.fileName}</strong>
+                    <span className="muted" style={{ fontSize: "0.85rem" }}>{tr.format}</span>
+                  </div>
+                  {Array.isArray(tr.warnings) && tr.warnings.length ? (
+                    <div className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>
+                      {tr.warnings.join(" · ")}
+                    </div>
+                  ) : null}
+                  <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
+                    {(tr.diff || []).map((d) => (
+                      <label key={d.field} style={{ display: "grid", gridTemplateColumns: "22px 120px 1fr 1fr", gap: 8, alignItems: "baseline" }}>
+                        <input
+                          type="checkbox"
+                          disabled={busy || !d.supported}
+                          checked={!!(sel?.[tr.trackId]?.[d.field]) && !!d.supported}
+                          onChange={() => toggle(tr.trackId, d.field)}
+                        />
+                        <span className="muted">{d.field}</span>
+                        <span style={{ opacity: d.changed ? 1 : 0.6 }}>{d.before ?? "—"}</span>
+                        <span style={{ opacity: d.changed ? 1 : 0.6 }}>{d.after ?? "—"}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {results?.results ? (
+              <div style={{ marginTop: 12 }}>
+                <h4 style={{ margin: "0 0 8px 0" }}>Результаты</h4>
+                <div className="muted" style={{ fontSize: "0.9rem" }}>
+                  {results.results.map((r) => (
+                    <div key={r.trackId}>
+                      {r.fileName}: {r.error ? `ошибка: ${r.error}` : "ok"}
+                      {Array.isArray(r.warnings) && r.warnings.length ? ` (${r.warnings.join("; ")})` : ""}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
+          <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+            Закрыть
+          </button>
+          <button type="button" onClick={apply} disabled={busy || loading || !!jobId}>
+            Apply imprint
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -202,10 +404,12 @@ function sortTracks(list, key, dir) {
 }
 
 export function Album() {
+  const { t } = useI18n();
   const { id } = useParams();
   const [tr, setTr] = useState([]);
   const [a, setA] = useState(null);
   const [editAlbum, setEditAlbum] = useState(false);
+  const [imprintOpen, setImprintOpen] = useState(false);
   const [liked, setLiked] = useState(new Set());
   const [sortKey, setSortKey] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
@@ -235,10 +439,10 @@ export function Album() {
     if (!tr.length) return;
     const items = tr.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -260,10 +464,10 @@ export function Album() {
   const shuffle = () => {
     const items = tr.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -274,10 +478,10 @@ export function Album() {
   const playNext = (t) => {
     const item = {
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     };
@@ -302,7 +506,7 @@ export function Album() {
     <div>
       <p>
         <Link to="/" className="muted">
-          ← Home
+          ← {t("nav.home")}
         </Link>
       </p>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "1rem" }}>
@@ -318,7 +522,7 @@ export function Album() {
         )}
         <div style={{ minWidth: 0 }}>
           <h2 style={{ margin: 0 }}>
-            {a?.title || "Album"}
+            {a?.title || t("album.editTitle")}
             {a?.year != null ? (
               <span className="muted" style={{ fontWeight: 400 }}>
                 {" "}
@@ -332,17 +536,23 @@ export function Album() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           {getToken() ? (
             <button type="button" className="ghost" onClick={() => setEditAlbum(true)}>
-              Редактировать альбом
+              {t("album.editButton")}
             </button>
           ) : null}
-          <button type="button" className="ghost" onClick={shuffle} disabled={!tr.length} title="Shuffle">
-            Shuffle
+          {getToken() ? (
+            <button type="button" className="ghost" onClick={() => setImprintOpen(true)}>
+              Imprint metadata
+            </button>
+          ) : null}
+          <button type="button" className="ghost" onClick={shuffle} disabled={!tr.length} title={t("tracks.shuffle")}>
+            {t("tracks.shuffle")}
           </button>
         </div>
       </div>
       {editAlbum && a ? (
         <AlbumMetaModal albumId={id} album={a} onClose={() => setEditAlbum(false)} onRefresh={load} />
       ) : null}
+      {imprintOpen ? <ImprintModal albumId={id} onClose={() => setImprintOpen(false)} /> : null}
       <ul className="plain-list">
         <TrackHeader
           columns="album"
@@ -369,7 +579,7 @@ export function Album() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={liked.has(t.id)}
             onToggleLike={(id2) => toggleLike(id2)}
-            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || "Untitled"}`}
+            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || t("common.untitled")}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             columns="album"

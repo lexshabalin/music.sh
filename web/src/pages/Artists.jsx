@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { lib } from "../api";
+import { useI18n } from "../i18n";
 
 export function Artists() {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [list, setList] = useState([]);
   const [err, setErr] = useState("");
@@ -23,7 +25,7 @@ export function Artists() {
   return (
     <div>
       <div className="search">
-        <input placeholder="Search artists…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder={t("artists.searchArtists")} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <ul className="plain-list">
@@ -32,7 +34,7 @@ export function Artists() {
             <Link to={"/artist/" + a.id} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
               {a.name}
             </Link>
-            <span className="muted">Albums →</span>
+            <span className="muted">{t("artists.albumsArrow")}</span>
           </li>
         ))}
       </ul>

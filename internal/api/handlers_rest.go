@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"musicsh/internal/imprint"
 	"musicsh/internal/store"
 	"musicsh/internal/stream"
 	"musicsh/internal/scanner"
@@ -646,6 +647,154 @@ func (a *App) deleteTrackCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type imprintApplyIn struct {
+	Confirm bool `json:"confirm"`
+	Tracks  []struct {
+		TrackID string   `json:"trackId"`
+		Fields  []string `json:"fields"`
+	} `json:"tracks"`
+}
+
+func (a *App) albumImprintDryRun(w http.ResponseWriter, r *http.Request) {
+	albumID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	rows, err := a.DB.GetAlbumTracksForImprint(r.Context(), albumID)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	var targets []imprint.TrackTarget
+	for _, tr := range rows {
+		targets = append(targets, imprint.TrackTarget{
+			TrackID:      tr.TrackID,
+			FilePath:     tr.FilePath,
+			Format:       tr.Format,
+			Title:        tr.Title,
+			Artist:       tr.ArtistName,
+			Album:        tr.AlbumTitle,
+			Year:         tr.Year,
+			TrackNo:      tr.TrackNo,
+			DiscNo:       tr.DiscNo,
+			CoverRelPath: tr.CoverRelPath,
+		})
+	}
+	dr, err := imprint.DryRunAlbum(targets, a.DataDir)
+	if err != nil {
+		JSONError(w, 500, "imprint")
+		return
+	}
+	dr.AlbumID = albumID
+	JSON(w, 200, dr)
+}
+
+func (a *App) albumImprintApply(w http.ResponseWriter, r *http.Request) {
+	albumID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	var in imprintApplyIn
+	if err := ReadJSON(r, &in); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	if !in.Confirm {
+		JSONError(w, 400, "confirm required")
+		return
+	}
+	// Build selection map: trackId -> field -> bool
+	sel := map[string]map[imprint.Field]bool{}
+	for _, t := range in.Tracks {
+		tid := strings.TrimSpace(t.TrackID)
+		if tid == "" {
+			continue
+		}
+		m := sel[tid]
+		if m == nil {
+			m = map[imprint.Field]bool{}
+			sel[tid] = m
+		}
+		for _, f := range t.Fields {
+			switch strings.ToLower(strings.TrimSpace(f)) {
+			case "title":
+				m[imprint.FieldTitle] = true
+			case "artist", "artistname":
+				m[imprint.FieldArtist] = true
+			case "album", "albumtitle":
+				m[imprint.FieldAlbum] = true
+			case "year":
+				m[imprint.FieldYear] = true
+			case "trackno", "track":
+				m[imprint.FieldTrackNo] = true
+			case "discno", "disc":
+				m[imprint.FieldDiscNo] = true
+			case "cover", "art":
+				m[imprint.FieldCover] = true
+			}
+		}
+	}
+
+	rows, err := a.DB.GetAlbumTracksForImprint(r.Context(), albumID)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	_ = rows
+
+	jobID := uuid.New()
+	payload := map[string]any{
+		"albumId": albumID.String(),
+		"tracks":  in.Tracks,
+	}
+	b, _ := json.Marshal(payload)
+	if err := a.DB.EnqueueJob(r.Context(), jobID, string(store.JobImprintTags), string(b)); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 202, map[string]any{"jobId": jobID.String()})
+}
+
+func (a *App) getJob(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	st, err := a.DB.GetJobStatus(r.Context(), id)
+	if err != nil {
+		JSONError(w, 404, "not found")
+		return
+	}
+	out := map[string]any{
+		"id":        st.ID.String(),
+		"type":      st.Type,
+		"status":    st.Status,
+		"attempts":  st.Attempts,
+		"createdAt": st.CreatedAt,
+	}
+	if st.LastError != nil {
+		out["lastError"] = *st.LastError
+	}
+	if st.ProgressDone != nil {
+		out["progressDone"] = *st.ProgressDone
+	}
+	if st.ProgressTotal != nil {
+		out["progressTotal"] = *st.ProgressTotal
+	}
+	if st.ProgressMsg != nil {
+		out["progressMsg"] = *st.ProgressMsg
+	}
+	if st.ResultJSON != nil {
+		var j any
+		_ = json.Unmarshal([]byte(*st.ResultJSON), &j)
+		out["result"] = j
+	}
+	JSON(w, 200, out)
 }
 
 // --- scan ---

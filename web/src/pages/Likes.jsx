@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackRow } from "../components/TrackMenu";
+import { useI18n } from "../i18n";
 
 export function Likes() {
+  const { t } = useI18n();
   const [tracks, setT] = useState([]);
   const p = usePlayer();
   const likedSet = new Set(tracks.map((t) => t.id));
@@ -20,10 +22,10 @@ export function Likes() {
   const playAt = (startIdx) => {
     const items = tracks.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -33,10 +35,10 @@ export function Likes() {
   const playNext = (t) => {
     const item = {
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     };
@@ -54,7 +56,7 @@ export function Likes() {
 
   return (
     <div>
-      <h2>Likes</h2>
+      <h2>{t("likes.title")}</h2>
       <ul className="plain-list">
         {tracks.map((t, i) => (
           <TrackRow
@@ -65,7 +67,7 @@ export function Likes() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={likedSet.has(t.id)}
             onToggleLike={() => unlike(t.id)}
-            label={`${t.title || "Untitled"}`}
+            label={`${t.title || t("common.untitled")}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             onMetaSaved={load}

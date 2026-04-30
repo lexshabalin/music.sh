@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
+import { useI18n } from "../i18n";
 
 function hash32(s) {
   let h = 2166136261;
@@ -32,6 +33,7 @@ function pickCoversForPlaylist(plId, tracks) {
 }
 
 export function Playlists() {
+  const { t } = useI18n();
   const [list, setList] = useState([]);
   const [name, setN] = useState("");
   const [desc, setDesc] = useState("");
@@ -76,11 +78,11 @@ export function Playlists() {
 
   return (
     <div>
-      <h2>Playlists</h2>
+      <h2>{t("playlist.playlists")}</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <div className="card" style={{ marginBottom: 16, display: "flex", gap: 8 }}>
-        <input placeholder="New playlist" value={name} onChange={(e) => setN(e.target.value)} />
-        <input placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <input placeholder={t("playlist.newPlaylist")} value={name} onChange={(e) => setN(e.target.value)} />
+        <input placeholder={t("playlist.descriptionOptional")} value={desc} onChange={(e) => setDesc(e.target.value)} />
         <button
           type="button"
           onClick={async () => {
@@ -95,7 +97,7 @@ export function Playlists() {
             }
           }}
         >
-          Create
+          {t("playlist.create")}
         </button>
       </div>
       <div className="grid">
@@ -113,8 +115,8 @@ export function Playlists() {
                 <button
                   type="button"
                   className="tile-play-btn"
-                  title="Play playlist"
-                  aria-label="Play playlist"
+                  title={t("playlist.play")}
+                  aria-label={t("playlist.play")}
                   onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -123,10 +125,10 @@ export function Playlists() {
                       const tracks = Array.isArray(pl?.tracks) ? pl.tracks : [];
                       const items = tracks.map((t) => ({
                         id: t.id,
-                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
                         url: lib.streamUrl(t.id),
                         artist: t.artist?.name || "",
-                        title: t.title || "Track",
+                        title: t.title || t("common.track"),
                         album: t.album?.title || "",
                         coverUrl: effectiveTrackCoverUrl(t),
                       }));

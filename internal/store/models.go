@@ -17,6 +17,8 @@ type User struct {
 	BackgroundPreset *string `json:"backgroundPreset,omitempty"`
 	BackgroundURL    *string `json:"backgroundUrl,omitempty"`
 	BackgroundMime   *string `json:"backgroundMime,omitempty"`
+
+	UILang string `json:"uiLang,omitempty"`
 }
 
 type Artist struct {
@@ -119,6 +121,7 @@ const (
 	JobScan        JobType = "scan"
 	JobFetchAlbum  JobType = "fetch_album"
 	JobIdentifyTrack JobType = "identify_track"
+	JobImprintTags JobType = "imprint_tags"
 )
 
 type Job struct {

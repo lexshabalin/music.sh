@@ -3,8 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
+import { useI18n } from "../i18n";
 
 export function Artist() {
+  const { t } = useI18n();
   const { id } = useParams();
   const [q, setQ] = useState("");
   const [albums, setAlbums] = useState([]);
@@ -28,11 +30,11 @@ export function Artist() {
     <div>
       <p>
         <Link to="/artists" className="muted">
-          ← Artists
+          {t("artists.back")}
         </Link>
       </p>
       <div className="search">
-        <input placeholder="Search albums…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder={t("artists.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <div className="grid">
@@ -44,8 +46,8 @@ export function Artist() {
                 <button
                   type="button"
                   className="tile-play-btn"
-                  title="Play album"
-                  aria-label="Play album"
+                  title={t("library.playAlbum")}
+                  aria-label={t("library.playAlbum")}
                   onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -53,10 +55,10 @@ export function Artist() {
                       const tr = await lib.tracks("", a.id);
                       const items = (Array.isArray(tr) ? tr : []).map((t) => ({
                         id: t.id,
-                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
                         url: lib.streamUrl(t.id),
                         artist: t.artist?.name || "",
-                        title: t.title || "Track",
+                        title: t.title || t("common.track"),
                         album: t.album?.title || a.title || "",
                         coverUrl: effectiveTrackCoverUrl(t) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
                       }));
@@ -70,7 +72,7 @@ export function Artist() {
               <div className="album-meta">
                 <div className="album-title">{a.title}</div>
                 <div className="album-sub">
-                  <span>{a.artistName || "—"}</span>
+                  <span>{a.artistName || t("common.unknown")}</span>
                   {a.year ? <span className="album-year">{a.year}</span> : null}
                 </div>
               </div>

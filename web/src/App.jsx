@@ -1,6 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { I18nContext, I18nProvider, LANGS, normalizeLang, useI18n } from "./i18n";
 import {
   auth,
   getToken,
@@ -61,13 +62,19 @@ class ErrorBoundary extends React.Component {
     if (this.state.err) {
       return (
         <div className="card" style={{ maxWidth: 720, margin: "2rem auto" }}>
-          <h2>UI crashed</h2>
-          <p className="muted">Open DevTools Console to see the error.</p>
+          <I18nContext.Consumer>
+            {({ t }) => (
+              <>
+                <h2>{t("err.uiCrashed")}</h2>
+                <p className="muted">{t("err.openConsole")}</p>
+              </>
+            )}
+          </I18nContext.Consumer>
           <pre style={{ whiteSpace: "pre-wrap", color: "tomato" }}>
             {String(this.state.err?.message || this.state.err)}
           </pre>
           <button className="ghost" type="button" onClick={() => this.setState({ err: null })}>
-            Try again
+            <I18nContext.Consumer>{({ t }) => t("err.tryAgain")}</I18nContext.Consumer>
           </button>
         </div>
       );
@@ -104,6 +111,7 @@ function BrandIcon() {
 function Shell({ children }) {
   const location = useLocation();
   const p = usePlayer();
+  const { t, lang, setLang } = useI18n();
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [curT, setCurT] = React.useState(0);
   const [dur, setDur] = React.useState(0);
@@ -198,9 +206,9 @@ function Shell({ children }) {
       const el = p.ref.current;
       if (el) el.pause();
     } catch (_) {}
-    setRemotePlayingNotice("Музыка воспроизводится на другом устройстве");
+    setRemotePlayingNotice(t("player.playingRemote"));
     window.setTimeout(() => setRemotePlayingNotice(""), 9000);
-  }, [p.ref]);
+  }, [p.ref, t]);
 
   const flushPlayback = React.useCallback(async (opts = {}) => {
     const forceNow = !!opts.forceNow;
@@ -542,6 +550,16 @@ function Shell({ children }) {
       cancelled = true;
     };
   }, [!!getToken()]);
+
+  // Sync UI language from server profile (one-way) after auth.
+  React.useEffect(() => {
+    const serverLang = normalizeLang(me?.uiLang);
+    if (!getToken() || !serverLang) return;
+    if (serverLang !== normalizeLang(lang)) {
+      setLang(serverLang);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.uiLang, !!getToken()]);
 
   React.useEffect(() => {
     // Close mobile sidebar on route changes.
@@ -981,7 +999,7 @@ function Shell({ children }) {
             <button
               type="button"
               className="mobile-nav-toggle ghost"
-              aria-label="Toggle navigation"
+              aria-label={t("menu.toggleNav")}
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen((v) => !v)}
             >
@@ -1005,8 +1023,8 @@ function Shell({ children }) {
                 ref={userBtnRef}
                 type="button"
                 className="user-chip"
-                title="Profile"
-                aria-label="Profile"
+                title={t("menu.profile")}
+                aria-label={t("menu.profile")}
                 onClick={() => setShowUserMenu((v) => !v)}
               >
                 {avatarUrl ? <img className="user-avatar" src={avatarUrl} alt="" /> : <div className="user-avatar placeholder" />}
@@ -1027,12 +1045,12 @@ function Shell({ children }) {
               ) : null}
             </div>
             <nav className="side-nav">
-              <Link to="/" onClick={() => setMobileNavOpen(false)}>Home</Link>
-              <Link to="/songs" onClick={() => setMobileNavOpen(false)}>Songs</Link>
-              <Link to="/artists" onClick={() => setMobileNavOpen(false)}>Artists</Link>
-              <Link to="/albums" onClick={() => setMobileNavOpen(false)}>Albums</Link>
-              <Link to="/playlists" onClick={() => setMobileNavOpen(false)}>Playlists</Link>
-              <Link to="/likes" onClick={() => setMobileNavOpen(false)}>Likes</Link>
+              <Link to="/" onClick={() => setMobileNavOpen(false)}>{t("nav.home")}</Link>
+              <Link to="/songs" onClick={() => setMobileNavOpen(false)}>{t("nav.songs")}</Link>
+              <Link to="/artists" onClick={() => setMobileNavOpen(false)}>{t("nav.artists")}</Link>
+              <Link to="/albums" onClick={() => setMobileNavOpen(false)}>{t("nav.albums")}</Link>
+              <Link to="/playlists" onClick={() => setMobileNavOpen(false)}>{t("nav.playlists")}</Link>
+              <Link to="/likes" onClick={() => setMobileNavOpen(false)}>{t("nav.likes")}</Link>
             </nav>
           </aside>
         ) : null}
@@ -1050,7 +1068,7 @@ function Shell({ children }) {
               claimPlaybackSync();
               p.prev();
             }}
-            title="Rewind"
+            title={t("player.rewind")}
           >
             <IRewind />
           </button>
@@ -1073,7 +1091,7 @@ function Shell({ children }) {
               }
               else el.pause();
             }}
-            title={isPlaying ? "Pause" : "Play"}
+            title={isPlaying ? t("player.pause") : t("player.play")}
           >
             {isPlaying ? <IPause /> : <IPlay />}
           </button>
@@ -1085,7 +1103,7 @@ function Shell({ children }) {
               claimPlaybackSync();
               p.next();
             }}
-            title="Fast-forward"
+            title={t("player.fastForward")}
           >
             <IFastForward />
           </button>
@@ -1094,14 +1112,14 @@ function Shell({ children }) {
             className="player-skip"
             type="button"
             onClick={p.toggleMute}
-            title={p.muted ? "Unmute" : "Mute"}
+            title={p.muted ? t("player.unmute") : t("player.mute")}
           >
             {p.muted ? <ISpeakerOff /> : <ISpeaker />}
           </button>
 
           <input
             className="range mono vol"
-            aria-label="Volume"
+            aria-label={t("player.volume")}
             type="range"
             min="0"
             max="1"
@@ -1128,7 +1146,7 @@ function Shell({ children }) {
           <button
             className="ghost"
             type="button"
-            title={liked ? "Unlike" : "Like"}
+            title={liked ? t("player.unlike") : t("player.like")}
             onClick={async () => {
               try {
                 if (!p.current?.id) return;
@@ -1142,12 +1160,12 @@ function Shell({ children }) {
             <IHeart />
           </button>
 
-          <button className="ghost" type="button" title="Add to playlist" onClick={() => setShowPlModal(true)}>
+          <button className="ghost" type="button" title={t("player.addToPlaylist")} onClick={() => setShowPlModal(true)}>
             <IPlus />
           </button>
 
           {remotePlaybackActive ? (
-            <span className="player-remote-indicator" title="Playing on another device" aria-label="Playing on another device">
+            <span className="player-remote-indicator" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
               <IRemoteDevice />
             </span>
           ) : null}
@@ -1159,7 +1177,7 @@ function Shell({ children }) {
           <div className="player-progress-wrap">
             <input
               className="range mono progress"
-              aria-label="Seek"
+              aria-label={t("player.seek")}
               type="range"
               min="0"
               max={Math.max(1, dur || 0)}
@@ -1180,8 +1198,8 @@ function Shell({ children }) {
             ref={queueBtnRef}
             className="player-skip"
             type="button"
-            title="Queue"
-            aria-label="Queue"
+            title={t("player.queue")}
+            aria-label={t("player.queue")}
             onClick={() => setShowQueue((v) => !v)}
           >
             <IQueue />
@@ -1261,7 +1279,7 @@ function Shell({ children }) {
             </div>
             <div className="player-mini-controls">
               {remotePlaybackActive ? (
-                <span className="player-remote-indicator player-remote-indicator--mini" title="Playing on another device" aria-label="Playing on another device">
+                <span className="player-remote-indicator player-remote-indicator--mini" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
                   <IRemoteDevice />
                 </span>
               ) : null}
@@ -1273,7 +1291,7 @@ function Shell({ children }) {
                   claimPlaybackSync();
                   p.prev();
                 }}
-                title="Previous"
+                title={t("player.prev")}
               >
                 <IRewind />
               </button>
@@ -1304,7 +1322,7 @@ function Shell({ children }) {
                   claimPlaybackSync();
                   p.next();
                 }}
-                title="Next"
+                title={t("player.next")}
               >
                 <IFastForward />
               </button>
@@ -1487,7 +1505,7 @@ function Shell({ children }) {
                     <div className="mobile-player-progress">
                       <input
                         className="range mono progress"
-                        aria-label="Seek"
+                        aria-label={t("player.seek")}
                         type="range"
                         min="0"
                         max={Math.max(1, dur || 0)}
@@ -1515,7 +1533,7 @@ function Shell({ children }) {
                           claimPlaybackSync();
                           p.prev();
                         }}
-                        title="Previous"
+                        title={t("player.prev")}
                       >
                         <IRewind />
                       </button>
@@ -1533,7 +1551,7 @@ function Shell({ children }) {
                             el.pause();
                           }
                         }}
-                        title={isPlaying ? "Pause" : "Play"}
+                        title={isPlaying ? t("player.pause") : t("player.play")}
                       >
                         {isPlaying ? <IPause /> : <IPlay />}
                       </button>
@@ -1544,7 +1562,7 @@ function Shell({ children }) {
                           claimPlaybackSync();
                           p.next();
                         }}
-                        title="Next"
+                        title={t("player.next")}
                       >
                         <IFastForward />
                       </button>
@@ -1552,7 +1570,7 @@ function Shell({ children }) {
                   </section>
 
                   <section className="mobile-player-page mobile-player-page--queue" aria-label="Queue">
-                    <div className="mobile-queue-page-head">Up next</div>
+                    <div className="mobile-queue-page-head">{t("player.upNext")}</div>
                     <div
                       className="mobile-queue-page-list"
                       onTouchStart={(e) => {
@@ -1589,11 +1607,11 @@ function Shell({ children }) {
                         const q = Array.isArray(p.queue) ? p.queue : [];
                         const start = typeof p.index === "number" && p.index >= 0 ? p.index : 0;
                         const view = q.slice(start);
-                        if (!view.length) return <div className="muted" style={{ padding: 10 }}>Empty queue</div>;
+                        if (!view.length) return <div className="muted" style={{ padding: 10 }}>{t("player.emptyQueue")}</div>;
                         return view.map((it, i) => {
                           const actualIdx = start + i;
                           const active = actualIdx === p.index;
-                          const title = it.title || it.label || "Track";
+                          const title = it.title || it.label || t("common.track");
                           const sub = [it.artist, it.album].filter(Boolean).join(" • ");
                           return (
                             <button
@@ -1713,6 +1731,15 @@ function Shell({ children }) {
           me={me}
           avatarUrl={avatarUrl}
           bg={bg}
+          lang={lang}
+          onLangChange={async (nextLang) => {
+            const l = normalizeLang(nextLang);
+            setLang(l);
+            try {
+              await auth.setUILang(l);
+              setMe((prev) => (prev ? { ...prev, uiLang: l } : prev));
+            } catch (_) {}
+          }}
           onBgChange={setBg}
           onClose={() => setShowProfile(false)}
           onAvatarUpdated={async () => {
@@ -1763,6 +1790,7 @@ function BackgroundLayer({ bg }) {
 }
 
 function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
+  const { t } = useI18n();
   const menuRef = React.useRef(null);
   React.useEffect(() => {
     const onDoc = (e) => {
@@ -1803,17 +1831,18 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
         {name}
       </div>
       <button type="button" className="ghost menu-btn" onClick={onOpenProfile}>
-        Profile settings
+        {t("menu.profileSettings")}
       </button>
       <button type="button" className="ghost menu-btn" onClick={onLogout}>
-        Log out
+        {t("menu.logout")}
       </button>
     </div>,
     document.body
   );
 }
 
-function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated, onLogout }) {
+function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClose, onAvatarUpdated, onLogout }) {
+  const { t } = useI18n();
   const [err, setErr] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [cur, setCur] = React.useState("");
@@ -1823,9 +1852,9 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <h3 style={{ margin: 0 }}>Profile</h3>
+          <h3 style={{ margin: 0 }}>{t("profile.title")}</h3>
           <button className="ghost" type="button" onClick={onClose}>
-            Close
+            {t("profile.close")}
           </button>
         </div>
 
@@ -1834,13 +1863,13 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12 }}>
           {avatarUrl ? <img src={avatarUrl} alt="" className="profile-avatar" /> : <div className="profile-avatar placeholder" />}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800 }}>{me?.displayName || me?.username || me?.email || "User"}</div>
+            <div style={{ fontWeight: 800 }}>{me?.displayName || me?.username || me?.email || t("common.user")}</div>
             <div className="muted" style={{ fontSize: 12 }}>
               {me?.email || ""}
             </div>
             <div style={{ marginTop: 8 }}>
               <label className="ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, cursor: "pointer" }}>
-                Upload avatar
+                {t("profile.uploadAvatar")}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
@@ -1866,7 +1895,26 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
         </div>
 
         <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-          <h4 style={{ margin: "0 0 8px" }}>Background</h4>
+          <h4 style={{ margin: "0 0 8px" }}>{t("profile.language")}</h4>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              className="lang-select"
+              value={normalizeLang(lang)}
+              disabled={busy}
+              onChange={(e) => onLangChange?.(e.target.value)}
+              aria-label={t("profile.language")}
+            >
+              {LANGS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.flag} {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <h4 style={{ margin: "0 0 8px" }}>{t("profile.background")}</h4>
           <div style={{ display: "grid", gap: 10 }}>
             <div className="bg-presets">
               <button
@@ -1884,9 +1932,9 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
                 disabled={busy}
-                title="No background"
+                title={t("profile.bg.none")}
               >
-                None
+                {t("profile.bg.none")}
               </button>
 
               <button
@@ -1904,10 +1952,10 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
                 disabled={busy}
-                title="Lava lamp"
+                title={t("profile.bg.lava")}
               >
                 <span className="bg-thumb bg-thumb--lava" aria-hidden="true" />
-                Lava
+                {t("profile.bg.lava")}
               </button>
 
               <button
@@ -1925,10 +1973,10 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
                 disabled={busy}
-                title="Dark grain"
+                title={t("profile.bg.grain")}
               >
                 <span className="bg-thumb bg-thumb--grain" aria-hidden="true" />
-                Grain
+                {t("profile.bg.grain")}
               </button>
 
               <button
@@ -1946,10 +1994,10 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
                 disabled={busy}
-                title="Neon grid"
+                title={t("profile.bg.grid")}
               >
                 <span className="bg-thumb bg-thumb--grid" aria-hidden="true" />
-                Grid
+                {t("profile.bg.grid")}
               </button>
 
               <button
@@ -1967,17 +2015,17 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
                 disabled={busy}
-                title="Subtle waves"
+                title={t("profile.bg.waves")}
               >
                 <span className="bg-thumb bg-thumb--waves" aria-hidden="true" />
-                Waves
+                {t("profile.bg.waves")}
               </button>
 
-              <label className={`bg-preset ${bg?.type === "custom" ? "active" : ""}`} title="Upload your own">
+              <label className={`bg-preset ${bg?.type === "custom" ? "active" : ""}`} title={t("profile.bg.upload")}>
                 <span className="bg-thumb bg-thumb--upload" aria-hidden="true">
                   +
                 </span>
-                Upload
+                {t("profile.bg.upload")}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
@@ -2001,16 +2049,16 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
             </div>
 
             <div className="muted" style={{ fontSize: 12 }}>
-              Presets are instant. Upload supports images, GIFs, and short videos.
+              {t("profile.bg.hint")}
             </div>
           </div>
         </div>
 
         <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-          <h4 style={{ margin: "0 0 8px" }}>Change password</h4>
+          <h4 style={{ margin: "0 0 8px" }}>{t("profile.password.title")}</h4>
           <div style={{ display: "grid", gap: 8 }}>
-            <input type="password" placeholder="Current password" value={cur} onChange={(e) => setCur(e.target.value)} />
-            <input type="password" placeholder="New password (8+)" value={next} onChange={(e) => setNext(e.target.value)} />
+            <input type="password" placeholder={t("profile.password.current")} value={cur} onChange={(e) => setCur(e.target.value)} />
+            <input type="password" placeholder={t("profile.password.new")} value={next} onChange={(e) => setNext(e.target.value)} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 type="button"
@@ -2028,10 +2076,10 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
                   setBusy(false);
                 }}
               >
-                Save
+                {t("profile.save")}
               </button>
               <button className="ghost" type="button" onClick={onLogout} disabled={busy}>
-                Log out
+                {t("menu.logout")}
               </button>
             </div>
           </div>
@@ -2042,6 +2090,7 @@ function ProfileModal({ me, avatarUrl, bg, onBgChange, onClose, onAvatarUpdated,
 }
 
 function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
+  const { t } = useI18n();
   const popRef = React.useRef(null);
   const [box, setBox] = React.useState(null);
 
@@ -2103,13 +2152,13 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
         padding: 6,
       }}
       role="dialog"
-      aria-label="Queue"
+      aria-label={t("player.queue")}
     >
-      <div style={{ padding: "6px 8px", fontWeight: 800 }}>Queue</div>
+      <div style={{ padding: "6px 8px", fontWeight: 800 }}>{t("player.queue")}</div>
       {items.length ? (
         items.map((it, i) => {
           const active = i === currentIndex;
-          const title = it.title || it.label || "Track";
+          const title = it.title || it.label || t("common.track");
           const sub = [it.artist, it.album].filter(Boolean).join(" • ");
           return (
             <button
@@ -2140,7 +2189,7 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
         })
       ) : (
         <div className="muted" style={{ padding: 10 }}>
-          Empty queue
+          {t("player.emptyQueue")}
         </div>
       )}
     </div>
@@ -2156,52 +2205,54 @@ function HomeRedirect() {
 
 export function App() {
   return (
-    <Shell>
-      <ErrorBoundary>
-        <Routes>
-          <Route path="/" element={<HomeRedirect />} />
-          <Route
-            path="/login"
-            element={getToken() ? <Navigate to="/" replace /> : <Login />}
-          />
-          <Route
-            path="/register"
-            element={getToken() ? <Navigate to="/" replace /> : <Register />}
-          />
-          <Route
-            path="/album/:id"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Album />}
-          />
-          <Route
-            path="/songs"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Songs />}
-          />
-          <Route
-            path="/artists"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Artists />}
-          />
-          <Route
-            path="/artist/:id"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Artist />}
-          />
-          <Route
-            path="/albums"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Albums />}
-          />
-          <Route
-            path="/playlists"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Playlists />}
-          />
-          <Route
-            path="/playlist/:id"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Playlist />}
-          />
-          <Route
-            path="/likes"
-            element={!getToken() ? <Navigate to="/login" replace /> : <Likes />}
-          />
-        </Routes>
-      </ErrorBoundary>
-    </Shell>
+    <I18nProvider>
+      <Shell>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<HomeRedirect />} />
+            <Route
+              path="/login"
+              element={getToken() ? <Navigate to="/" replace /> : <Login />}
+            />
+            <Route
+              path="/register"
+              element={getToken() ? <Navigate to="/" replace /> : <Register />}
+            />
+            <Route
+              path="/album/:id"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Album />}
+            />
+            <Route
+              path="/songs"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Songs />}
+            />
+            <Route
+              path="/artists"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Artists />}
+            />
+            <Route
+              path="/artist/:id"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Artist />}
+            />
+            <Route
+              path="/albums"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Albums />}
+            />
+            <Route
+              path="/playlists"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Playlists />}
+            />
+            <Route
+              path="/playlist/:id"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Playlist />}
+            />
+            <Route
+              path="/likes"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Likes />}
+            />
+          </Routes>
+        </ErrorBoundary>
+      </Shell>
+    </I18nProvider>
   );
 }

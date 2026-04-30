@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getToken, lib } from "../api";
 import { IClock, IHeart } from "./icons";
+import { useI18n } from "../i18n";
 
 function fmtDur(ms) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
@@ -118,6 +119,7 @@ export function TrackRow({
   allowMetaEdit = true,
   onMetaSaved,
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
@@ -182,8 +184,8 @@ export function TrackRow({
     }
 
     const target = e.target;
-    const moreBtn = target?.closest?.('button[title="More"]');
-    const likeBtn = target?.closest?.('button[title="Like"]');
+    const moreBtn = target?.closest?.('button[data-action="more"]');
+    const likeBtn = target?.closest?.('button[data-action="like"]');
     if (moreBtn || likeBtn) return;
 
     suppressClickRef.current = true;
@@ -235,11 +237,11 @@ export function TrackRow({
               }
               onPlayAt(index);
             }}
-            aria-label={`Play ${label}`}
+            aria-label={`${t("tracks.playAria")} ${label}`}
           >
             <span className="track-title-text">{label}</span>
             <span className="track-mobile-sub muted">
-              {artistName || "Unknown Artist"}
+              {artistName || t("common.unknownArtist")}
               {albumTitle ? ` • ${albumTitle}` : ""}
             </span>
           </button>
@@ -247,16 +249,16 @@ export function TrackRow({
           <div className="track-col track-artist">
             {track?.artist?.id ? (
               <Link to={"/artist/" + track.artist.id} className="muted" style={{ textDecoration: "none" }}>
-                {artistName || "Unknown Artist"}
+                {artistName || t("common.unknownArtist")}
               </Link>
             ) : (
-              <span className="muted">{artistName || "—"}</span>
+              <span className="muted">{artistName || t("common.unknown")}</span>
             )}
           </div>
 
           {columns === "full" ? (
             <div className="track-col track-album">
-              <span className="muted">{albumTitle || "—"}</span>
+              <span className="muted">{albumTitle || t("common.unknown")}</span>
             </div>
           ) : (
             <div className="track-col track-album track-album--hidden" aria-hidden="true" />
@@ -268,7 +270,7 @@ export function TrackRow({
         </div>
         <div className="track-actions">
           {isNowPlaying ? (
-            <span className="np-eq" aria-hidden="true" title={isPlaying ? "Now playing" : "Paused"}>
+            <span className="np-eq" aria-hidden="true" title={isPlaying ? t("tracks.nowPlaying") : t("tracks.paused")}>
               <span className="np-eq__bar" />
               <span className="np-eq__bar" />
               <span className="np-eq__bar" />
@@ -280,8 +282,9 @@ export function TrackRow({
             <button
               className="ghost"
               type="button"
+              data-action="like"
               onClick={() => onToggleLike(track.id)}
-              title="Like"
+              title={t("tracks.like")}
               style={{
                 color: isLiked ? "tomato" : undefined,
                 borderColor: isLiked ? "tomato" : undefined,
@@ -294,8 +297,9 @@ export function TrackRow({
             className="ghost"
             type="button"
             ref={btnRef}
+            data-action="more"
             onClick={() => setOpen((v) => !v)}
-            title="More"
+            title={t("tracks.more")}
           >
             ⋯
           </button>
@@ -354,6 +358,7 @@ export function TrackHeader({
   sortDir = "asc",
   onSort,
 }) {
+  const { t } = useI18n();
   const canSort = typeof onSort === "function";
   const arrow = sortDir === "desc" ? "▼" : "▲";
   const head = (k, label, cls) => {
@@ -374,15 +379,15 @@ export function TrackHeader({
   return (
     <li className="track-header" aria-hidden="true">
       <div className={`track-grid track-grid--header${columns === "album" ? " track-grid--album" : ""}`}>
-        <div className="track-col track-title-h">{head("title", "Title", "track-title-h")}</div>
-        <div className="track-col track-artist-h">{head("artist", "Artist", "track-artist-h")}</div>
+        <div className="track-col track-title-h">{head("title", t("tracks.title"), "track-title-h")}</div>
+        <div className="track-col track-artist-h">{head("artist", t("tracks.artist"), "track-artist-h")}</div>
         {columns === "full" ? (
-          <div className="track-col track-album-h">{head("album", "Album", "track-album-h")}</div>
+          <div className="track-col track-album-h">{head("album", t("tracks.album"), "track-album-h")}</div>
         ) : (
           <div className="track-col track-album-h track-album--hidden" />
         )}
         <div className="track-col track-dur track-dur-h">
-          <span className="track-time-icon" title="Time" aria-label="Time">
+          <span className="track-time-icon" title={t("tracks.time")} aria-label={t("tracks.time")}>
             <IClock size={16} />
           </span>
         </div>
@@ -393,6 +398,7 @@ export function TrackHeader({
 }
 
 function Menu({ anchorRef, onClose, suppressClose, onPlayNow, onPlayNext, onAddToPlaylist, onEditMeta }) {
+  const { t } = useI18n();
   useEffect(() => {
     const onDoc = (e) => {
       if (suppressClose) return;
@@ -419,11 +425,11 @@ function Menu({ anchorRef, onClose, suppressClose, onPlayNow, onPlayNext, onAddT
     : {};
 
   return (
-    <div style={style} role="menu" aria-label="Track actions">
-      <MenuItem onClick={onPlayNow}>Play now</MenuItem>
-      <MenuItem onClick={onPlayNext}>Play next</MenuItem>
-      <MenuItem onClick={onAddToPlaylist}>Add to playlist</MenuItem>
-      {typeof onEditMeta === "function" ? <MenuItem onClick={onEditMeta}>Править метаданные</MenuItem> : null}
+    <div style={style} role="menu" aria-label={t("tracks.actions")}>
+      <MenuItem onClick={onPlayNow}>{t("tracks.playNow")}</MenuItem>
+      <MenuItem onClick={onPlayNext}>{t("tracks.playNext")}</MenuItem>
+      <MenuItem onClick={onAddToPlaylist}>{t("tracks.addToPlaylist")}</MenuItem>
+      {typeof onEditMeta === "function" ? <MenuItem onClick={onEditMeta}>{t("tracks.editMeta")}</MenuItem> : null}
     </div>
   );
 }
@@ -448,6 +454,7 @@ function MenuItem({ children, onClick, disabled }) {
 }
 
 function ResetLink({ onClick, busy }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -459,12 +466,13 @@ function ResetLink({ onClick, busy }) {
         onClick();
       }}
     >
-      Сбросить
+      {t("album.meta.reset")}
     </button>
   );
 }
 
 function TrackMetaEditModal({ trackId, onClose, onSaved }) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -557,7 +565,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
         if (cancelled) return;
         applyAlbumStateFromTrack(t, albs);
       } catch (e) {
-        if (!cancelled) setErr(e.message || "Ошибка загрузки");
+        if (!cancelled) setErr(e.message || t("common.error"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -607,18 +615,18 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       applyAlbumStateFromTrack(t, albs);
       onSaved();
     } catch (e) {
-      setErr(e.message || "Ошибка");
+      setErr(e.message || t("common.error"));
     }
     setBusy(false);
   };
 
   const save = async () => {
     if (!title.trim()) {
-      setErr("Укажите название трека");
+      setErr(t("trackmeta.err.needTitle"));
       return;
     }
     if (albumSource === "library" && !libraryAlbumId) {
-      setErr("Выберите альбом из списка или переключитесь на ввод вручную");
+      setErr(t("trackmeta.err.pickAlbumOrCustom"));
       return;
     }
     setBusy(true);
@@ -641,7 +649,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
             clear.push("year");
           } else {
             const y = parseInt(year, 10);
-            if (!Number.isFinite(y)) throw new Error("Некорректный год");
+            if (!Number.isFinite(y)) throw new Error(t("trackmeta.err.badYear"));
             body.year = y;
           }
         }
@@ -651,26 +659,26 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
         if (albumArtist.trim()) body.albumArtistName = albumArtist.trim();
         if (year.trim()) {
           const y = parseInt(year, 10);
-          if (!Number.isFinite(y)) throw new Error("Некорректный год");
+          if (!Number.isFinite(y)) throw new Error(t("trackmeta.err.badYear"));
           body.year = y;
         }
       }
 
       if (trackNo.trim()) {
         const n = parseInt(trackNo, 10);
-        if (!Number.isFinite(n)) throw new Error("Некорректный номер трека");
+        if (!Number.isFinite(n)) throw new Error(t("trackmeta.err.badTrackNo"));
         body.trackNo = n;
       }
       if (discNo.trim()) {
         const n = parseInt(discNo, 10);
-        if (!Number.isFinite(n)) throw new Error("Некорректный номер диска");
+        if (!Number.isFinite(n)) throw new Error(t("trackmeta.err.badDiscNo"));
         body.discNo = n;
       }
       await lib.patchTrackMeta(trackId, body);
       onSaved();
       onClose();
     } catch (e) {
-      setErr(e.message || "Ошибка сохранения");
+      setErr(e.message || t("trackmeta.err.saveFailed"));
     }
     setBusy(false);
   };
@@ -681,32 +689,30 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>Метаданные трека</h3>
+        <h3 style={{ marginTop: 0 }}>{t("trackmeta.title")}</h3>
         <p className="muted" style={{ fontSize: "0.9rem", marginTop: "-0.5rem" }}>
-          Сначала укажите исполнителя — подгрузятся альбомы из библиотеки для этого исполнителя. Можно выбрать готовый
-          альбом (трек унаследует его название, год и обложку) или ввести альбом вручную. Текстовые поля и своя обложка
-          не перезаписываются при повторном сканировании.
+          {t("trackmeta.help")}
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
         {loading ? (
-          <p className="muted">Загрузка…</p>
+          <p className="muted">{t("trackmeta.loading")}</p>
         ) : (
           <>
             <p>
               <label>
-                Название {m?.title ? <ResetLink onClick={() => resetField("title")} busy={busy} /> : null}
+                {t("trackmeta.field.title")} {m?.title ? <ResetLink onClick={() => resetField("title")} busy={busy} /> : null}
               </label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} />
             </p>
             <p>
               <label>
-                Исполнитель {m?.artist ? <ResetLink onClick={() => resetField("artist")} busy={busy} /> : null}
+                {t("trackmeta.field.artist")} {m?.artist ? <ResetLink onClick={() => resetField("artist")} busy={busy} /> : null}
               </label>
               <input value={artist} onChange={(e) => setArtist(e.target.value)} />
             </p>
             <p>
               <label>
-                Альбом {m?.album ? <ResetLink onClick={() => resetField("album")} busy={busy} /> : null}
+                {t("trackmeta.field.album")} {m?.album ? <ResetLink onClick={() => resetField("album")} busy={busy} /> : null}
               </label>
               <select
                 value={albumSelectValue}
@@ -727,31 +733,31 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                   }
                 }}
               >
-                <option value="">— выберите альбом из библиотеки —</option>
+                <option value="">{t("trackmeta.album.pick")}</option>
                 {albumList.map((al) => (
                   <option key={al.id} value={al.id}>
                     {al.title}
                     {al.year != null ? ` (${al.year})` : ""}
                   </option>
                 ))}
-                <option value="__custom__">Другой альбом (ввести вручную)…</option>
+                <option value="__custom__">{t("trackmeta.album.custom")}</option>
               </select>
             </p>
             {albumSource === "custom" ? (
               <>
                 <p>
-                  <label>Название альбома</label>
+                  <label>{t("trackmeta.album.title")}</label>
                   <input value={album} onChange={(e) => setAlbum(e.target.value)} />
                 </p>
                 <p>
-                  <label>Исполнитель альбома (если отличается)</label>
-                  <input value={albumArtist} onChange={(e) => setAlbumArtist(e.target.value)} placeholder="Необязательно" />
+                  <label>{t("trackmeta.album.artist")}</label>
+                  <input value={albumArtist} onChange={(e) => setAlbumArtist(e.target.value)} placeholder={t("trackmeta.optional")} />
                 </p>
               </>
             ) : null}
             <p>
               <label>
-                Год {m?.year ? <ResetLink onClick={() => resetField("year")} busy={busy} /> : null}
+                {t("trackmeta.year")} {m?.year ? <ResetLink onClick={() => resetField("year")} busy={busy} /> : null}
               </label>
               <input
                 value={year}
@@ -759,31 +765,31 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                   setYear(e.target.value);
                   setYearTouched(true);
                 }}
-                placeholder={albumSource === "library" && libraryAlbumId ? "Как у альбома, если не менять" : "Напр. 2020"}
+                placeholder={albumSource === "library" && libraryAlbumId ? t("trackmeta.year.keepAlbum") : t("trackmeta.year.example")}
               />
               {albumSource === "library" && libraryAlbumId && !yearTouched ? (
                 <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 4 }}>
-                  Берётся из альбома. Измените поле, чтобы зафиксировать свой год для трека.
+                  {t("trackmeta.year.hint")}
                 </span>
               ) : null}
             </p>
             <p style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <span>
                 <label>
-                  № трека {m?.trackNo ? <ResetLink onClick={() => resetField("trackNo")} busy={busy} /> : null}
+                  {t("trackmeta.trackNo")} {m?.trackNo ? <ResetLink onClick={() => resetField("trackNo")} busy={busy} /> : null}
                 </label>
                 <input value={trackNo} onChange={(e) => setTrackNo(e.target.value)} />
               </span>
               <span>
                 <label>
-                  № диска {m?.discNo ? <ResetLink onClick={() => resetField("discNo")} busy={busy} /> : null}
+                  {t("trackmeta.discNo")} {m?.discNo ? <ResetLink onClick={() => resetField("discNo")} busy={busy} /> : null}
                 </label>
                 <input value={discNo} onChange={(e) => setDiscNo(e.target.value)} />
               </span>
             </p>
             <p>
               <label>
-                Обложка {m?.art ? <ResetLink onClick={() => resetField("art")} busy={busy} /> : null}
+                {t("trackmeta.cover")} {m?.art ? <ResetLink onClick={() => resetField("art")} busy={busy} /> : null}
               </label>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
                 {full?.coverUrl || m?.art ? (
@@ -811,25 +817,24 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                       setFull(t);
                       onSaved();
                     } catch (err2) {
-                      setErr(err2.message || "Ошибка загрузки");
+                      setErr(err2.message || t("trackmeta.uploadError"));
                     }
                     setBusy(false);
                   }}
                 />
               </div>
               <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 6 }}>
-                JPEG, PNG или WebP. Не заменяет обложку альбома для других треков. Сканирование библиотеки не удаляет свою
-                обложку.
+                {t("trackmeta.coverHint")}
               </span>
             </p>
           </>
         )}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
           <button className="ghost" type="button" onClick={onClose} disabled={busy}>
-            Отмена
+            {t("common.cancel")}
           </button>
           <button type="button" disabled={busy || loading} onClick={save}>
-            Сохранить
+            {t("common.save")}
           </button>
         </div>
       </div>
@@ -838,6 +843,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
 }
 
 function AddToPlaylistModal({ trackId, onClose }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [err, setErr] = useState("");
@@ -846,20 +852,20 @@ function AddToPlaylistModal({ trackId, onClose }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <h3 style={{ marginTop: 0 }}>Add to playlist</h3>
+        <h3 style={{ marginTop: 0 }}>{t("plmodal.title")}</h3>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
-        <p className="muted">Create a new playlist and add this track.</p>
+        <p className="muted">{t("plmodal.help")}</p>
         <p>
-          <label>Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My playlist" />
+          <label>{t("plmodal.name")}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("plmodal.myPlaylist")} />
         </p>
         <p>
-          <label>Description</label>
-          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" />
+          <label>{t("plmodal.desc")}</label>
+          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("plmodal.optional")} />
         </p>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="ghost" type="button" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -877,7 +883,7 @@ function AddToPlaylistModal({ trackId, onClose }) {
               setBusy(false);
             }}
           >
-            Create & add
+            {t("plmodal.createAdd")}
           </button>
         </div>
       </div>

@@ -114,6 +114,28 @@ func (h *Worker) runOne(ctx context.Context) error {
 			return ierr
 		}
 		return h.DB.CompleteJob(ctx, id)
+	case "imprint_tags":
+		var p struct {
+			AlbumID string `json:"albumId"`
+			Tracks  []struct {
+				TrackID string   `json:"trackId"`
+				Fields  []string `json:"fields"`
+			} `json:"tracks"`
+		}
+		if uerr := json.Unmarshal([]byte(payload), &p); uerr != nil {
+			_ = h.DB.FailJob(ctx, id, uerr.Error())
+			return uerr
+		}
+		aid, uerr := uuid.Parse(p.AlbumID)
+		if uerr != nil {
+			_ = h.DB.FailJob(ctx, id, uerr.Error())
+			return uerr
+		}
+		if err := h.imprintTagsJob(ctx, id, aid, p.Tracks); err != nil {
+			_ = h.DB.FailJob(ctx, id, err.Error())
+			return err
+		}
+		return h.DB.CompleteJob(ctx, id)
 	default:
 		_ = h.DB.FailJob(ctx, id, "unknown job: "+jt)
 		return nil

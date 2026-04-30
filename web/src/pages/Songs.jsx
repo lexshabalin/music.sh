@@ -2,6 +2,7 @@ import React from "react";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
+import { useI18n } from "../i18n";
 
 function shuffleCopy(arr) {
   const a = Array.isArray(arr) ? arr.slice() : [];
@@ -34,6 +35,7 @@ function sortTracks(list, key, dir) {
 }
 
 export function Songs() {
+  const { t } = useI18n();
   const [tracks, setTracks] = React.useState([]);
   const [err, setErr] = React.useState("");
   const [liked, setLiked] = React.useState(new Set());
@@ -66,10 +68,10 @@ export function Songs() {
     // Playback order should follow the original (unsorted) library order.
     return tracks.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -96,10 +98,10 @@ export function Songs() {
   const playNext = (t) => {
     const item = {
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     };
@@ -127,9 +129,9 @@ export function Songs() {
   return (
     <div>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>Songs</h2>
-        <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title="Shuffle">
-          Shuffle
+        <h2 style={{ margin: 0 }}>{t("nav.songs")}</h2>
+        <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")}>
+          {t("tracks.shuffle")}
         </button>
       </div>
 
@@ -160,7 +162,7 @@ export function Songs() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={liked.has(t.id)}
             onToggleLike={(id2) => toggleLike(id2)}
-            label={`${t.title || "Untitled"}`}
+            label={`${t.title || t("common.untitled")}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             columns="full"

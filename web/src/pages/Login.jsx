@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { auth, setToken } from "../api";
+import { useI18n } from "../i18n";
 
 export function Login() {
+  const { t } = useI18n();
   const [login, setLogin] = useState("");
   const [pw, setP] = useState("");
   const [err, setErr] = useState("");
@@ -19,19 +21,19 @@ export function Login() {
   };
   return (
     <form onSubmit={submit} className="card" style={{ maxWidth: 360, margin: "2rem auto" }}>
-      <h2>Log in</h2>
+      <h2>{t("auth.login")}</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <p>
-        <label>Username or email</label>
+        <label>{t("auth.usernameOrEmail")}</label>
         <input value={login} onChange={(e) => setLogin(e.target.value)} autoCapitalize="none" autoCorrect="off" required />
       </p>
       <p>
-        <label>Password</label>
+        <label>{t("auth.password")}</label>
         <input value={pw} onChange={(e) => setP(e.target.value)} type="password" required />
       </p>
-      <button type="submit">Log in</button>
+      <button type="submit">{t("auth.login")}</button>
       <p className="muted">
-        No account? <Link to="/register">Register</Link>
+        {t("auth.noAccount")} <Link to="/register">{t("auth.register")}</Link>
       </p>
     </form>
   );

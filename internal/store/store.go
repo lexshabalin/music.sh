@@ -268,7 +268,7 @@ func (d *DB) UserAuthByUsername(ctx context.Context, username string) (id uuid.U
 
 func (d *DB) CreateUser(ctx context.Context, id uuid.UUID, username *string, email, hash string, name *string) error {
 	_, err := d.Pool.Exec(ctx,
-		`INSERT INTO users (id, username, email, password_hash, display_name) VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO users (id, username, email, password_hash, display_name, ui_lang) VALUES ($1, $2, $3, $4, $5, 'ru')`,
 		id, username, strings.ToLower(strings.TrimSpace(email)), hash, name,
 	)
 	return err
@@ -282,10 +282,11 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var bgp sql.NullString
 	var bgpath sql.NullString
 	var bgmime sql.NullString
+	var uiLang sql.NullString
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, username, email, display_name, created_at, background_type, background_preset, background_path, background_mime
+		`SELECT id, username, email, display_name, created_at, background_type, background_preset, background_path, background_mime, ui_lang
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &uname, &u.Email, &name, &u.CreatedAt, &bgt, &bgp, &bgpath, &bgmime)
+	).Scan(&u.ID, &uname, &u.Email, &name, &u.CreatedAt, &bgt, &bgp, &bgpath, &bgmime, &uiLang)
 	if err != nil {
 		return u, err
 	}
@@ -309,8 +310,24 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		s := bgmime.String
 		u.BackgroundMime = &s
 	}
+	if uiLang.Valid && strings.TrimSpace(uiLang.String) != "" {
+		u.UILang = strings.TrimSpace(uiLang.String)
+	} else {
+		u.UILang = "ru"
+	}
 	// BackgroundURL is set by API layer (needs absolute route).
 	return u, nil
+}
+
+// --- UI language (profile) ---
+
+func (d *DB) SetUserUILang(ctx context.Context, userID uuid.UUID, lang string) error {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	if lang != "ru" && lang != "en" {
+		lang = "ru"
+	}
+	_, err := d.Pool.Exec(ctx, `UPDATE users SET ui_lang = $2 WHERE id = $1`, userID, lang)
+	return err
 }
 
 // --- Backgrounds (profile) ---
@@ -865,6 +882,103 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 	}
 	defer rows.Close()
 	return scanTrackRows(rows)
+}
+
+// ImprintTrackRow is a minimal row for imprint preview/apply.
+type ImprintTrackRow struct {
+	TrackID uuid.UUID
+	FilePath string
+	Format   string
+
+	Title      string
+	ArtistName string
+	AlbumTitle string
+	Year       *int
+	TrackNo    *int
+	DiscNo     *int
+
+	// CoverRelPath is relative to DATA_DIR.
+	CoverRelPath *string
+}
+
+// GetAlbumTracksForImprint returns effective metadata (as in UI) for all tracks in the album.
+func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([]ImprintTrackRow, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT
+			t.id,
+			t.file_path,
+			COALESCE(t.format, '') AS fmt,
+			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) AS disp_title,
+			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
+			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
+			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
+			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
+			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
+			CASE
+				WHEN t.art_path IS NOT NULL AND BTRIM(t.art_path) <> '' THEN t.art_path
+				WHEN al.cover_path IS NOT NULL AND BTRIM(al.cover_path) <> '' THEN al.cover_path
+				ELSE NULL
+			END AS disp_cover_rel
+		FROM tracks t
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE t.album_id = $1
+		ORDER BY
+			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
+			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
+			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
+			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST
+	`, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ImprintTrackRow
+	for rows.Next() {
+		var r ImprintTrackRow
+		var fmtS sql.NullString
+		var y sql.NullInt64
+		var tno, dno sql.NullInt32
+		var cover sql.NullString
+		if err := rows.Scan(
+			&r.TrackID,
+			&r.FilePath,
+			&fmtS,
+			&r.Title,
+			&r.ArtistName,
+			&r.AlbumTitle,
+			&y,
+			&tno,
+			&dno,
+			&cover,
+		); err != nil {
+			return nil, err
+		}
+		if fmtS.Valid {
+			r.Format = fmtS.String
+		}
+		if y.Valid {
+			v := int(y.Int64)
+			r.Year = &v
+		}
+		if tno.Valid {
+			v := int(tno.Int32)
+			r.TrackNo = &v
+		}
+		if dno.Valid {
+			v := int(dno.Int32)
+			r.DiscNo = &v
+		}
+		if cover.Valid && strings.TrimSpace(cover.String) != "" {
+			s := cover.String
+			r.CoverRelPath = &s
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func scanTrackRows(rows pgx.Rows) ([]Track, error) {
@@ -1672,6 +1786,73 @@ func (d *DB) FailJob(ctx context.Context, id uuid.UUID, msg string) error {
 		WHERE id = $1
 	`, id, msg)
 	return err
+}
+
+// UpdateJobProgress updates coarse progress counters/message (best-effort).
+func (d *DB) UpdateJobProgress(ctx context.Context, id uuid.UUID, done, total *int, msg *string) error {
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE jobs SET
+			progress_done = COALESCE($2, progress_done),
+			progress_total = COALESCE($3, progress_total),
+			progress_msg = COALESCE($4, progress_msg)
+		WHERE id = $1
+	`, id, done, total, msg)
+	return err
+}
+
+func (d *DB) SetJobResult(ctx context.Context, id uuid.UUID, resultJSON string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE jobs SET result = $2::jsonb WHERE id = $1`, id, resultJSON)
+	return err
+}
+
+type JobStatusRow struct {
+	ID           uuid.UUID
+	Type         string
+	Status       string
+	Attempts     int
+	LastError    *string
+	CreatedAt    time.Time
+	ProgressDone *int
+	ProgressTotal *int
+	ProgressMsg  *string
+	ResultJSON   *string
+}
+
+func (d *DB) GetJobStatus(ctx context.Context, id uuid.UUID) (JobStatusRow, error) {
+	var out JobStatusRow
+	var le sql.NullString
+	var pd, pt sql.NullInt32
+	var pm sql.NullString
+	var res sql.NullString
+	err := d.Pool.QueryRow(ctx, `
+		SELECT id, type, status::text, attempts, last_error, created_at,
+		       progress_done, progress_total, progress_msg, result::text
+		FROM jobs WHERE id = $1
+	`, id).Scan(&out.ID, &out.Type, &out.Status, &out.Attempts, &le, &out.CreatedAt, &pd, &pt, &pm, &res)
+	if err != nil {
+		return JobStatusRow{}, err
+	}
+	if le.Valid {
+		s := le.String
+		out.LastError = &s
+	}
+	if pd.Valid {
+		v := int(pd.Int32)
+		out.ProgressDone = &v
+	}
+	if pt.Valid {
+		v := int(pt.Int32)
+		out.ProgressTotal = &v
+	}
+	if pm.Valid {
+		s := pm.String
+		out.ProgressMsg = &s
+	}
+	if res.Valid {
+		s := res.String
+		out.ResultJSON = &s
+	}
+	return out, nil
 }
 
 // GetAlbumByID for metadata worker

@@ -93,6 +93,7 @@ func (a *App) Handlers() http.Handler {
 	r.Group(func(g chi.Router) {
 		g.Use(middlewareUser(a))
 		g.Get("/api/me", a.me)
+		g.Post("/api/me/ui/lang", a.setUILang)
 		g.Get("/api/me/avatar", a.getAvatar)
 		g.Post("/api/me/avatar", a.uploadAvatar)
 		g.Get("/api/me/background/settings", a.getBackgroundSettings)
@@ -109,6 +110,9 @@ func (a *App) Handlers() http.Handler {
 		g.Patch("/api/albums/{id}", a.patchAlbumMeta)
 		g.Post("/api/albums/{id}/cover", a.uploadAlbumCover)
 		g.Delete("/api/albums/{id}/cover", a.deleteAlbumCover)
+		g.Post("/api/albums/{id}/imprint/dry-run", a.albumImprintDryRun)
+		g.Post("/api/albums/{id}/imprint/apply", a.albumImprintApply)
+		g.Get("/api/jobs/{id}", a.getJob)
 		g.Get("/api/tracks", a.listTracks)
 		g.Get("/api/tracks/{id}", a.getTrack)
 		g.Patch("/api/tracks/{id}", a.patchTrackMeta)

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
+import { useI18n } from "../i18n";
 
 function shuffleCopy(arr) {
   const a = Array.isArray(arr) ? arr.slice() : [];
@@ -35,6 +36,7 @@ function sortTracks(list, key, dir) {
 }
 
 export function Playlist() {
+  const { t } = useI18n();
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
@@ -56,7 +58,7 @@ export function Playlist() {
   }, [id]);
 
   if (err) return <p style={{ color: "tomato" }}>{err}</p>;
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <p className="muted">{t("common.loading")}</p>;
 
   const tracks = Array.isArray(data.tracks) ? data.tracks : [];
   const sortedTracks = sortTracks(tracks, sortKey, sortDir);
@@ -65,10 +67,10 @@ export function Playlist() {
     if (!tracks.length) return;
     const items = tracks.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -89,10 +91,10 @@ export function Playlist() {
   const shuffle = () => {
     const items = tracks.map((t) => ({
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     }));
@@ -102,10 +104,10 @@ export function Playlist() {
   const playNext = (t) => {
     const item = {
       id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
+      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
-      title: t.title || "Track",
+      title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
     };
@@ -117,7 +119,7 @@ export function Playlist() {
     <div>
       <p>
         <Link to="/playlists" className="muted">
-          ← Playlists
+          ← {t("playlist.playlists")}
         </Link>
       </p>
       <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -125,8 +127,8 @@ export function Playlist() {
           <h2 style={{ margin: 0 }}>{data.name}</h2>
           {data.description ? <p className="muted">{data.description}</p> : null}
         </div>
-        <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title="Shuffle">
-          Shuffle
+        <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
+          {t("tracks.shuffle")}
         </button>
       </div>
       <ul className="plain-list">
@@ -154,7 +156,7 @@ export function Playlist() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={false}
             onToggleLike={null}
-            label={`${t.title || "Untitled"}`}
+            label={`${t.title || t("common.untitled")}`}
             isNowPlaying={player.current?.id === t.id}
             isPlaying={player.isPlaying}
             columns="full"
