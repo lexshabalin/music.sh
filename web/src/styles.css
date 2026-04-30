@@ -365,6 +365,12 @@ button.ghost {
   color: var(--text);
   border: 1px solid var(--border);
 }
+
+/* Ensure playlist header "⋯" is always clickable (some mobile rules hide track-row ⋯). */
+.playlist-more-btn {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
 input {
   width: 100%;
   padding: 0.5rem 0.75rem;

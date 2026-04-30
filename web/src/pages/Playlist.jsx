@@ -151,7 +151,7 @@ export function Playlist() {
           <button
             ref={menuBtnRef}
             type="button"
-            className="ghost"
+            className="ghost playlist-more-btn"
             title={t("playlist.more")}
             aria-label={t("playlist.more")}
             onClick={() => setMenuOpen((v) => !v)}
