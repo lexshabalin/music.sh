@@ -25,7 +25,7 @@ func readFLACTags(path string) (flacTags, []string, error) {
 	if err != nil {
 		return flacTags{}, warn, err
 	}
-	var vc *flacvorbis.VorbisComment
+	var vc *flacvorbis.MetaDataBlockVorbisComment
 	out := flacTags{}
 	for _, meta := range f.Meta {
 		if meta.Type == flac.VorbisComment {
@@ -41,30 +41,58 @@ func readFLACTags(path string) (flacTags, []string, error) {
 		}
 	}
 	if vc != nil {
-		out.Title = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_TITLE)))
-		out.Artist = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_ARTIST)))
-		out.Album = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_ALBUM)))
+		out.Title = strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_TITLE))
+		out.Artist = strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_ARTIST))
+		out.Album = strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_ALBUM))
 		// DATE is most common, YEAR also exists; read both
-		date := strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_DATE)))
+		date := strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_DATE))
 		if date == "" {
-			date = strings.TrimSpace(string(firstVorbis(vc, "YEAR")))
+			date = strings.TrimSpace(firstVorbis(vc, "YEAR"))
 		}
 		out.Year = date
-		out.TrackNo = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_TRACKNUMBER)))
-		out.DiscNo = strings.TrimSpace(string(firstVorbis(vc, "DISCNUMBER")))
+		out.TrackNo = strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_TRACKNUMBER))
+		out.DiscNo = strings.TrimSpace(firstVorbis(vc, "DISCNUMBER"))
 	}
 	return out, warn, nil
 }
 
-func firstVorbis(vc *flacvorbis.VorbisComment, key string) []byte {
+func firstVorbis(vc *flacvorbis.MetaDataBlockVorbisComment, key string) string {
 	if vc == nil {
-		return nil
+		return ""
 	}
-	vs := vc.Get(key)
-	if len(vs) == 0 {
-		return nil
+	vs, err := vc.Get(key)
+	if err != nil || len(vs) == 0 {
+		return ""
 	}
 	return vs[0]
+}
+
+func deleteVorbis(vc *flacvorbis.MetaDataBlockVorbisComment, key string) {
+	if vc == nil {
+		return
+	}
+	var kept []string
+	for _, cmt := range vc.Comments {
+		parts := strings.SplitN(cmt, "=", 2)
+		if len(parts) != 2 {
+			// Keep malformed comment to avoid data loss.
+			kept = append(kept, cmt)
+			continue
+		}
+		if strings.EqualFold(parts[0], key) {
+			continue
+		}
+		kept = append(kept, cmt)
+	}
+	vc.Comments = kept
+}
+
+func setVorbis(vc *flacvorbis.MetaDataBlockVorbisComment, key, val string) error {
+	if vc == nil {
+		return fmt.Errorf("nil vorbis comment")
+	}
+	deleteVorbis(vc, key)
+	return vc.Add(key, val)
 }
 
 func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool, coverBytes []byte, coverMime string) ([]string, error) {
@@ -74,7 +102,7 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 		return warn, err
 	}
 
-	var vc *flacvorbis.VorbisComment
+	var vc *flacvorbis.MetaDataBlockVorbisComment
 	vcIdx := -1
 	for idx, meta := range f.Meta {
 		if meta.Type == flac.VorbisComment {
@@ -90,33 +118,45 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 	}
 
 	if writeFields[FieldTitle] {
-		vc.Set(flacvorbis.FIELD_TITLE, []byte(desired.Title))
+		if err := setVorbis(vc, flacvorbis.FIELD_TITLE, desired.Title); err != nil {
+			return warn, err
+		}
 	}
 	if writeFields[FieldArtist] {
-		vc.Set(flacvorbis.FIELD_ARTIST, []byte(desired.Artist))
+		if err := setVorbis(vc, flacvorbis.FIELD_ARTIST, desired.Artist); err != nil {
+			return warn, err
+		}
 	}
 	if writeFields[FieldAlbum] {
-		vc.Set(flacvorbis.FIELD_ALBUM, []byte(desired.Album))
+		if err := setVorbis(vc, flacvorbis.FIELD_ALBUM, desired.Album); err != nil {
+			return warn, err
+		}
 	}
 	if writeFields[FieldYear] {
 		if desired.Year != nil {
-			vc.Set(flacvorbis.FIELD_DATE, []byte(fmt.Sprintf("%d", *desired.Year)))
+			if err := setVorbis(vc, flacvorbis.FIELD_DATE, fmt.Sprintf("%d", *desired.Year)); err != nil {
+				return warn, err
+			}
 		} else {
-			vc.Delete(flacvorbis.FIELD_DATE)
+			deleteVorbis(vc, flacvorbis.FIELD_DATE)
 		}
 	}
 	if writeFields[FieldTrackNo] {
 		if desired.TrackNo != nil {
-			vc.Set(flacvorbis.FIELD_TRACKNUMBER, []byte(fmt.Sprintf("%d", *desired.TrackNo)))
+			if err := setVorbis(vc, flacvorbis.FIELD_TRACKNUMBER, fmt.Sprintf("%d", *desired.TrackNo)); err != nil {
+				return warn, err
+			}
 		} else {
-			vc.Delete(flacvorbis.FIELD_TRACKNUMBER)
+			deleteVorbis(vc, flacvorbis.FIELD_TRACKNUMBER)
 		}
 	}
 	if writeFields[FieldDiscNo] {
 		if desired.DiscNo != nil {
-			vc.Set("DISCNUMBER", []byte(fmt.Sprintf("%d", *desired.DiscNo)))
+			if err := setVorbis(vc, "DISCNUMBER", fmt.Sprintf("%d", *desired.DiscNo)); err != nil {
+				return warn, err
+			}
 		} else {
-			vc.Delete("DISCNUMBER")
+			deleteVorbis(vc, "DISCNUMBER")
 		}
 	}
 
