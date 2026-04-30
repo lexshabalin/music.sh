@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
@@ -44,6 +45,7 @@ export function Playlist() {
   const [sortKey, setSortKey] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null); // { left, top }
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
   const menuBtnRef = useRef(null);
@@ -76,6 +78,20 @@ export function Playlist() {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
     };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setMenuPos(null);
+      return;
+    }
+    const r = menuBtnRef.current?.getBoundingClientRect?.();
+    if (!r) return;
+    const w = 220;
+    const pad = 8;
+    const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
+    const top = Math.min(window.innerHeight - pad, r.bottom + 6);
+    setMenuPos({ left, top, width: w });
   }, [menuOpen]);
 
   if (err) return <p style={{ color: "tomato" }}>{err}</p>;
@@ -148,7 +164,7 @@ export function Playlist() {
           <h2 style={{ margin: 0 }}>{data.name}</h2>
           {data.description ? <p className="muted">{data.description}</p> : null}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
             {t("tracks.shuffle")}
           </button>
@@ -158,42 +174,49 @@ export function Playlist() {
             className="ghost playlist-more-btn"
             title={t("playlist.more")}
             aria-label={t("playlist.more")}
-            onMouseDown={(e) => {
+            onClick={(e) => {
+              try { e.preventDefault(); } catch (_) {}
               try { e.stopPropagation(); } catch (_) {}
-              setMenuOpen((v) => !v);
-            }}
-            onTouchStart={(e) => {
-              try { e.stopPropagation(); } catch (_) {}
+              const r = menuBtnRef.current?.getBoundingClientRect?.();
+              if (r) {
+                const w = 220;
+                const pad = 8;
+                const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
+                const top = Math.min(window.innerHeight - pad, r.bottom + 6);
+                setMenuPos({ left, top, width: w });
+              }
               setMenuOpen((v) => !v);
             }}
           >
             ⋯
           </button>
-          {menuOpen ? (
+        </div>
+      </div>
+      {menuOpen && menuPos
+        ? createPortal(
             <div
               ref={menuRef}
               style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 6px)",
-                width: 220,
+                position: "fixed",
+                left: menuPos.left,
+                top: menuPos.top,
+                width: menuPos.width || 220,
                 background: "#18181f",
                 border: "1px solid #2a2a33",
                 borderRadius: 10,
                 padding: 6,
-                zIndex: 2000,
+                zIndex: 5000,
                 boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
               }}
               role="menu"
               aria-label={t("playlist.more")}
-              onClick={(e) => {
-                // Prevent bubbling to document click handler.
-                try { e.stopPropagation(); } catch (_) {}
-              }}
               onMouseDown={(e) => {
                 try { e.stopPropagation(); } catch (_) {}
               }}
               onTouchStart={(e) => {
+                try { e.stopPropagation(); } catch (_) {}
+              }}
+              onClick={(e) => {
                 try { e.stopPropagation(); } catch (_) {}
               }}
             >
@@ -201,17 +224,17 @@ export function Playlist() {
                 type="button"
                 className="ghost"
                 style={{ width: "100%", justifyContent: "flex-start", display: "flex", padding: "8px 10px", color: "tomato" }}
-                onClick={async () => {
+                onClick={() => {
                   setMenuOpen(false);
                   setConfirmDeleteOpen(true);
                 }}
               >
                 {t("playlist.delete")}
               </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+            </div>,
+            document.body
+          )
+        : null}
       {confirmDeleteOpen ? (
         <ConfirmModal
           title={t("playlist.delete")}
