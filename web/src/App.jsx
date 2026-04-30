@@ -159,8 +159,12 @@ function Shell({ children }) {
   const remotePlaybackActiveRef = React.useRef(false);
   const remoteProgressBaseMsRef = React.useRef(0);
   const remoteProgressUpdatedAtRef = React.useRef(0);
-  const remotePlaybackSeenUntilRef = React.useRef(0);
   const remoteInactiveStreakRef = React.useRef(0);
+  /** Last server session we attributed to a remote owner (stable UI vs flaky isPlaying). */
+  const remoteOwnerLockRef = React.useRef(null);
+  const lastRemotePlayingSeenAtRef = React.useRef(0);
+  /** Mirrors server: another client owns playback and is playing (drives progress interpolation). */
+  const remoteServerPlayingRef = React.useRef(false);
 
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
@@ -172,6 +176,14 @@ function Shell({ children }) {
   React.useEffect(() => {
     playQueueRef.current = p.playQueue;
   }, [p.playQueue]);
+  const queueRef = React.useRef(p.queue);
+  const indexRef = React.useRef(p.index);
+  const jumpToRef = React.useRef(p.jumpTo);
+  React.useEffect(() => {
+    queueRef.current = p.queue;
+    indexRef.current = p.index;
+    jumpToRef.current = p.jumpTo;
+  }, [p.queue, p.index, p.jumpTo]);
 
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
@@ -285,6 +297,10 @@ function Shell({ children }) {
     takeoverRequestedRef.current = false;
     takeoverGuardUntilRef.current = 0;
     ownerEpochRef.current = 0;
+    remoteOwnerLockRef.current = null;
+    lastRemotePlayingSeenAtRef.current = 0;
+    remoteServerPlayingRef.current = false;
+    remoteInactiveStreakRef.current = 0;
     try {
       localStorage.removeItem("musicsh_token");
     } catch (_) {}
@@ -339,8 +355,10 @@ function Shell({ children }) {
       takeoverGuardUntilRef.current = Date.now() + 3000;
       setRemotePlaybackActive(false);
       remotePlaybackActiveRef.current = false;
-      remotePlaybackSeenUntilRef.current = 0;
       remoteInactiveStreakRef.current = 0;
+      remoteOwnerLockRef.current = null;
+      lastRemotePlayingSeenAtRef.current = 0;
+      remoteServerPlayingRef.current = false;
       // Explicit takeover endpoint (atomic intent), then heartbeat.
       try {
         void pushTakeoverNow();
@@ -365,7 +383,14 @@ function Shell({ children }) {
         const st = await playback.get();
         ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
         if (!st?.isPlaying || !st.clientId || st.clientId === mine) return;
-        setRemotePlaybackActive(true);
+        const e = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
+        remoteOwnerLockRef.current = { epoch: e, clientId: st.clientId };
+        lastRemotePlayingSeenAtRef.current = Date.now();
+        remoteServerPlayingRef.current = true;
+        if (!remotePlaybackActiveRef.current) {
+          remotePlaybackActiveRef.current = true;
+          setRemotePlaybackActive(true);
+        }
         takeoverRemotePlaybackUI();
       } catch (_) {}
     };
@@ -382,68 +407,87 @@ function Shell({ children }) {
     if (!getToken() || !p.current?.id) {
       setRemotePlaybackActive(false);
       remotePlaybackActiveRef.current = false;
-      remotePlaybackSeenUntilRef.current = 0;
       remoteInactiveStreakRef.current = 0;
+      remoteOwnerLockRef.current = null;
+      lastRemotePlayingSeenAtRef.current = 0;
+      remoteServerPlayingRef.current = false;
       return;
     }
+    const REMOTE_UI_INACTIVE_GRACE_MS = 1100;
     const syncRemote = async () => {
       try {
         const st = await playback.get();
         ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
         const mine = getPlaybackClientId();
-        const activeRemote = !!(st?.isPlaying && st?.clientId && mine && st.clientId !== mine);
-        if (activeRemote) {
+        const stEpoch = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
+        const stCid = (st?.clientId && String(st.clientId)) || "";
+        const activeRemote = !!(st?.isPlaying && stCid && mine && stCid !== mine);
+
+        remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
+        remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
+        remoteServerPlayingRef.current = !!(stCid && mine && stCid !== mine && st?.isPlaying);
+
+        if (mine && stCid && stCid === mine) {
+          remoteOwnerLockRef.current = null;
+          lastRemotePlayingSeenAtRef.current = 0;
           remoteInactiveStreakRef.current = 0;
-          remotePlaybackSeenUntilRef.current = Date.now() + 800;
-          remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
-          remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
+          if (remotePlaybackActiveRef.current) {
+            remotePlaybackActiveRef.current = false;
+            setRemotePlaybackActive(false);
+          }
+          return;
+        }
+
+        if (activeRemote) {
+          remoteOwnerLockRef.current = { epoch: stEpoch, clientId: stCid };
+          lastRemotePlayingSeenAtRef.current = Date.now();
+          remoteInactiveStreakRef.current = 0;
           if (!remotePlaybackActiveRef.current) {
             remotePlaybackActiveRef.current = true;
             setRemotePlaybackActive(true);
           }
         } else {
-          remoteInactiveStreakRef.current += 1;
-          // Hide only after N consecutive inactive polls to avoid flicker.
-          if (remoteInactiveStreakRef.current >= 3) {
-            remotePlaybackActiveRef.current = false;
-            setRemotePlaybackActive(false);
-            remotePlaybackSeenUntilRef.current = 0;
+          const lock = remoteOwnerLockRef.current;
+          const sameLock = !!(lock && stEpoch === lock.epoch && stCid && lock.clientId && stCid === lock.clientId);
+          const withinGrace = Date.now() - lastRemotePlayingSeenAtRef.current < REMOTE_UI_INACTIVE_GRACE_MS;
+          if (sameLock && withinGrace) {
+            // Ignore brief gaps in isPlaying / network while session identity matches.
+          } else {
+            remoteInactiveStreakRef.current += 1;
+            if (remoteInactiveStreakRef.current >= 3) {
+              remotePlaybackActiveRef.current = false;
+              setRemotePlaybackActive(false);
+              remoteOwnerLockRef.current = null;
+              lastRemotePlayingSeenAtRef.current = 0;
+            }
           }
         }
+
         if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
         const remoteTrackId = st.trackIds[st.currentIndex];
         if (!remoteTrackId) return;
-        const q = Array.isArray(p.queue) ? p.queue : [];
+        const q = Array.isArray(queueRef.current) ? queueRef.current : [];
         const remoteIdx = q.findIndex((x) => x?.id === remoteTrackId);
-        if (remoteIdx >= 0 && remoteIdx !== p.index) {
+        if (remoteIdx >= 0 && remoteIdx !== indexRef.current) {
           skipAutoplayOnceRef.current = true;
-          p.jumpTo(remoteIdx);
+          jumpToRef.current(remoteIdx);
         }
       } catch (_) {}
     };
     const id = window.setInterval(syncRemote, 1000);
     syncRemote();
     return () => clearInterval(id);
-  }, [p.current?.id, p.index, p.queue]);
-
-  React.useEffect(() => {
-    if (!remotePlaybackActive) return;
-    const tick = () => {
-      // Do not auto-hide based on wall-clock only; rely on consecutive inactive polls.
-      if (remoteInactiveStreakRef.current < 3) return;
-      remotePlaybackActiveRef.current = false;
-      setRemotePlaybackActive(false);
-      remotePlaybackSeenUntilRef.current = 0;
-    };
-    const id = window.setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [remotePlaybackActive]);
+  }, [p.current?.id]);
 
   React.useEffect(() => {
     if (!remotePlaybackActive) return;
     const tick = () => {
       const baseMs = remoteProgressBaseMsRef.current;
       const updatedAt = remoteProgressUpdatedAtRef.current || Date.now();
+      if (!remoteServerPlayingRef.current) {
+        setCurT(Math.max(0, baseMs / 1000));
+        return;
+      }
       const nextSec = Math.max(0, (baseMs + Math.max(0, Date.now() - updatedAt)) / 1000);
       setCurT(nextSec);
     };
