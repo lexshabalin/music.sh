@@ -47,6 +47,7 @@ export function Playlist() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
   const menuBtnRef = useRef(null);
+  const menuRef = useRef(null);
   const player = usePlayer();
 
   const load = () =>
@@ -66,6 +67,7 @@ export function Playlist() {
     if (!menuOpen) return;
     const onDoc = (e) => {
       if (menuBtnRef.current && menuBtnRef.current.contains(e.target)) return;
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
       setMenuOpen(false);
     };
     document.addEventListener("click", onDoc);
@@ -158,6 +160,7 @@ export function Playlist() {
           </button>
           {menuOpen ? (
             <div
+              ref={menuRef}
               style={(() => {
                 const r = menuBtnRef.current?.getBoundingClientRect?.();
                 if (!r) return {};
@@ -179,6 +182,10 @@ export function Playlist() {
               })()}
               role="menu"
               aria-label={t("playlist.more")}
+              onClick={(e) => {
+                // Prevent bubbling to document click handler.
+                try { e.stopPropagation(); } catch (_) {}
+              }}
             >
               <button
                 type="button"
