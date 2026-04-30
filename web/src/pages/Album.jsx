@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib } from "../api";
 import { usePlayer } from "../usePlayer";
@@ -274,7 +275,7 @@ function ImprintModal({ albumId, onClose }) {
     };
   }, [jobId]);
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
         className="modal"
@@ -412,6 +413,8 @@ function ImprintModal({ albumId, onClose }) {
         </div>
       </div>
     </div>
+    ,
+    document.body
   );
 }
 
