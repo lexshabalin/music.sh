@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { lib } from "../api";
+import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
 
@@ -128,7 +128,7 @@ export function Playlists() {
                         artist: t.artist?.name || "",
                         title: t.title || "Track",
                         album: t.album?.title || "",
-                        coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+                        coverUrl: effectiveTrackCoverUrl(t),
                       }));
                       if (items.length) player.playQueue(items, 0);
                     } catch (e2) {

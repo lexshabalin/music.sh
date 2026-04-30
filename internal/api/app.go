@@ -86,6 +86,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/auth/login", a.login)
 	})
 	r.Get("/api/tracks/{id}/stream", a.stream) // may use ?token= for <audio>
+	r.Get("/api/tracks/{id}/cover", a.trackCover)
 	r.Get("/api/albums/{id}/cover", a.albumCover)
 	r.Get("/api/me/background", a.getBackgroundAsset)
 
@@ -108,6 +109,8 @@ func (a *App) Handlers() http.Handler {
 		g.Get("/api/tracks", a.listTracks)
 		g.Get("/api/tracks/{id}", a.getTrack)
 		g.Patch("/api/tracks/{id}", a.patchTrackMeta)
+		g.Post("/api/tracks/{id}/cover", a.uploadTrackCover)
+		g.Delete("/api/tracks/{id}/cover", a.deleteTrackCover)
 		g.Get("/api/playlists", a.listPl)
 		g.Post("/api/playlists", a.createPl)
 		g.Get("/api/playlists/{id}", a.getPl)

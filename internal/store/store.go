@@ -760,6 +760,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			t.art_path,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -801,8 +802,9 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 		var tno, dno, yr sql.NullInt32
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
+		var artPath sql.NullString
 		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc bool
-		if err := rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN,
+		if err := rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &artPath,
 			&pinTitle, &pinArtist, &pinAlbum, &pinYear, &pinTn, &pinDisc); err != nil {
 			return nil, err
 		}
@@ -854,15 +856,36 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 				t.Artist = &TrackArtist{ID: uid, Name: nn}
 			}
 		}
-		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc {
+		artHas := artPath.Valid && strings.TrimSpace(artPath.String) != ""
+		if artHas {
+			s := "/api/tracks/" + t.ID.String() + "/cover"
+			t.CoverURL = &s
+		}
+		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || artHas {
 			t.Meta = &TrackMetaPins{
 				Title: pinTitle, Artist: pinArtist, Album: pinAlbum,
-				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc,
+				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc, Art: artHas,
 			}
 		}
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// TrackArtRelPath returns stored relative art path if present.
+func (d *DB) TrackArtRelPath(ctx context.Context, id uuid.UUID) (rel string, ok bool) {
+	var p sql.NullString
+	err := d.Pool.QueryRow(ctx, `SELECT art_path FROM tracks WHERE id = $1`, id).Scan(&p)
+	if err != nil || !p.Valid || strings.TrimSpace(p.String) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(p.String), true
+}
+
+// SetTrackArtPath stores relative path to custom cover under DataDir.
+func (d *DB) SetTrackArtPath(ctx context.Context, id uuid.UUID, rel string) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE tracks SET art_path = $2 WHERE id = $1`, id, rel)
+	return err
 }
 
 // GetTrackForStream returns file path, title for logging
@@ -1074,8 +1097,19 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
+	if u.ClearArt {
+		if _, e := d.Pool.Exec(ctx, `UPDATE tracks SET art_path = NULL WHERE id = $1`, trackID); e != nil {
+			return e
+		}
+	}
 	_ = d.CleanupOrphanAlbums(ctx)
 	return nil
+}
+
+// ClearTrackArtPath removes custom cover path (file delete is caller's responsibility).
+func (d *DB) ClearTrackArtPath(ctx context.Context, id uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `UPDATE tracks SET art_path = NULL WHERE id = $1`, id)
+	return err
 }
 
 func (d *DB) GetAnyTrackPathForAlbum(ctx context.Context, albumID uuid.UUID) (string, error) {
@@ -1238,6 +1272,7 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			t.art_path,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -1266,9 +1301,10 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 		var tno, dno, yr sql.NullInt32
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
+		var artPath sql.NullString
 		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc bool
 		var pos int
-		if err = rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN,
+		if err = rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &artPath,
 			&pinTitle, &pinArtist, &pinAlbum, &pinYear, &pinTn, &pinDisc, &pos); err != nil {
 			return p, nil, err
 		}
@@ -1320,10 +1356,15 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 				t.Artist = &TrackArtist{ID: uid, Name: nn}
 			}
 		}
-		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc {
+		artHas := artPath.Valid && strings.TrimSpace(artPath.String) != ""
+		if artHas {
+			s := "/api/tracks/" + t.ID.String() + "/cover"
+			t.CoverURL = &s
+		}
+		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || artHas {
 			t.Meta = &TrackMetaPins{
 				Title: pinTitle, Artist: pinArtist, Album: pinAlbum,
-				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc,
+				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc, Art: artHas,
 			}
 		}
 		tr = append(tr, t)
@@ -1481,6 +1522,7 @@ func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			t.art_path,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -1523,6 +1565,7 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			t.art_path,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,

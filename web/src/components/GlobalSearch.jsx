@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { lib } from "../api";
+import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "./icons";
 
@@ -162,7 +162,7 @@ export function GlobalSearch() {
                             artist: t.artist?.name || "",
                             title: t.title || "Track",
                             album: t.album?.title || "",
-                            coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+                            coverUrl: effectiveTrackCoverUrl(t),
                           };
                           player.playQueue([item], 0);
                           // iOS Safari: call play() from the click handler to avoid "needs 2 taps".

@@ -44,6 +44,8 @@ type Track struct {
 	TrackNo      *int       `json:"trackNo,omitempty"`
 	DiscNo       *int       `json:"discNo,omitempty"`
 	Year         *int       `json:"year,omitempty"`
+	// CoverURL is set when the track has custom art (GET /api/tracks/{id}/cover).
+	CoverURL     *string    `json:"coverUrl,omitempty"`
 	FilePath     string     `json:"-"` // not exposed; stream uses id
 	Album        *TrackAlbum `json:"album,omitempty"`
 	Artist       *TrackArtist `json:"artist,omitempty"`
@@ -59,14 +61,15 @@ type TrackMetaPins struct {
 	Year    bool `json:"year,omitempty"`
 	TrackNo bool `json:"trackNo,omitempty"`
 	DiscNo  bool `json:"discNo,omitempty"`
+	Art     bool `json:"art,omitempty"`
 }
 
 // TrackMetaUpdate is the store layer input for PATCH /api/tracks/{id} metadata.
 type TrackMetaUpdate struct {
-	ClearTitle, ClearArtist, ClearAlbum, ClearYear, ClearTrackNo, ClearDiscNo bool
-	Title, ArtistName, AlbumTitle, AlbumArtistName                           *string
-	Year                                                                       *int
-	TrackNo, DiscNo                                                            *int
+	ClearTitle, ClearArtist, ClearAlbum, ClearYear, ClearTrackNo, ClearDiscNo, ClearArt bool
+	Title, ArtistName, AlbumTitle, AlbumArtistName                                      *string
+	Year                                                                                  *int
+	TrackNo, DiscNo                                                                       *int
 }
 
 type TrackAlbum struct {

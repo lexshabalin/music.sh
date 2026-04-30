@@ -17,7 +17,10 @@ export const clearToken = () => setToken("");
 const base = () => "";
 
 async function req(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...opts.headers };
+  const isForm = typeof FormData !== "undefined" && opts.body instanceof FormData;
+  const headers = isForm
+    ? { ...opts.headers }
+    : { "Content-Type": "application/json", ...opts.headers };
   const t = getToken();
   if (t) headers.Authorization = `Bearer ${t}`;
   const r = await fetch(base() + path, { ...opts, headers });
@@ -112,6 +115,17 @@ export const lib = {
   /** PATCH user metadata (pinned fields survive library rescan). */
   patchTrackMeta: (id, body) =>
     req("/api/tracks/" + id, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
+  /** Upload custom cover (JPEG/PNG/WebP). */
+  uploadTrackCover: (id, file) => {
+    const fd = new FormData();
+    fd.append("art", file);
+    return req("/api/tracks/" + id + "/cover", { method: "POST", body: fd });
+  },
+  deleteTrackCover: (id) => req("/api/tracks/" + id + "/cover", { method: "DELETE" }),
+  trackCoverUrl: (id) => {
+    const t = getToken();
+    return base() + "/api/tracks/" + id + "/cover" + (t ? "?token=" + encodeURIComponent(t) : "");
+  },
   scan: () => req("/api/library/scan", { method: "POST", body: "{}" }),
   scanStatus: () => req("/api/library/scan/status"),
   streamUrl: (id) => {
@@ -150,6 +164,13 @@ export const lib = {
   },
 };
 
+/** Cover for player UI: custom track art, else album art. */
+export function effectiveTrackCoverUrl(t) {
+  if (t?.coverUrl) return lib.trackCoverUrl(t.id);
+  if (t?.album?.id) return lib.coverUrl(t.album.id);
+  return "";
+}
+
 /** Player queue items from `/api/tracks` rows (same shape as playlist pages). */
 export function tracksToQueueItems(tracks) {
   if (!Array.isArray(tracks)) return [];
@@ -160,7 +181,7 @@ export function tracksToQueueItems(tracks) {
     artist: t.artist?.name || "",
     title: t.title || "Track",
     album: t.album?.title || "",
-    coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+    coverUrl: effectiveTrackCoverUrl(t),
   }));
 }
 

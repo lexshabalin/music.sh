@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { lib } from "../api";
+import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackRow } from "../components/TrackMenu";
 
@@ -25,7 +25,7 @@ export function Likes() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     }));
     p.playQueue(items, startIdx);
   };
@@ -38,7 +38,7 @@ export function Likes() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     };
     if (!p.current) {
       p.playQueue([item], 0);

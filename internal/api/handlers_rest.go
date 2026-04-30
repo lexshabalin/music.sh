@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -202,6 +203,13 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 			up.ClearTrackNo = true
 		case "discno", "disc":
 			up.ClearDiscNo = true
+		case "art", "cover":
+			up.ClearArt = true
+		}
+	}
+	if up.ClearArt {
+		if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
+			_ = os.Remove(filepath.Join(a.DataDir, rel))
 		}
 	}
 	if err := a.DB.UpdateTrackMeta(r.Context(), id, up); err != nil {
@@ -294,6 +302,154 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	http.ServeFile(w, r, abs)
+}
+
+func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	_, err = a.parseUserIDFromMediaRequest(r)
+	if err != nil {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	rel, ok := a.DB.TrackArtRelPath(r.Context(), id)
+	if !ok {
+		JSONError(w, 404, "no cover")
+		return
+	}
+	abs := filepath.Join(a.DataDir, rel)
+	if _, err := os.Stat(abs); err != nil {
+		JSONError(w, 404, "file")
+		return
+	}
+	ct := "image/jpeg"
+	switch filepath.Ext(abs) {
+	case ".png":
+		ct = "image/png"
+	case ".webp":
+		ct = "image/webp"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	http.ServeFile(w, r, abs)
+}
+
+func (a *App) uploadTrackCover(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	if _, err := a.DB.GetTrackByID(r.Context(), id); err != nil {
+		JSONError(w, 404, "not found")
+		return
+	}
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		JSONError(w, 400, "bad multipart")
+		return
+	}
+	f, _, err := r.FormFile("art")
+	if err != nil {
+		f, _, err = r.FormFile("cover")
+	}
+	if err != nil {
+		JSONError(w, 400, "image required")
+		return
+	}
+	defer f.Close()
+
+	buf := make([]byte, 512)
+	n, readErr := f.Read(buf)
+	if readErr != nil && readErr != io.EOF {
+		JSONError(w, 400, "read")
+		return
+	}
+	if n == 0 {
+		JSONError(w, 400, "empty file")
+		return
+	}
+	ct := http.DetectContentType(buf[:n])
+	if !strings.HasPrefix(ct, "image/") {
+		JSONError(w, 400, "invalid image")
+		return
+	}
+	var ext string
+	switch ct {
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	default:
+		JSONError(w, 400, "unsupported image type")
+		return
+	}
+
+	dir := filepath.Join(a.DataDir, "covers", "tracks")
+	_ = os.MkdirAll(dir, 0o755)
+	if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
+		_ = os.Remove(filepath.Join(a.DataDir, rel))
+	}
+	rel := filepath.Join("covers", "tracks", id.String()+ext)
+	abs := filepath.Join(a.DataDir, rel)
+	tmp := abs + ".tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		JSONError(w, 500, "write")
+		return
+	}
+	if _, err = out.Write(buf[:n]); err != nil {
+		_ = out.Close()
+		_ = os.Remove(tmp)
+		JSONError(w, 500, "write")
+		return
+	}
+	if _, err = io.Copy(out, f); err != nil {
+		_ = out.Close()
+		_ = os.Remove(tmp)
+		JSONError(w, 500, "write")
+		return
+	}
+	if err = out.Close(); err != nil {
+		_ = os.Remove(tmp)
+		JSONError(w, 500, "write")
+		return
+	}
+	if err = os.Rename(tmp, abs); err != nil {
+		_ = os.Remove(tmp)
+		JSONError(w, 500, "write")
+		return
+	}
+	if err := a.DB.SetTrackArtPath(r.Context(), id, rel); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	t, err := a.DB.GetTrackByID(r.Context(), id)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, t)
+}
+
+func (a *App) deleteTrackCover(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
+		_ = os.Remove(filepath.Join(a.DataDir, rel))
+	}
+	if err := a.DB.ClearTrackArtPath(r.Context(), id); err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- scan ---

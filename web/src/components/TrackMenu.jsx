@@ -574,8 +574,8 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
         <h3 style={{ marginTop: 0 }}>Метаданные трека</h3>
         <p className="muted" style={{ fontSize: "0.9rem", marginTop: "-0.5rem" }}>
-          Поля, заданные здесь вручную, не перезаписываются при повторном сканировании библиотеки. Нажмите «Сбросить», чтобы
-          снова использовать значения из файла.
+          Текстовые поля и своя обложка не перезаписываются при повторном сканировании. Нажмите «Сбросить», чтобы снова
+          подставлять значения из файла / обложку альбома.
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
         {loading ? (
@@ -622,6 +622,47 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                   № диска {m?.discNo ? <ResetLink onClick={() => resetField("discNo")} busy={busy} /> : null}
                 </label>
                 <input value={discNo} onChange={(e) => setDiscNo(e.target.value)} />
+              </span>
+            </p>
+            <p>
+              <label>
+                Обложка {m?.art ? <ResetLink onClick={() => resetField("art")} busy={busy} /> : null}
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+                {full?.coverUrl || m?.art ? (
+                  <img
+                    src={lib.trackCoverUrl(trackId)}
+                    alt=""
+                    style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }}
+                  />
+                ) : (
+                  <div style={{ width: 96, height: 96, background: "#222", borderRadius: 8 }} />
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={busy}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    setBusy(true);
+                    setErr("");
+                    try {
+                      await lib.uploadTrackCover(trackId, file);
+                      const t = await lib.track(trackId);
+                      setFull(t);
+                      onSaved();
+                    } catch (err2) {
+                      setErr(err2.message || "Ошибка загрузки");
+                    }
+                    setBusy(false);
+                  }}
+                />
+              </div>
+              <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 6 }}>
+                JPEG, PNG или WebP. Не заменяет обложку альбома для других треков. Сканирование библиотеки не удаляет свою
+                обложку.
               </span>
             </p>
           </>

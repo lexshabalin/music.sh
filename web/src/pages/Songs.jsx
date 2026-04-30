@@ -1,5 +1,5 @@
 import React from "react";
-import { lib } from "../api";
+import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 
@@ -71,7 +71,7 @@ export function Songs() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     }));
   }, [tracks]);
 
@@ -101,7 +101,7 @@ export function Songs() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     };
     if (!p.current) p.playQueue([item], 0);
     else p.playNext(item);

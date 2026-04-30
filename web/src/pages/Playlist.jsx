@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { lib } from "../api";
+import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 
@@ -70,7 +70,7 @@ export function Playlist() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     }));
     const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
     const idx = Math.max(0, Math.min(items.length - 1, raw));
@@ -94,7 +94,7 @@ export function Playlist() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     }));
     const shuffled = shuffleCopy(items);
     if (shuffled.length) player.playQueue(shuffled, 0);
@@ -107,7 +107,7 @@ export function Playlist() {
       artist: t.artist?.name || "",
       title: t.title || "Track",
       album: t.album?.title || "",
-      coverUrl: t.album?.id ? lib.coverUrl(t.album.id) : "",
+      coverUrl: effectiveTrackCoverUrl(t),
     };
     if (!player.current) player.playQueue([item], 0);
     else player.playNext(item);
