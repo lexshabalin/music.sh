@@ -25,7 +25,7 @@ func readFLACTags(path string) (flacTags, []string, error) {
 	if err != nil {
 		return flacTags{}, warn, err
 	}
-	var vc *flacvorbis.MetadataBlockVorbisComment
+	var vc *flacvorbis.VorbisComment
 	out := flacTags{}
 	for _, meta := range f.Meta {
 		if meta.Type == flac.VorbisComment {
@@ -56,7 +56,7 @@ func readFLACTags(path string) (flacTags, []string, error) {
 	return out, warn, nil
 }
 
-func firstVorbis(vc *flacvorbis.MetadataBlockVorbisComment, key string) []byte {
+func firstVorbis(vc *flacvorbis.VorbisComment, key string) []byte {
 	if vc == nil {
 		return nil
 	}
@@ -74,7 +74,7 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 		return warn, err
 	}
 
-	var vc *flacvorbis.MetadataBlockVorbisComment
+	var vc *flacvorbis.VorbisComment
 	vcIdx := -1
 	for idx, meta := range f.Meta {
 		if meta.Type == flac.VorbisComment {
