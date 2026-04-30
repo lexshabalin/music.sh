@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getToken, lib } from "../api";
 import { IClock, IHeart } from "./icons";
@@ -474,8 +474,70 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
   const [album, setAlbum] = useState("");
   const [albumArtist, setAlbumArtist] = useState("");
   const [year, setYear] = useState("");
+  const [yearTouched, setYearTouched] = useState(false);
   const [trackNo, setTrackNo] = useState("");
   const [discNo, setDiscNo] = useState("");
+  const [albumList, setAlbumList] = useState([]);
+  /** "library" = привязка к строке альбома в БД; "custom" = название вручную */
+  const [albumSource, setAlbumSource] = useState("custom");
+  const [libraryAlbumId, setLibraryAlbumId] = useState("");
+
+  const applyAlbumStateFromTrack = (t, albs) => {
+    const list = Array.isArray(albs) ? albs : [];
+    const curAid = t.album?.id;
+    if (curAid && list.some((a) => a.id === curAid)) {
+      setAlbumSource("library");
+      setLibraryAlbumId(curAid);
+      const al = list.find((a) => a.id === curAid);
+      setYear(al?.year != null ? String(al.year) : t.year != null ? String(t.year) : "");
+      setYearTouched(false);
+    } else {
+      setAlbumSource("custom");
+      setLibraryAlbumId("");
+      setAlbum(t.album?.title || "");
+      setYear(t.year != null ? String(t.year) : "");
+      setYearTouched(false);
+    }
+  };
+
+  const loadAlbumsForArtistName = useCallback(async (artistName, fallbackArtistId) => {
+    let aid = fallbackArtistId;
+    const name = (artistName || "").trim();
+    if (name) {
+      try {
+        const artists = await lib.artists(name);
+        const ex = artists.find((x) => (x.name || "").toLowerCase() === name.toLowerCase());
+        if (ex?.id) aid = ex.id;
+      } catch (_) {}
+    }
+    if (!aid) {
+      setAlbumList([]);
+      return [];
+    }
+    try {
+      const albs = await lib.albums("", aid);
+      const list = Array.isArray(albs) ? albs : [];
+      setAlbumList(list);
+      return list;
+    } catch (_) {
+      setAlbumList([]);
+      return [];
+    }
+  }, []);
+
+  const skipArtistDebounceRef = useRef(true);
+  const libraryAlbumIdRef = useRef("");
+  const fullRef = useRef(null);
+  useEffect(() => {
+    libraryAlbumIdRef.current = libraryAlbumId;
+  }, [libraryAlbumId]);
+  useEffect(() => {
+    fullRef.current = full;
+  }, [full]);
+
+  useEffect(() => {
+    skipArtistDebounceRef.current = true;
+  }, [trackId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,11 +550,12 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
         setFull(t);
         setTitle(t.title || "");
         setArtist(t.artist?.name || "");
-        setAlbum(t.album?.title || "");
         setAlbumArtist("");
-        setYear(t.year != null ? String(t.year) : "");
         setTrackNo(t.trackNo != null ? String(t.trackNo) : "");
         setDiscNo(t.discNo != null ? String(t.discNo) : "");
+        const albs = await loadAlbumsForArtistName(t.artist?.name, t.artist?.id);
+        if (cancelled) return;
+        applyAlbumStateFromTrack(t, albs);
       } catch (e) {
         if (!cancelled) setErr(e.message || "Ошибка загрузки");
       } finally {
@@ -502,7 +565,31 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
     return () => {
       cancelled = true;
     };
-  }, [trackId]);
+  }, [trackId, loadAlbumsForArtistName]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (skipArtistDebounceRef.current) {
+      skipArtistDebounceRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const fr = fullRef.current;
+      const albs = await loadAlbumsForArtistName(artist, fr?.artist?.id);
+      if (cancelled) return;
+      const picked = libraryAlbumIdRef.current;
+      if (picked && !albs.some((a) => a.id === picked)) {
+        setLibraryAlbumId("");
+        setAlbumSource("custom");
+        setAlbum(fr?.album?.title || "");
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [artist, loading, loadAlbumsForArtistName]);
 
   const resetField = async (field) => {
     setBusy(true);
@@ -513,11 +600,11 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       setFull(t);
       setTitle(t.title || "");
       setArtist(t.artist?.name || "");
-      setAlbum(t.album?.title || "");
-      setYear(t.year != null ? String(t.year) : "");
+      setAlbumArtist("");
       setTrackNo(t.trackNo != null ? String(t.trackNo) : "");
       setDiscNo(t.discNo != null ? String(t.discNo) : "");
-      setAlbumArtist("");
+      const albs = await loadAlbumsForArtistName(t.artist?.name, t.artist?.id);
+      applyAlbumStateFromTrack(t, albs);
       onSaved();
     } catch (e) {
       setErr(e.message || "Ошибка");
@@ -530,25 +617,45 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       setErr("Укажите название трека");
       return;
     }
+    if (albumSource === "library" && !libraryAlbumId) {
+      setErr("Выберите альбом из списка или переключитесь на ввод вручную");
+      return;
+    }
     setBusy(true);
     setErr("");
     try {
       const clear = [];
-      if (!year.trim() && full?.meta?.year) clear.push("year");
       if (!trackNo.trim() && full?.meta?.trackNo) clear.push("trackNo");
       if (!discNo.trim() && full?.meta?.discNo) clear.push("discNo");
+
       const body = {
         title: title.trim(),
         artistName: artist.trim(),
-        albumTitle: album.trim(),
         clear,
       };
-      if (albumArtist.trim()) body.albumArtistName = albumArtist.trim();
-      if (year.trim()) {
-        const y = parseInt(year, 10);
-        if (!Number.isFinite(y)) throw new Error("Некорректный год");
-        body.year = y;
+
+      if (albumSource === "library" && libraryAlbumId) {
+        body.albumId = libraryAlbumId;
+        if (yearTouched) {
+          if (!year.trim()) {
+            clear.push("year");
+          } else {
+            const y = parseInt(year, 10);
+            if (!Number.isFinite(y)) throw new Error("Некорректный год");
+            body.year = y;
+          }
+        }
+      } else {
+        if (!year.trim() && full?.meta?.year) clear.push("year");
+        body.albumTitle = album.trim();
+        if (albumArtist.trim()) body.albumArtistName = albumArtist.trim();
+        if (year.trim()) {
+          const y = parseInt(year, 10);
+          if (!Number.isFinite(y)) throw new Error("Некорректный год");
+          body.year = y;
+        }
       }
+
       if (trackNo.trim()) {
         const n = parseInt(trackNo, 10);
         if (!Number.isFinite(n)) throw new Error("Некорректный номер трека");
@@ -569,13 +676,16 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
   };
 
   const m = full?.meta;
+  const albumSelectValue = albumSource === "custom" ? "__custom__" : libraryAlbumId || "";
+
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
         <h3 style={{ marginTop: 0 }}>Метаданные трека</h3>
         <p className="muted" style={{ fontSize: "0.9rem", marginTop: "-0.5rem" }}>
-          Текстовые поля и своя обложка не перезаписываются при повторном сканировании. Нажмите «Сбросить», чтобы снова
-          подставлять значения из файла / обложку альбома.
+          Сначала укажите исполнителя — подгрузятся альбомы из библиотеки для этого исполнителя. Можно выбрать готовый
+          альбом (трек унаследует его название, год и обложку) или ввести альбом вручную. Текстовые поля и своя обложка
+          не перезаписываются при повторном сканировании.
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
         {loading ? (
@@ -598,17 +708,64 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
               <label>
                 Альбом {m?.album ? <ResetLink onClick={() => resetField("album")} busy={busy} /> : null}
               </label>
-              <input value={album} onChange={(e) => setAlbum(e.target.value)} />
+              <select
+                value={albumSelectValue}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__custom__") {
+                    setAlbumSource("custom");
+                    setLibraryAlbumId("");
+                    setAlbum(full?.album?.title || "");
+                    setYear(full?.year != null ? String(full.year) : "");
+                    setYearTouched(false);
+                  } else {
+                    setAlbumSource("library");
+                    setLibraryAlbumId(v);
+                    const al = albumList.find((x) => x.id === v);
+                    setYear(al?.year != null ? String(al.year) : "");
+                    setYearTouched(false);
+                  }
+                }}
+              >
+                <option value="">— выберите альбом из библиотеки —</option>
+                {albumList.map((al) => (
+                  <option key={al.id} value={al.id}>
+                    {al.title}
+                    {al.year != null ? ` (${al.year})` : ""}
+                  </option>
+                ))}
+                <option value="__custom__">Другой альбом (ввести вручную)…</option>
+              </select>
             </p>
-            <p>
-              <label>Исполнитель альбома (если отличается)</label>
-              <input value={albumArtist} onChange={(e) => setAlbumArtist(e.target.value)} placeholder="Необязательно" />
-            </p>
+            {albumSource === "custom" ? (
+              <>
+                <p>
+                  <label>Название альбома</label>
+                  <input value={album} onChange={(e) => setAlbum(e.target.value)} />
+                </p>
+                <p>
+                  <label>Исполнитель альбома (если отличается)</label>
+                  <input value={albumArtist} onChange={(e) => setAlbumArtist(e.target.value)} placeholder="Необязательно" />
+                </p>
+              </>
+            ) : null}
             <p>
               <label>
                 Год {m?.year ? <ResetLink onClick={() => resetField("year")} busy={busy} /> : null}
               </label>
-              <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Напр. 2020" />
+              <input
+                value={year}
+                onChange={(e) => {
+                  setYear(e.target.value);
+                  setYearTouched(true);
+                }}
+                placeholder={albumSource === "library" && libraryAlbumId ? "Как у альбома, если не менять" : "Напр. 2020"}
+              />
+              {albumSource === "library" && libraryAlbumId && !yearTouched ? (
+                <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 4 }}>
+                  Берётся из альбома. Измените поле, чтобы зафиксировать свой год для трека.
+                </span>
+              ) : null}
             </p>
             <p style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <span>

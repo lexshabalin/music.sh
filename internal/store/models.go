@@ -86,6 +86,8 @@ type TrackMetaUpdate struct {
 	Title, ArtistName, AlbumTitle, AlbumArtistName                                      *string
 	Year                                                                                  *int
 	TrackNo, DiscNo                                                                       *int
+	// AlbumID links to an existing album row (library pick); string pins are cleared so the track inherits album metadata.
+	AlbumID *uuid.UUID
 }
 
 type TrackAlbum struct {

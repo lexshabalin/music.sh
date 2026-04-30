@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,24 @@ import (
 
 type DB struct {
 	Pool *pgxpool.Pool
+}
+
+// ErrAlbumNotForArtist is returned when PATCH sets albumId that is not associated with the resolved track artist.
+var ErrAlbumNotForArtist = errors.New("album not in artist context")
+
+// AlbumBelongsToArtistContext matches ListAlbums(artistId): album artist or a track on the album has this artist.
+func (d *DB) AlbumBelongsToArtistContext(ctx context.Context, albumID, artistID uuid.UUID) (bool, error) {
+	var ok bool
+	err := d.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM albums a
+			WHERE a.id = $1 AND (
+				a.artist_id = $2 OR EXISTS (
+					SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.artist_id = $2
+				)
+			)
+		)`, albumID, artistID).Scan(&ok)
+	return ok, err
 }
 
 // CountPendingIdentifyJobForTrack returns how many pending/running identify jobs exist for a track.
@@ -1067,7 +1086,22 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 
 	// Resolve album_id
 	var albumID uuid.UUID
-	if metaPinString(muAlb) {
+	if u.AlbumID != nil && *u.AlbumID != uuid.Nil {
+		ok, verr := d.AlbumBelongsToArtistContext(ctx, *u.AlbumID, artistID)
+		if verr != nil {
+			return verr
+		}
+		if !ok {
+			return ErrAlbumNotForArtist
+		}
+		albumID = *u.AlbumID
+		// Drop album string pins so API/list views inherit title, album artist, and year from the album row.
+		muAlb = sql.NullString{}
+		muAlbArt = sql.NullString{}
+		if u.Year == nil {
+			muY = sql.NullInt32{}
+		}
+	} else if metaPinString(muAlb) {
 		albTitle := strings.TrimSpace(muAlb.String)
 		var albumArtistID uuid.UUID
 		if metaPinString(muAlbArt) {

@@ -346,6 +346,7 @@ type trackMetaJSON struct {
 	ArtistName      *string `json:"artistName"`
 	AlbumTitle      *string `json:"albumTitle"`
 	AlbumArtistName *string `json:"albumArtistName"`
+	AlbumID         *string `json:"albumId"`
 	Year            *int    `json:"year"`
 	TrackNo         *int    `json:"trackNo"`
 	DiscNo          *int    `json:"discNo"`
@@ -371,6 +372,14 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 		Year:            in.Year,
 		TrackNo:         in.TrackNo,
 		DiscNo:          in.DiscNo,
+	}
+	if in.AlbumID != nil && strings.TrimSpace(*in.AlbumID) != "" {
+		aid, err := uuid.Parse(strings.TrimSpace(*in.AlbumID))
+		if err != nil {
+			JSONError(w, 400, "bad albumId")
+			return
+		}
+		up.AlbumID = &aid
 	}
 	for _, c := range in.Clear {
 		switch strings.ToLower(strings.TrimSpace(c)) {
@@ -398,6 +407,10 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 	if err := a.DB.UpdateTrackMeta(r.Context(), id, up); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			JSONError(w, 404, "not found")
+			return
+		}
+		if errors.Is(err, store.ErrAlbumNotForArtist) {
+			JSONError(w, 400, "album does not match artist")
 			return
 		}
 		JSONError(w, 500, "db")
