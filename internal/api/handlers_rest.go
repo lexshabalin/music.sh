@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"musicsh/internal/store"
 	"musicsh/internal/stream"
@@ -149,6 +152,69 @@ func (a *App) getTrack(w http.ResponseWriter, r *http.Request) {
 	t, err := a.DB.GetTrackByID(r.Context(), id)
 	if err != nil {
 		JSONError(w, 404, "not found")
+		return
+	}
+	JSON(w, 200, t)
+}
+
+type trackMetaJSON struct {
+	Title           *string `json:"title"`
+	ArtistName      *string `json:"artistName"`
+	AlbumTitle      *string `json:"albumTitle"`
+	AlbumArtistName *string `json:"albumArtistName"`
+	Year            *int    `json:"year"`
+	TrackNo         *int    `json:"trackNo"`
+	DiscNo          *int    `json:"discNo"`
+	Clear           []string `json:"clear"`
+}
+
+func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	var in trackMetaJSON
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	up := store.TrackMetaUpdate{
+		Title:           in.Title,
+		ArtistName:      in.ArtistName,
+		AlbumTitle:      in.AlbumTitle,
+		AlbumArtistName: in.AlbumArtistName,
+		Year:            in.Year,
+		TrackNo:         in.TrackNo,
+		DiscNo:          in.DiscNo,
+	}
+	for _, c := range in.Clear {
+		switch strings.ToLower(strings.TrimSpace(c)) {
+		case "title":
+			up.ClearTitle = true
+		case "artist", "artistname":
+			up.ClearArtist = true
+		case "album", "albumtitle":
+			up.ClearAlbum = true
+		case "year":
+			up.ClearYear = true
+		case "trackno", "track":
+			up.ClearTrackNo = true
+		case "discno", "disc":
+			up.ClearDiscNo = true
+		}
+	}
+	if err := a.DB.UpdateTrackMeta(r.Context(), id, up); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	t, err := a.DB.GetTrackByID(r.Context(), id)
+	if err != nil {
+		JSONError(w, 500, "db")
 		return
 	}
 	JSON(w, 200, t)

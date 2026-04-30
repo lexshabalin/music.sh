@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { lib } from "../api";
+import { getToken, lib } from "../api";
 import { IClock, IHeart } from "./icons";
 
 function fmtDur(ms) {
@@ -115,9 +115,12 @@ export function TrackRow({
   isNowPlaying,
   isPlaying,
   columns = "full",
+  allowMetaEdit = true,
+  onMetaSaved,
 }) {
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
   const btnRef = useRef(null);
   const suppressClickRef = useRef(false);
   const didScrollRef = useRef(false);
@@ -316,12 +319,29 @@ export function TrackRow({
             setShowAdd(true);
             setOpen(false);
           }}
+          onEditMeta={
+            allowMetaEdit && getToken()
+              ? () => {
+                  setShowMeta(true);
+                  setOpen(false);
+                }
+              : undefined
+          }
         />
       ) : null}
       {showAdd ? (
         <AddToPlaylistModal
           trackId={track.id}
           onClose={() => setShowAdd(false)}
+        />
+      ) : null}
+      {showMeta ? (
+        <TrackMetaEditModal
+          trackId={track.id}
+          onClose={() => setShowMeta(false)}
+          onSaved={() => {
+            if (typeof onMetaSaved === "function") onMetaSaved();
+          }}
         />
       ) : null}
     </>
@@ -372,7 +392,7 @@ export function TrackHeader({
   );
 }
 
-function Menu({ anchorRef, onClose, suppressClose, onPlayNow, onPlayNext, onAddToPlaylist }) {
+function Menu({ anchorRef, onClose, suppressClose, onPlayNow, onPlayNext, onAddToPlaylist, onEditMeta }) {
   useEffect(() => {
     const onDoc = (e) => {
       if (suppressClose) return;
@@ -403,6 +423,7 @@ function Menu({ anchorRef, onClose, suppressClose, onPlayNow, onPlayNext, onAddT
       <MenuItem onClick={onPlayNow}>Play now</MenuItem>
       <MenuItem onClick={onPlayNext}>Play next</MenuItem>
       <MenuItem onClick={onAddToPlaylist}>Add to playlist</MenuItem>
+      {typeof onEditMeta === "function" ? <MenuItem onClick={onEditMeta}>Править метаданные</MenuItem> : null}
     </div>
   );
 }
@@ -423,6 +444,198 @@ function MenuItem({ children, onClick, disabled }) {
     >
       {children}
     </button>
+  );
+}
+
+function ResetLink({ onClick, busy }) {
+  return (
+    <button
+      type="button"
+      className="ghost"
+      style={{ fontSize: "0.75rem", marginLeft: 8, padding: "2px 6px" }}
+      disabled={busy}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
+    >
+      Сбросить
+    </button>
+  );
+}
+
+function TrackMetaEditModal({ trackId, onClose, onSaved }) {
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [full, setFull] = useState(null);
+  const [title, setTitle] = useState("");
+  const [artist, setArtist] = useState("");
+  const [album, setAlbum] = useState("");
+  const [albumArtist, setAlbumArtist] = useState("");
+  const [year, setYear] = useState("");
+  const [trackNo, setTrackNo] = useState("");
+  const [discNo, setDiscNo] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        const t = await lib.track(trackId);
+        if (cancelled || !t) return;
+        setFull(t);
+        setTitle(t.title || "");
+        setArtist(t.artist?.name || "");
+        setAlbum(t.album?.title || "");
+        setAlbumArtist("");
+        setYear(t.year != null ? String(t.year) : "");
+        setTrackNo(t.trackNo != null ? String(t.trackNo) : "");
+        setDiscNo(t.discNo != null ? String(t.discNo) : "");
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Ошибка загрузки");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trackId]);
+
+  const resetField = async (field) => {
+    setBusy(true);
+    setErr("");
+    try {
+      await lib.patchTrackMeta(trackId, { clear: [field] });
+      const t = await lib.track(trackId);
+      setFull(t);
+      setTitle(t.title || "");
+      setArtist(t.artist?.name || "");
+      setAlbum(t.album?.title || "");
+      setYear(t.year != null ? String(t.year) : "");
+      setTrackNo(t.trackNo != null ? String(t.trackNo) : "");
+      setDiscNo(t.discNo != null ? String(t.discNo) : "");
+      setAlbumArtist("");
+      onSaved();
+    } catch (e) {
+      setErr(e.message || "Ошибка");
+    }
+    setBusy(false);
+  };
+
+  const save = async () => {
+    if (!title.trim()) {
+      setErr("Укажите название трека");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      const clear = [];
+      if (!year.trim() && full?.meta?.year) clear.push("year");
+      if (!trackNo.trim() && full?.meta?.trackNo) clear.push("trackNo");
+      if (!discNo.trim() && full?.meta?.discNo) clear.push("discNo");
+      const body = {
+        title: title.trim(),
+        artistName: artist.trim(),
+        albumTitle: album.trim(),
+        clear,
+      };
+      if (albumArtist.trim()) body.albumArtistName = albumArtist.trim();
+      if (year.trim()) {
+        const y = parseInt(year, 10);
+        if (!Number.isFinite(y)) throw new Error("Некорректный год");
+        body.year = y;
+      }
+      if (trackNo.trim()) {
+        const n = parseInt(trackNo, 10);
+        if (!Number.isFinite(n)) throw new Error("Некорректный номер трека");
+        body.trackNo = n;
+      }
+      if (discNo.trim()) {
+        const n = parseInt(discNo, 10);
+        if (!Number.isFinite(n)) throw new Error("Некорректный номер диска");
+        body.discNo = n;
+      }
+      await lib.patchTrackMeta(trackId, body);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setErr(e.message || "Ошибка сохранения");
+    }
+    setBusy(false);
+  };
+
+  const m = full?.meta;
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Метаданные трека</h3>
+        <p className="muted" style={{ fontSize: "0.9rem", marginTop: "-0.5rem" }}>
+          Поля, заданные здесь вручную, не перезаписываются при повторном сканировании библиотеки. Нажмите «Сбросить», чтобы
+          снова использовать значения из файла.
+        </p>
+        {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
+        {loading ? (
+          <p className="muted">Загрузка…</p>
+        ) : (
+          <>
+            <p>
+              <label>
+                Название {m?.title ? <ResetLink onClick={() => resetField("title")} busy={busy} /> : null}
+              </label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} />
+            </p>
+            <p>
+              <label>
+                Исполнитель {m?.artist ? <ResetLink onClick={() => resetField("artist")} busy={busy} /> : null}
+              </label>
+              <input value={artist} onChange={(e) => setArtist(e.target.value)} />
+            </p>
+            <p>
+              <label>
+                Альбом {m?.album ? <ResetLink onClick={() => resetField("album")} busy={busy} /> : null}
+              </label>
+              <input value={album} onChange={(e) => setAlbum(e.target.value)} />
+            </p>
+            <p>
+              <label>Исполнитель альбома (если отличается)</label>
+              <input value={albumArtist} onChange={(e) => setAlbumArtist(e.target.value)} placeholder="Необязательно" />
+            </p>
+            <p>
+              <label>
+                Год {m?.year ? <ResetLink onClick={() => resetField("year")} busy={busy} /> : null}
+              </label>
+              <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Напр. 2020" />
+            </p>
+            <p style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <span>
+                <label>
+                  № трека {m?.trackNo ? <ResetLink onClick={() => resetField("trackNo")} busy={busy} /> : null}
+                </label>
+                <input value={trackNo} onChange={(e) => setTrackNo(e.target.value)} />
+              </span>
+              <span>
+                <label>
+                  № диска {m?.discNo ? <ResetLink onClick={() => resetField("discNo")} busy={busy} /> : null}
+                </label>
+                <input value={discNo} onChange={(e) => setDiscNo(e.target.value)} />
+              </span>
+            </p>
+          </>
+        )}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <button className="ghost" type="button" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button type="button" disabled={busy || loading} onClick={save}>
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

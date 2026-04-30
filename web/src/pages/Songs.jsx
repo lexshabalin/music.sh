@@ -164,6 +164,7 @@ export function Songs() {
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             columns="full"
+            onMetaSaved={load}
           />
         ))}
       </ul>

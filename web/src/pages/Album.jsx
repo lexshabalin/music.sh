@@ -186,6 +186,7 @@ export function Album() {
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             columns="album"
+            onMetaSaved={load}
           />
         ))}
       </ul>

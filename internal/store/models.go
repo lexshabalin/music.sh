@@ -47,6 +47,26 @@ type Track struct {
 	FilePath     string     `json:"-"` // not exposed; stream uses id
 	Album        *TrackAlbum `json:"album,omitempty"`
 	Artist       *TrackArtist `json:"artist,omitempty"`
+	// Meta lists which fields are user-pinned (not overwritten on rescan).
+	Meta *TrackMetaPins `json:"meta,omitempty"`
+}
+
+// TrackMetaPins indicates user overrides active for the track.
+type TrackMetaPins struct {
+	Title   bool `json:"title,omitempty"`
+	Artist  bool `json:"artist,omitempty"`
+	Album   bool `json:"album,omitempty"`
+	Year    bool `json:"year,omitempty"`
+	TrackNo bool `json:"trackNo,omitempty"`
+	DiscNo  bool `json:"discNo,omitempty"`
+}
+
+// TrackMetaUpdate is the store layer input for PATCH /api/tracks/{id} metadata.
+type TrackMetaUpdate struct {
+	ClearTitle, ClearArtist, ClearAlbum, ClearYear, ClearTrackNo, ClearDiscNo bool
+	Title, ArtistName, AlbumTitle, AlbumArtistName                           *string
+	Year                                                                       *int
+	TrackNo, DiscNo                                                            *int
 }
 
 type TrackAlbum struct {

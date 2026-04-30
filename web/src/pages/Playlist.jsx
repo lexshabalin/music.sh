@@ -158,6 +158,7 @@ export function Playlist() {
             isNowPlaying={player.current?.id === t.id}
             isPlaying={player.isPlaying}
             columns="full"
+            onMetaSaved={load}
           />
         ))}
       </ul>

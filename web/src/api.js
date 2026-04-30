@@ -109,6 +109,9 @@ export const lib = {
   album: (id) => req("/api/albums/" + id),
   tracks: (q, albumId) => req("/api/tracks?" + new URLSearchParams({ query: q || "", ...(albumId && { albumId }) })),
   track: (id) => req("/api/tracks/" + id),
+  /** PATCH user metadata (pinned fields survive library rescan). */
+  patchTrackMeta: (id, body) =>
+    req("/api/tracks/" + id, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
   scan: () => req("/api/library/scan", { method: "POST", body: "{}" }),
   scanStatus: () => req("/api/library/scan/status"),
   streamUrl: (id) => {

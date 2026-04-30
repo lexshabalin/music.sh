@@ -107,6 +107,7 @@ func (a *App) Handlers() http.Handler {
 		g.Get("/api/albums/{id}", a.getAlbum)
 		g.Get("/api/tracks", a.listTracks)
 		g.Get("/api/tracks/{id}", a.getTrack)
+		g.Patch("/api/tracks/{id}", a.patchTrackMeta)
 		g.Get("/api/playlists", a.listPl)
 		g.Post("/api/playlists", a.createPl)
 		g.Get("/api/playlists/{id}", a.getPl)

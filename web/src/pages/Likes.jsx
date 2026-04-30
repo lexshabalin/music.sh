@@ -68,6 +68,7 @@ export function Likes() {
             label={`${t.title || "Untitled"}`}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
+            onMetaSaved={load}
           />
         ))}
       </ul>
