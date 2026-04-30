@@ -276,7 +276,14 @@ function ImprintModal({ albumId, onClose }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ maxWidth: 860 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        style={{
+          maxWidth: 1100,
+          width: "min(1100px, 96vw)",
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <h3 style={{ marginTop: 0 }}>Imprint metadata</h3>
         <p className="muted" style={{ marginTop: "-0.5rem" }}>
           Предпросмотр изменений перед записью тегов в файлы. По умолчанию выбраны все поддерживаемые поля.
@@ -316,7 +323,15 @@ function ImprintModal({ albumId, onClose }) {
                 {job?.lastError ? <div style={{ color: "tomato", marginTop: 8 }}>{job.lastError}</div> : null}
               </div>
             ) : null}
-            <div style={{ maxHeight: "55vh", overflow: "auto", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }}>
+            <div
+              style={{
+                maxHeight: "55vh",
+                overflowY: "auto",
+                overflowX: "hidden",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 8,
+              }}
+            >
               {(dry?.tracks || []).map((tr) => (
                 <div key={tr.trackId} style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -330,7 +345,15 @@ function ImprintModal({ albumId, onClose }) {
                   ) : null}
                   <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
                     {(tr.diff || []).map((d) => (
-                      <label key={d.field} style={{ display: "grid", gridTemplateColumns: "22px 120px 1fr 1fr", gap: 8, alignItems: "baseline" }}>
+                      <label
+                        key={d.field}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "22px 140px minmax(0, 1fr) minmax(0, 1fr)",
+                          gap: 8,
+                          alignItems: "baseline",
+                        }}
+                      >
                         <input
                           type="checkbox"
                           disabled={busy || !d.supported}
@@ -338,8 +361,26 @@ function ImprintModal({ albumId, onClose }) {
                           onChange={() => toggle(tr.trackId, d.field)}
                         />
                         <span className="muted">{d.field}</span>
-                        <span style={{ opacity: d.changed ? 1 : 0.6 }}>{d.before ?? "—"}</span>
-                        <span style={{ opacity: d.changed ? 1 : 0.6 }}>{d.after ?? "—"}</span>
+                        <span
+                          style={{
+                            opacity: d.changed ? 1 : 0.6,
+                            minWidth: 0,
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {d.before ?? "—"}
+                        </span>
+                        <span
+                          style={{
+                            opacity: d.changed ? 1 : 0.6,
+                            minWidth: 0,
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {d.after ?? "—"}
+                        </span>
                       </label>
                     ))}
                   </div>
