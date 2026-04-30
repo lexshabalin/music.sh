@@ -110,6 +110,15 @@ export const lib = {
   artists: (q) => req("/api/artists?" + new URLSearchParams({ query: q || "" })),
   albums: (q, artistId) => req("/api/albums?" + new URLSearchParams({ query: q || "", ...(artistId && { artistId }) })),
   album: (id) => req("/api/albums/" + id),
+  /** PATCH album metadata (pinned fields; cover lock via upload or clear). */
+  patchAlbumMeta: (id, body) =>
+    req("/api/albums/" + id, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
+  uploadAlbumCover: (id, file) => {
+    const fd = new FormData();
+    fd.append("cover", file);
+    return req("/api/albums/" + id + "/cover", { method: "POST", body: fd });
+  },
+  deleteAlbumCover: (id) => req("/api/albums/" + id + "/cover", { method: "DELETE" }),
   tracks: (q, albumId) => req("/api/tracks?" + new URLSearchParams({ query: q || "", ...(albumId && { albumId }) })),
   track: (id) => req("/api/tracks/" + id),
   /** PATCH user metadata (pinned fields survive library rescan). */

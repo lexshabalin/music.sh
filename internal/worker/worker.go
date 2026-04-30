@@ -164,6 +164,13 @@ func (h *Worker) identifyTrack(ctx context.Context, trackID uuid.UUID) error {
 }
 
 func (h *Worker) fetchAlbumMeta(ctx context.Context, albumID uuid.UUID) error {
+	locked, err := h.DB.AlbumCoverLocked(ctx, albumID)
+	if err != nil {
+		return err
+	}
+	if locked {
+		return nil
+	}
 	has, err := h.DB.AlbumHasCover(ctx, albumID)
 	if err != nil {
 		return err

@@ -32,7 +32,23 @@ type Album struct {
 	ArtistID           *uuid.UUID `json:"artistId,omitempty"`
 	ArtistName         *string    `json:"artistName,omitempty"`
 	CoverPath          *string    `json:"-"`
-	MusicBrainzRelease *string    `json:"musicbrainzReleaseId,omitempty"`
+	MusicBrainzRelease *string    `json:"musicBrainzReleaseId,omitempty"`
+	Meta               *AlbumMetaPins `json:"meta,omitempty"`
+}
+
+// AlbumMetaPins marks user-edited album fields (persist across library rescan).
+type AlbumMetaPins struct {
+	Title  bool `json:"title,omitempty"`
+	Artist bool `json:"artist,omitempty"`
+	Year   bool `json:"year,omitempty"`
+	Cover  bool `json:"cover,omitempty"`
+}
+
+// AlbumMetaUpdate is input for PATCH /api/albums/{id}.
+type AlbumMetaUpdate struct {
+	ClearTitle, ClearArtist, ClearYear, ClearCover bool
+	Title, ArtistName                              *string
+	Year                                           *int
 }
 
 type Track struct {

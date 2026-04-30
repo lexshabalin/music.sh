@@ -436,6 +436,21 @@ func (d *DB) FindOrCreateAlbum(ctx context.Context, artistID *uuid.UUID, title s
 	return aid, nil
 }
 
+// albumHasUserMeta is true if the user edited this album — rescan should not move tracks away from it.
+func (d *DB) albumHasUserMeta(ctx context.Context, albumID uuid.UUID) (bool, error) {
+	var ok bool
+	err := d.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM albums WHERE id = $1 AND (
+				(meta_user_title IS NOT NULL AND BTRIM(COALESCE(meta_user_title, '')) <> '') OR
+				(meta_user_artist IS NOT NULL AND BTRIM(COALESCE(meta_user_artist, '')) <> '') OR
+				meta_user_year IS NOT NULL OR
+				meta_cover_locked
+			)
+		)`, albumID).Scan(&ok)
+	return ok, err
+}
+
 // UpsertTrack reads metadata from the scanner and inserts or updates a file row.
 func (d *DB) UpsertTrack(
 	ctx context.Context,
@@ -490,7 +505,17 @@ func (d *DB) UpsertTrack(
 		pinTrackNo := muTrackNo.Valid
 		pinDiscNo := muDiscNo.Valid
 
-		sameAlbum := curAlbumID.Valid && curAlbumID.String != "" && curAlbumID.String == albumID.String()
+		tagDerivedAlbID := albumID
+		effectiveTagAlbID := tagDerivedAlbID
+		if curAlbumID.Valid && curAlbumID.String != "" && !pinAlbum {
+			curAUUID, errP := uuid.Parse(curAlbumID.String)
+			if errP == nil {
+				if has, e := d.albumHasUserMeta(ctx, curAUUID); e == nil && has {
+					effectiveTagAlbID = curAUUID
+				}
+			}
+		}
+		sameAlbum := curAlbumID.Valid && curAlbumID.String != "" && curAlbumID.String == effectiveTagAlbID.String()
 		sameArtist := curArtistID.Valid && curArtistID.String != "" && curArtistID.String == artistID.String()
 		if oldMtime == mtimeNs {
 			effSameAlbum := sameAlbum || pinAlbum
@@ -514,7 +539,7 @@ func (d *DB) UpsertTrack(
 				finalArtistID = u
 			}
 		}
-		finalAlbumID := albumID
+		finalAlbumID := effectiveTagAlbID
 		if pinAlbum && curAlbumID.Valid && curAlbumID.String != "" {
 			if u, e := uuid.Parse(curAlbumID.String); e == nil {
 				finalAlbumID = u
@@ -627,7 +652,18 @@ func (d *DB) ListArtists(ctx context.Context, q string) ([]Artist, error) {
 // GetAlbum returns one album row for the API
 func (d *DB) GetAlbum(ctx context.Context, id uuid.UUID) (Album, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT a.id, a.title, a.year, a.artist_id::text, ar.name, a.musicbrainz_release_id, a.cover_path
+		SELECT
+			a.id,
+			COALESCE(NULLIF(BTRIM(a.meta_user_title), ''), a.title) AS disp_title,
+			CASE WHEN a.meta_user_year IS NOT NULL THEN a.meta_user_year ELSE a.year END AS disp_year,
+			a.artist_id::text,
+			COALESCE(NULLIF(BTRIM(a.meta_user_artist), ''), ar.name) AS disp_an,
+			a.musicbrainz_release_id,
+			a.cover_path,
+			(a.meta_user_title IS NOT NULL AND BTRIM(COALESCE(a.meta_user_title, '')) <> '') AS pin_t,
+			(a.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(a.meta_user_artist, '')) <> '') AS pin_ar,
+			(a.meta_user_year IS NOT NULL) AS pin_y,
+			a.meta_cover_locked AS pin_cov
 		FROM albums a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
 		WHERE a.id = $1
@@ -679,7 +715,8 @@ func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]A
 					))) AS artist_key
 			FROM cand c
 			LEFT JOIN artists ar ON c.artist_id = ar.id
-			WHERE ($1 = '' OR c.title ILIKE $2 OR ar.name ILIKE $2)
+			WHERE ($1 = '' OR COALESCE(NULLIF(BTRIM(c.meta_user_title), ''), c.title) ILIKE $2
+				OR COALESCE(NULLIF(BTRIM(c.meta_user_artist), ''), ar.name) ILIKE $2)
 		),
 		ranked AS (
 			SELECT
@@ -694,11 +731,24 @@ func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]A
 				) AS rn
 			FROM base b
 		)
-		SELECT a.id, a.title, a.year, a.artist_id::text, ar.name, a.musicbrainz_release_id, a.cover_path
+		SELECT
+			a.id,
+			COALESCE(NULLIF(BTRIM(a.meta_user_title), ''), a.title) AS disp_title,
+			CASE WHEN a.meta_user_year IS NOT NULL THEN a.meta_user_year ELSE a.year END AS disp_year,
+			a.artist_id::text,
+			COALESCE(NULLIF(BTRIM(a.meta_user_artist), ''), ar.name) AS disp_an,
+			a.musicbrainz_release_id,
+			a.cover_path,
+			(a.meta_user_title IS NOT NULL AND BTRIM(COALESCE(a.meta_user_title, '')) <> '') AS pin_t,
+			(a.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(a.meta_user_artist, '')) <> '') AS pin_ar,
+			(a.meta_user_year IS NOT NULL) AS pin_y,
+			a.meta_cover_locked AS pin_cov
 		FROM ranked a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
 		WHERE a.rn = 1
-		ORDER BY ar.name NULLS LAST, a.title
+		ORDER BY
+			COALESCE(NULLIF(BTRIM(a.meta_user_artist), ''), ar.name) NULLS LAST,
+			COALESCE(NULLIF(BTRIM(a.meta_user_title), ''), a.title)
 	`, qs, like, artistID)
 	if err != nil {
 		return nil, err
@@ -711,15 +761,18 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	var out []Album
 	for rows.Next() {
 		var a Album
-		var y sql.NullInt64
+		var dispTitle string
+		var dispY sql.NullInt64
 		var aid sql.NullString
-		var an sql.NullString
+		var dispAn sql.NullString
 		var mb, cp sql.NullString
-		if err := rows.Scan(&a.ID, &a.Title, &y, &aid, &an, &mb, &cp); err != nil {
+		var pinT, pinAr, pinY, pinCov bool
+		if err := rows.Scan(&a.ID, &dispTitle, &dispY, &aid, &dispAn, &mb, &cp, &pinT, &pinAr, &pinY, &pinCov); err != nil {
 			return nil, err
 		}
-		if y.Valid {
-			yy := int(y.Int64)
+		a.Title = dispTitle
+		if dispY.Valid {
+			yy := int(dispY.Int64)
 			a.Year = &yy
 		}
 		if aid.Valid && aid.String != "" {
@@ -728,8 +781,8 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 				a.ArtistID = &uid
 			}
 		}
-		if an.Valid {
-			s := an.String
+		if dispAn.Valid {
+			s := dispAn.String
 			a.ArtistName = &s
 		}
 		if cp.Valid {
@@ -739,6 +792,9 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 		if mb.Valid {
 			s := mb.String
 			a.MusicBrainzRelease = &s
+		}
+		if pinT || pinAr || pinY || pinCov {
+			a.Meta = &AlbumMetaPins{Title: pinT, Artist: pinAr, Year: pinY, Cover: pinCov}
 		}
 		out = append(out, a)
 	}
@@ -755,9 +811,10 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 			t.duration_ms, t.format, t.bitrate_kbps,
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
 			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
-			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year ELSE t.year END AS disp_year,
+			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
+			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
 			t.album_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
@@ -772,14 +829,14 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 		LEFT JOIN artists ar ON t.artist_id = ar.id
 		WHERE ($1 = '' OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) ILIKE $2) OR
-			(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) ILIKE $2) OR
+			(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) ILIKE $2) OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) ILIKE $2) OR
 			(t.file_path ILIKE $2))
 		AND ($3::uuid IS NULL OR t.album_id = $3)
 		AND ($4::uuid IS NULL OR t.artist_id = $4)
 		ORDER BY
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) NULLS LAST,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
 			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST
@@ -1106,6 +1163,122 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 	return nil
 }
 
+// UpdateAlbumMeta applies user edits; display uses meta_user_* over base columns.
+func (d *DB) UpdateAlbumMeta(ctx context.Context, albumID uuid.UUID, u AlbumMetaUpdate) error {
+	var curTitle string
+	var curArtID sql.NullString
+	var muT, muAr sql.NullString
+	var muY sql.NullInt32
+
+	err := d.Pool.QueryRow(ctx, `
+		SELECT a.title, a.artist_id::text,
+			a.meta_user_title, a.meta_user_artist, a.meta_user_year
+		FROM albums a WHERE a.id = $1`,
+		albumID,
+	).Scan(&curTitle, &curArtID, &muT, &muAr, &muY)
+	if err != nil {
+		return err
+	}
+
+	if u.ClearTitle {
+		muT = sql.NullString{}
+	}
+	if u.ClearArtist {
+		muAr = sql.NullString{}
+	}
+	if u.ClearYear {
+		muY = sql.NullInt32{}
+	}
+
+	if u.Title != nil {
+		s := strings.TrimSpace(*u.Title)
+		if s == "" {
+			muT = sql.NullString{}
+		} else {
+			muT = sql.NullString{String: s, Valid: true}
+		}
+	}
+	if u.ArtistName != nil {
+		s := strings.TrimSpace(*u.ArtistName)
+		if s == "" {
+			muAr = sql.NullString{}
+		} else {
+			muAr = sql.NullString{String: s, Valid: true}
+		}
+	}
+	if u.Year != nil {
+		muY = sql.NullInt32{Int32: int32(*u.Year), Valid: true}
+	}
+
+	var artArg interface{}
+	if metaPinString(muAr) {
+		aid, e := d.FindOrCreateArtist(ctx, muAr.String)
+		if e != nil {
+			return e
+		}
+		artArg = aid
+	} else if curArtID.Valid && strings.TrimSpace(curArtID.String) != "" {
+		aid, e := uuid.Parse(curArtID.String)
+		if e != nil {
+			return e
+		}
+		artArg = aid
+	} else {
+		artArg = nil
+	}
+
+	effTitle := curTitle
+	if metaPinString(muT) {
+		effTitle = muT.String
+	}
+	ts := normalizeSearch(effTitle)
+
+	tag, err := d.Pool.Exec(ctx, `
+		UPDATE albums SET
+			meta_user_title = $2,
+			meta_user_artist = $3,
+			meta_user_year = $4,
+			artist_id = $5,
+			title_search = $6,
+			cover_path = CASE WHEN $7 THEN NULL ELSE cover_path END,
+			meta_cover_locked = CASE WHEN $7 THEN false ELSE meta_cover_locked END
+		WHERE id = $1
+	`, albumID, muT, muAr, muY, artArg, ts, u.ClearCover)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// SetAlbumCoverUser stores a user-provided cover and locks it against automatic replacement.
+func (d *DB) SetAlbumCoverUser(ctx context.Context, albumID uuid.UUID, relPath string) error {
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE albums SET cover_path = $2, meta_cover_locked = true WHERE id = $1
+	`, albumID, relPath)
+	return err
+}
+
+// ClearAlbumCover removes cover path and unlocks automatic fetches (caller removes file on disk).
+func (d *DB) ClearAlbumCover(ctx context.Context, albumID uuid.UUID) error {
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE albums SET cover_path = NULL, meta_cover_locked = false WHERE id = $1
+	`, albumID)
+	return err
+}
+
+// AlbumCoverLocked is true when the user locked the cover (worker must not replace it).
+func (d *DB) AlbumCoverLocked(ctx context.Context, albumID uuid.UUID) (bool, error) {
+	var b bool
+	err := d.Pool.QueryRow(ctx, `SELECT meta_cover_locked FROM albums WHERE id = $1`, albumID).Scan(&b)
+	if err != nil {
+		return false, err
+	}
+	return b, nil
+}
+
 // ClearTrackArtPath removes custom cover path (file delete is caller's responsibility).
 func (d *DB) ClearTrackArtPath(ctx context.Context, id uuid.UUID) error {
 	_, err := d.Pool.Exec(ctx, `UPDATE tracks SET art_path = NULL WHERE id = $1`, id)
@@ -1267,9 +1440,10 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 			t.duration_ms, t.format, t.bitrate_kbps,
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
 			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
-			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year ELSE t.year END AS disp_year,
+			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
+			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
 			t.album_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
@@ -1471,7 +1645,10 @@ func (d *DB) GetAlbumByID(ctx context.Context, id uuid.UUID) (title string, year
 	var y sql.NullInt32
 	var arn sql.NullString
 	err = d.Pool.QueryRow(ctx, `
-		SELECT a.title, a.year, ar.name
+		SELECT
+			COALESCE(NULLIF(BTRIM(a.meta_user_title), ''), a.title),
+			CASE WHEN a.meta_user_year IS NOT NULL THEN a.meta_user_year ELSE a.year END,
+			COALESCE(NULLIF(BTRIM(a.meta_user_artist), ''), ar.name)
 		FROM albums a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
 		WHERE a.id = $1
@@ -1517,9 +1694,10 @@ func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
 			t.duration_ms, t.format, t.bitrate_kbps,
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
 			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
-			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year ELSE t.year END AS disp_year,
+			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
+			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
 			t.album_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
@@ -1560,9 +1738,10 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 			t.duration_ms, t.format, t.bitrate_kbps,
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
 			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
-			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year ELSE t.year END AS disp_year,
+			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
+			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
 			t.album_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), al.title) AS disp_album_title,
+			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
