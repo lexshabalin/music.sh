@@ -14,7 +14,8 @@ export function normalizeLang(x) {
 
 export function getStoredLang() {
   try {
-    return normalizeLang(localStorage.getItem(LS_LANG));
+    const v = localStorage.getItem(LS_LANG);
+    return normalizeLang(v);
   } catch (_) {
     return "ru";
   }
@@ -24,6 +25,30 @@ export function storeLang(lang) {
   try {
     localStorage.setItem(LS_LANG, normalizeLang(lang));
   } catch (_) {}
+}
+
+export function getBootLang() {
+  // 1) Prefer lang pre-decided in index.html (prevents first-paint flash).
+  try {
+    const v = document?.documentElement?.dataset?.uiLang;
+    const n = normalizeLang(v);
+    if (n) return n;
+  } catch (_) {}
+
+  // 2) localStorage
+  try {
+    const n = normalizeLang(localStorage.getItem(LS_LANG));
+    if (n) return n;
+  } catch (_) {}
+
+  // 3) browser locale
+  try {
+    const nav = (navigator?.languages && navigator.languages[0]) || navigator?.language || "";
+    const s = String(nav || "").toLowerCase();
+    return s.startsWith("en") ? "en" : "ru";
+  } catch (_) {
+    return "ru";
+  }
 }
 
 const dict = {
@@ -384,7 +409,7 @@ export const I18nContext = React.createContext({
 });
 
 export function I18nProvider({ initialLang, children }) {
-  const [lang, setLangState] = React.useState(normalizeLang(initialLang || getStoredLang()));
+  const [lang, setLangState] = React.useState(normalizeLang(initialLang || getBootLang()));
 
   const setLang = React.useCallback((next) => {
     const l = normalizeLang(next);
