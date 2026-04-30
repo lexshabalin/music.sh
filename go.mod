@@ -8,8 +8,8 @@ require (
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/go-chi/cors v1.2.1
 	github.com/go-flac/flacpicture v0.3.0
-	github.com/go-flac/flacvorbis/v2 v2.0.2
-	github.com/go-flac/go-flac/v2 v2.0.4
+	github.com/go-flac/flacvorbis v0.2.0
+	github.com/go-flac/go-flac v1.0.0
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.5

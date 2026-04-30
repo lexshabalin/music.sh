@@ -106,7 +106,7 @@ func writeMP3Tags(path string, desired TrackTarget, writeFields map[Field]bool, 
 		if len(coverBytes) > 0 && strings.HasPrefix(coverMime, "image/") {
 			p := id3v2.PictureFrame{
 				Encoding:    tag.DefaultEncoding(),
-				MIMEType:    coverMime,
+				MimeType:    coverMime,
 				PictureType: id3v2.PTFrontCover,
 				Description: "Front cover",
 				Picture:     coverBytes,

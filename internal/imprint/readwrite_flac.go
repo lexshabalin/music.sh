@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/go-flac/flacpicture"
-	"github.com/go-flac/flacvorbis/v2"
-	"github.com/go-flac/go-flac/v2"
+	"github.com/go-flac/flacvorbis"
+	"github.com/go-flac/go-flac"
 )
 
 type flacTags struct {
@@ -51,7 +51,7 @@ func readFLACTags(path string) (flacTags, []string, error) {
 		}
 		out.Year = date
 		out.TrackNo = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_TRACKNUMBER)))
-		out.DiscNo = strings.TrimSpace(string(firstVorbis(vc, flacvorbis.FIELD_DISCNUMBER)))
+		out.DiscNo = strings.TrimSpace(string(firstVorbis(vc, "DISCNUMBER")))
 	}
 	return out, warn, nil
 }
@@ -114,9 +114,9 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 	}
 	if writeFields[FieldDiscNo] {
 		if desired.DiscNo != nil {
-			vc.Set(flacvorbis.FIELD_DISCNUMBER, []byte(fmt.Sprintf("%d", *desired.DiscNo)))
+			vc.Set("DISCNUMBER", []byte(fmt.Sprintf("%d", *desired.DiscNo)))
 		} else {
-			vc.Delete(flacvorbis.FIELD_DISCNUMBER)
+			vc.Delete("DISCNUMBER")
 		}
 	}
 
