@@ -18,7 +18,6 @@ build:image:
   stage: build
   image: docker:27
   tags:
-    - mediasrv
     - docker
   variables:
     DOCKER_HOST: "unix:///var/run/docker.sock"
@@ -35,7 +34,6 @@ deploy:prod:
   stage: deploy
   image: alpine:3.20
   tags:
-    - mediasrv
     - docker
   environment:
     name: production
