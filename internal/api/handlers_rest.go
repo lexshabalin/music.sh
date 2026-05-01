@@ -215,7 +215,31 @@ func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []by
 		_ = os.Remove(tmp)
 		return err
 	}
-	return a.DB.SetAlbumCoverUser(ctx, id, storeRel)
+	if err := a.DB.SetAlbumCoverUser(ctx, id, storeRel); err != nil {
+		return err
+	}
+	a.propagateAlbumCoverToTracksWithoutArt(ctx, id, jpeg)
+	return nil
+}
+
+// propagateAlbumCoverToTracksWithoutArt writes the same normalized JPEG onto every album track that
+// has no saved per-track cover yet so /api/tracks/{id}/cover and track coverUrl behave like the album artwork.
+func (a *App) propagateAlbumCoverToTracksWithoutArt(ctx context.Context, albumID uuid.UUID, jpeg []byte) {
+	if len(jpeg) == 0 {
+		return
+	}
+	ids, err := a.DB.ListAlbumTrackIDsWithoutStoredArt(ctx, albumID)
+	if err != nil || len(ids) == 0 {
+		if err != nil {
+			log.Printf("propagate album cover: list tracks album=%s: %v", albumID, err)
+		}
+		return
+	}
+	for _, tid := range ids {
+		if err := a.persistTrackCoverJPEG(ctx, tid, jpeg); err != nil {
+			log.Printf("propagate album cover: track=%s album=%s: %v", tid, albumID, err)
+		}
+	}
 }
 
 func (a *App) persistTrackCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []byte) error {

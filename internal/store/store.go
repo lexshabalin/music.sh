@@ -1206,6 +1206,28 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 	return out, rows.Err()
 }
 
+// ListAlbumTrackIDsWithoutStoredArt lists tracks on the album that have no persisted per-track cover yet.
+func (d *DB) ListAlbumTrackIDsWithoutStoredArt(ctx context.Context, albumID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT id FROM tracks
+		WHERE album_id = $1 AND (art_path IS NULL OR BTRIM(art_path) = '')
+		ORDER BY file_path
+	`, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // TrackArtRelPath returns stored relative art path if present.
 func (d *DB) TrackArtRelPath(ctx context.Context, id uuid.UUID) (rel string, ok bool) {
 	var p sql.NullString
