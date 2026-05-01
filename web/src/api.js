@@ -189,8 +189,8 @@ export const lib = {
   },
   playlists: (q) => req("/api/playlists?" + new URLSearchParams({ query: q || "" })),
   playlist: (id) => req("/api/playlists/" + id),
-  createPl: (name, description) =>
-    req("/api/playlists", { method: "POST", body: JSON.stringify({ name, description: description || undefined }) }),
+  createPl: (name) =>
+    req("/api/playlists", { method: "POST", body: JSON.stringify({ name }) }),
   addToPl: (plId, trackId) => req("/api/playlists/" + plId + "/tracks", { method: "POST", body: JSON.stringify({ trackId }) }),
   deletePl: (plId) => req("/api/playlists/" + plId, { method: "DELETE" }),
   likeIds: () => req("/api/likes"),

@@ -36,7 +36,6 @@ function pickCoversForPlaylist(plId, tracks) {
 function CreatePlaylistModal({ onClose, onCreated }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
   const [q, setQ] = useState("");
   const [res, setRes] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
@@ -74,7 +73,7 @@ function CreatePlaylistModal({ onClose, onCreated }) {
     setBusy(true);
     setErr("");
     try {
-      const pl = await lib.createPl(name.trim(), desc.trim());
+      const pl = await lib.createPl(name.trim());
       const id = pl?.id;
       if (id && selectedIds.length) {
         for (const tid of selectedIds) {
@@ -107,7 +106,6 @@ function CreatePlaylistModal({ onClose, onCreated }) {
 
         <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
           <input placeholder={t("playlist.newPlaylist")} value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
-          <input placeholder={t("playlist.descriptionOptional")} value={desc} onChange={(e) => setDesc(e.target.value)} disabled={busy} />
         </div>
 
         <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>

@@ -943,7 +943,6 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
 function AddToPlaylistModal({ trackId, onClose }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -957,10 +956,6 @@ function AddToPlaylistModal({ trackId, onClose }) {
           <label>{t("plmodal.name")}</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("plmodal.myPlaylist")} />
         </p>
-        <p>
-          <label>{t("plmodal.desc")}</label>
-          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("plmodal.optional")} />
-        </p>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="ghost" type="button" onClick={onClose}>
             {t("common.cancel")}
@@ -972,7 +967,7 @@ function AddToPlaylistModal({ trackId, onClose }) {
               setBusy(true);
               setErr("");
               try {
-                const pl = await lib.createPl(name.trim(), desc.trim());
+                const pl = await lib.createPl(name.trim());
                 await lib.addToPl(pl.id, trackId);
                 onClose();
               } catch (e) {
