@@ -89,6 +89,7 @@ func (a *App) coverURLFor(id uuid.UUID) *string {
 type albumMetaJSON struct {
 	Title      *string `json:"title"`
 	ArtistName *string `json:"artistName"`
+	Genre      *string `json:"genre"`
 	Year       *int    `json:"year"`
 	Clear      []string `json:"clear"`
 }
@@ -107,6 +108,7 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 	up := store.AlbumMetaUpdate{
 		Title:      in.Title,
 		ArtistName: in.ArtistName,
+		Genre:      in.Genre,
 		Year:       in.Year,
 	}
 	for _, c := range in.Clear {
@@ -117,6 +119,8 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 			up.ClearArtist = true
 		case "year":
 			up.ClearYear = true
+		case "genre":
+			up.ClearGenre = true
 		case "art", "cover":
 			up.ClearCover = true
 		}

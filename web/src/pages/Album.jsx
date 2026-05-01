@@ -31,11 +31,13 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
   const [title, setTitle] = useState(album?.title || "");
   const [artist, setArtist] = useState(album?.artistName || "");
   const [year, setYear] = useState(album?.year != null ? String(album.year) : "");
+  const [genre, setGenre] = useState(album?.genre ?? "");
 
   useEffect(() => {
     setTitle(album?.title || "");
     setArtist(album?.artistName || "");
     setYear(album?.year != null ? String(album.year) : "");
+    setGenre(album?.genre ?? "");
   }, [album]);
 
   const m = album?.meta || {};
@@ -62,11 +64,13 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
     try {
       const clear = [];
       if (!year.trim() && m.year) clear.push("year");
+      if (!genre.trim() && m.genre) clear.push("genre");
       const body = {
         title: title.trim(),
         artistName: artist.trim(),
         clear,
       };
+      if (genre.trim()) body.genre = genre.trim();
       if (year.trim()) {
         const y = parseInt(year, 10);
         if (!Number.isFinite(y)) throw new Error(t("album.meta.badYear"));
@@ -106,6 +110,15 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
             {t("album.meta.year")} {m.year ? <ResetPinButton onClick={() => resetField("year")} busy={busy} /> : null}
           </label>
           <input value={year} onChange={(e) => setYear(e.target.value)} placeholder={t("album.meta.yearExample")} />
+        </p>
+        <p>
+          <label>
+            {t("album.meta.genre")} {m.genre ? <ResetPinButton onClick={() => resetField("genre")} busy={busy} /> : null}
+          </label>
+          <input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="" />
+          <span className="muted" style={{ display: "block", fontSize: "0.82rem", marginTop: 4 }}>
+            {t("album.meta.genreRolloutHint")}
+          </span>
         </p>
         <p>
           <label>
@@ -725,6 +738,11 @@ export function Album() {
             ) : null}
           </h2>
           <div className="muted">{a?.artistName}</div>
+          {a?.genre ? (
+            <div className="muted" style={{ marginTop: 4 }}>
+              {a.genre}
+            </div>
+          ) : null}
         </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>

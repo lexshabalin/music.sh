@@ -30,6 +30,7 @@ type Artist struct {
 type Album struct {
 	ID                 uuid.UUID  `json:"id"`
 	Title              string     `json:"title"`
+	Genre              *string    `json:"genre,omitempty"`
 	Year               *int       `json:"year,omitempty"`
 	ArtistID           *uuid.UUID `json:"artistId,omitempty"`
 	ArtistName         *string    `json:"artistName,omitempty"`
@@ -43,14 +44,16 @@ type AlbumMetaPins struct {
 	Title  bool `json:"title,omitempty"`
 	Artist bool `json:"artist,omitempty"`
 	Year   bool `json:"year,omitempty"`
+	Genre  bool `json:"genre,omitempty"`
 	Cover  bool `json:"cover,omitempty"`
 }
 
 // AlbumMetaUpdate is input for PATCH /api/albums/{id}.
 type AlbumMetaUpdate struct {
-	ClearTitle, ClearArtist, ClearYear, ClearCover bool
-	Title, ArtistName                              *string
-	Year                                           *int
+	ClearTitle, ClearArtist, ClearYear, ClearGenre, ClearCover bool
+	Title, ArtistName                                            *string
+	Genre                                                       *string
+	Year                                                         *int
 }
 
 type Track struct {
