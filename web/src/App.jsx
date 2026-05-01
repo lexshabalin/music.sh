@@ -2185,12 +2185,28 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
   );
 }
 
-/** Scroll only `scroller` (do not use scrollIntoView — it climbs ancestors and fights user wheel/touch scrolling). */
+/** Vertical offset from top of scrolling box content to top of `row` (via offsetParent chain; bbox fallback inside fixed popovers). */
+function scrollContentYOffset(scroller, row) {
+  if (!scroller || !row || !scroller.contains(row)) return 0;
+  let y = 0;
+  let el = row;
+  while (el && el !== scroller) {
+    y += el.offsetTop;
+    const next = el.offsetParent;
+    if (!next || !scroller.contains(next)) break;
+    el = next;
+  }
+  if (el !== scroller) {
+    return scroller.scrollTop + row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  }
+  return y;
+}
+
+/** Adjust only `scroller.scrollTop` — never scrollIntoView (it climbs ancestor scroll containers). */
 function scrollPopoverListToCenterRow(scroller, row) {
   if (!scroller || !row) return;
-  const st = scroller.scrollTop;
-  const relTop = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + st;
-  const rowH = row.getBoundingClientRect().height || 1;
+  const relTop = scrollContentYOffset(scroller, row);
+  const rowH = row.offsetHeight || row.getBoundingClientRect().height || 1;
   const next = relTop + rowH / 2 - scroller.clientHeight / 2;
   const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
   scroller.scrollTop = Math.max(0, Math.min(next, max));
@@ -2249,10 +2265,22 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
   React.useLayoutEffect(() => {
     if (!historyUX) return;
     if (currentIndex < 0 || currentIndex >= items.length) return;
-    const scroller = popRef.current;
-    const row = activeRowRef.current;
-    if (!scroller || !row) return;
-    scrollPopoverListToCenterRow(scroller, row);
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const scroller = popRef.current;
+      if (!scroller?.isConnected) return;
+      const row =
+        scroller.querySelector(`button[data-queue-index="${currentIndex}"]`) || activeRowRef.current;
+      if (!row || !scroller.contains(row)) return;
+      scrollPopoverListToCenterRow(scroller, row);
+    };
+    queueMicrotask(run);
+    const t = window.setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [historyUX, currentIndex, items.length]);
 
   if (!box) return null;
