@@ -1153,7 +1153,7 @@ function Shell({ children }) {
         </main>
       </div>
       {p.current && getToken() && !isMobile ? (
-        <div className="player">
+        <div className={"player" + (p.isPlaying ? " player--playing" : "")}>
           <button
             className="player-skip"
             type="button"

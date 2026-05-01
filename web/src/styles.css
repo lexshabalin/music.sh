@@ -1809,6 +1809,44 @@ select.lang-select {
 .nowplaying-art.placeholder {
   background: #222;
 }
+
+/* --- Footer player “disc” effect (desktop hover) --- */
+@property --disc-rot {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes disc-spin {
+  from { --disc-rot: 0deg; }
+  to { --disc-rot: 360deg; }
+}
+/* Default: disc-like, but frozen when not playing. */
+.player .nowplaying-art {
+  --disc-rot: 0deg;
+  border-radius: 999px;
+  transform: rotate(var(--disc-rot));
+  transition:
+    border-radius 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 420ms ease,
+    border-color 420ms ease;
+  box-shadow:
+    0 10px 26px rgba(0,0,0,0.35),
+    inset 0 0 0 2px rgba(255,255,255,0.06);
+  will-change: transform, border-radius;
+  animation: disc-spin 6.5s linear infinite;
+  animation-play-state: paused;
+}
+.player.player--playing .nowplaying-art {
+  animation-play-state: running;
+}
+/* Hover: return to square + rotate back to 0 nicely. */
+.player .nowplaying:hover .nowplaying-art {
+  animation-play-state: paused;
+  --disc-rot: 0deg;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+}
 .nowplaying-text {
   min-width: 0;
 }
