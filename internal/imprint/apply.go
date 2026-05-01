@@ -33,16 +33,20 @@ func ApplySelection(targets []TrackTarget, dataDir string, selection map[string]
 		coverMime := ""
 		if sel[FieldCover] {
 			if t.CoverRelPath != nil && strings.TrimSpace(*t.CoverRelPath) != "" {
-				abs := filepath.Join(dataDir, *t.CoverRelPath)
-				b, err := os.ReadFile(abs)
-				if err != nil {
-					res.Warnings = append(res.Warnings, "read cover: "+err.Error())
+				abs := absUnderData(dataDir, *t.CoverRelPath)
+				if abs == "" {
+					res.Warnings = append(res.Warnings, "read cover: invalid path")
 				} else {
-					coverBytes = b
-					coverMime = mimeByExt(abs)
-					if coverMime == "" {
-						res.Warnings = append(res.Warnings, "cover mime unknown; skipping cover")
-						sel[FieldCover] = false
+					b, err := os.ReadFile(abs)
+					if err != nil {
+						res.Warnings = append(res.Warnings, "read cover: "+err.Error())
+					} else {
+						coverBytes = b
+						coverMime = coverMIME(abs, b)
+						if coverMime == "" || !strings.HasPrefix(coverMime, "image/") {
+							res.Warnings = append(res.Warnings, "cover mime unknown; skipping cover")
+							sel[FieldCover] = false
+						}
 					}
 				}
 			} else {

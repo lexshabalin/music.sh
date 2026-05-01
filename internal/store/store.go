@@ -1040,8 +1040,8 @@ func (d *DB) queryAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID, 
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
 			COALESCE(t.meta_user_disc_no, t.disc_no) AS disp_disc_no,
 			CASE
-				WHEN t.art_path IS NOT NULL AND BTRIM(t.art_path) <> '' THEN t.art_path
 				WHEN al.cover_path IS NOT NULL AND BTRIM(al.cover_path) <> '' THEN al.cover_path
+				WHEN t.art_path IS NOT NULL AND BTRIM(t.art_path) <> '' THEN t.art_path
 				ELSE NULL
 			END AS disp_cover_rel
 		FROM tracks t

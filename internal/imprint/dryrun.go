@@ -45,15 +45,21 @@ func DryRunAlbum(targets []TrackTarget, dataDir string) (AlbumDryRun, error) {
 		var coverBytes []byte
 		var coverMime string
 		if t.CoverRelPath != nil && strings.TrimSpace(*t.CoverRelPath) != "" {
-			abs := filepath.Join(dataDir, *t.CoverRelPath)
-			b, e := os.ReadFile(abs)
+			abs := absUnderData(dataDir, *t.CoverRelPath)
+			var b []byte
+			var e error
+			if abs == "" {
+				e = fmt.Errorf("invalid cover path")
+			} else {
+				b, e = os.ReadFile(abs)
+			}
 			if e != nil {
 				tr.Warnings = append(tr.Warnings, "read cover: "+e.Error())
 				desiredCoverNote = ptr("cover source missing")
 			} else if len(b) > 0 {
 				coverBytes = b
 				desiredCoverHash = hashBytes(b)
-				coverMime = mimeByExt(abs)
+				coverMime = coverMIME(abs, b)
 			}
 		}
 
