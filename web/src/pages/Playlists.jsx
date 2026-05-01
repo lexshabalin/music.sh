@@ -78,9 +78,6 @@ export function Playlists() {
 
   return (
     <div>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t("playlist.playlists")}</h2>
-      </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <div className="card" style={{ marginBottom: 16, display: "flex", gap: 8 }}>
         <input placeholder={t("playlist.newPlaylist")} value={name} onChange={(e) => setN(e.target.value)} />

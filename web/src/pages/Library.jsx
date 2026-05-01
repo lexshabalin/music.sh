@@ -49,9 +49,6 @@ export function Library({ section = "home", titleKey = "nav.home" }) {
   }, []);
   return (
     <div>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t(titleKey)}</h2>
-      </div>
       {msg ? <p className="muted">{msg}</p> : null}
       <div className="grid">
         {albums.map((a) => (

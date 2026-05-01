@@ -29,9 +29,6 @@ export function Artists() {
 
   return (
     <div>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t("nav.artists")}</h2>
-      </div>
       <div className="search">
         <input placeholder={t("artists.searchArtists")} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

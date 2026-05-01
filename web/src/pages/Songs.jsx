@@ -133,14 +133,18 @@ export function Songs() {
 
   return (
     <div>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t("nav.songs")}</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} />
-          <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")}>
-            {t("tracks.shuffle")}
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+        <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
+        <button
+          type="button"
+          className="ghost icon-btn"
+          onClick={shuffle}
+          disabled={!items.length}
+          title={t("tracks.shuffle")}
+          aria-label={t("tracks.shuffle")}
+        >
+          ⇄
+        </button>
       </div>
 
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}

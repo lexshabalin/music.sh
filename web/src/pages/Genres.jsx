@@ -32,14 +32,9 @@ export function Genres() {
           ← {t("nav.home")}
         </Link>
       </p>
-      <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 6 }}>{t("nav.genres")}</h2>
-          <p className="muted" style={{ marginBottom: 0 }}>
-            {t("genres.browseIntro")}
-          </p>
-        </div>
-      </div>
+      <p className="muted" style={{ marginBottom: 12 }}>
+        {t("genres.browseIntro")}
+      </p>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       {!err && !list.length ? <p className="muted">{t("genres.emptyLibrary")}</p> : null}
       <div className="pill-row">

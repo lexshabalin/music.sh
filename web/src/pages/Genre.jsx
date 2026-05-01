@@ -151,13 +151,10 @@ export function Genre() {
           ← {t("nav.genres")}
         </Link>
       </p>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{label || genreId}</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")}>
-            {t("tracks.shuffle")}
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+        <button type="button" className="ghost icon-btn" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")} aria-label={t("tracks.shuffle")}>
+          ⇄
+        </button>
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       {!tracks.length && !err ? <p className="muted">{t("genres.noTracks")}</p> : null}

@@ -60,9 +60,8 @@ export function Likes() {
 
   return (
     <div>
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t("likes.title")}</h2>
-        <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
       </div>
       {mode === "grid" ? (
         <div className="grid">

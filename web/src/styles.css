@@ -374,6 +374,26 @@ button.ghost {
   padding: 8px 10px;
   white-space: nowrap;
 }
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.icon-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 .viewmode-icon {
   width: 18px;
   height: 18px;
@@ -528,6 +548,10 @@ select.lang-select {
   border-radius: 10px;
 }
 .side-nav a:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.side-nav a.is-active {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
 }

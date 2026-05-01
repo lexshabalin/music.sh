@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Link, NavLink, Navigate, useLocation } from "react-router-dom";
 import { I18nContext, I18nProvider, LANGS, normalizeLang, useI18n } from "./i18n";
 import {
   auth,
@@ -1049,13 +1049,13 @@ function Shell({ children }) {
               ) : null}
             </div>
             <nav className="side-nav">
-              <Link to="/" onClick={() => setMobileNavOpen(false)}>{t("nav.home")}</Link>
-              <Link to="/songs" onClick={() => setMobileNavOpen(false)}>{t("nav.songs")}</Link>
-              <Link to="/artists" onClick={() => setMobileNavOpen(false)}>{t("nav.artists")}</Link>
-              <Link to="/albums" onClick={() => setMobileNavOpen(false)}>{t("nav.albums")}</Link>
-              <Link to="/genres" onClick={() => setMobileNavOpen(false)}>{t("nav.genres")}</Link>
-              <Link to="/playlists" onClick={() => setMobileNavOpen(false)}>{t("nav.playlists")}</Link>
-              <Link to="/likes" onClick={() => setMobileNavOpen(false)}>{t("nav.likes")}</Link>
+              <NavLink to="/" end onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.home")}</NavLink>
+              <NavLink to="/songs" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.songs")}</NavLink>
+              <NavLink to="/artists" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.artists")}</NavLink>
+              <NavLink to="/albums" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.albums")}</NavLink>
+              <NavLink to="/genres" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.genres")}</NavLink>
+              <NavLink to="/playlists" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.playlists")}</NavLink>
+              <NavLink to="/likes" onClick={() => setMobileNavOpen(false)} className={({ isActive }) => (isActive ? "is-active" : "")}>{t("nav.likes")}</NavLink>
             </nav>
           </aside>
         ) : null}

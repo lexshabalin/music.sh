@@ -165,8 +165,15 @@ export function Playlist() {
           {data.description ? <p className="muted">{data.description}</p> : null}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button type="button" className="ghost" onClick={shuffle} disabled={!tracks.length} title={t("tracks.shuffle")}>
-            {t("tracks.shuffle")}
+          <button
+            type="button"
+            className="ghost icon-btn"
+            onClick={shuffle}
+            disabled={!tracks.length}
+            title={t("tracks.shuffle")}
+            aria-label={t("tracks.shuffle")}
+          >
+            ⇄
           </button>
           <button
             ref={menuBtnRef}
