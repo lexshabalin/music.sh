@@ -68,6 +68,8 @@ type Track struct {
 	Year         *int       `json:"year,omitempty"`
 	// CoverURL is set when the track has custom art (GET /api/tracks/{id}/cover).
 	CoverURL     *string    `json:"coverUrl,omitempty"`
+	// AlbumID mirrors album.id when set (integrations expect a top-level albumId).
+	AlbumID      *uuid.UUID `json:"albumId,omitempty"`
 	FilePath     string     `json:"-"` // not exposed; stream uses id
 	Album        *TrackAlbum `json:"album,omitempty"`
 	Artist       *TrackArtist `json:"artist,omitempty"`

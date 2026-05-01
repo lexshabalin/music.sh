@@ -70,7 +70,7 @@ func (a *App) Handlers() http.Handler {
 	if len(a.Orig) > 0 {
 		c := cors.New(cors.Options{
 			AllowedOrigins:   a.Orig,
-			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedMethods:   []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			ExposedHeaders:   []string{},
 			// Browsers disallow Access-Control-Allow-Origin * together with Allow-Credentials: true on credentialed requests.
@@ -89,6 +89,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/auth/register", a.register)
 		g.Post("/api/auth/login", a.login)
 	})
+	r.Method(http.MethodHead, "/api/tracks/{id}/stream", a.stream)
 	r.Get("/api/tracks/{id}/stream", a.stream) // may use ?token= for <audio>
 	r.Get("/api/tracks/{id}/cover", a.trackCover)
 	r.Get("/api/albums/{id}/cover", a.albumCover)

@@ -1117,6 +1117,8 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 		if aID.Valid && aID.String != "" {
 			uid, err := uuid.Parse(aID.String)
 			if err == nil {
+				aid := uid
+				t.AlbumID = &aid
 				tt := ""
 				if alT.Valid {
 					tt = alT.String
@@ -1781,6 +1783,8 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 		if aID.Valid && aID.String != "" {
 			uid, errU := uuid.Parse(aID.String)
 			if errU == nil {
+				aid := uid
+				t.AlbumID = &aid
 				tt := ""
 				if alT.Valid {
 					tt = alT.String

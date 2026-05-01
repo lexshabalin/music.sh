@@ -174,11 +174,24 @@ func (d *DB) albumHasGenreTags(ctx context.Context, albumID uuid.UUID) bool {
 	return ok
 }
 
+// RecordGenreLabelsFromTaggedText inserts distinct labels into library_genres without attaching them to tracks.
+// Used so autocomplete sees vocabulary from scanned file tags even when mergeTrackGenresFromScan skips junction updates.
+func (d *DB) RecordGenreLabelsFromTaggedText(ctx context.Context, genreFromTag string) {
+	genreFromTag = strings.TrimSpace(genreFromTag)
+	if genreFromTag == "" {
+		return
+	}
+	for _, lab := range genres.Split(genreFromTag) {
+		_, _ = d.findOrCreateGenre(ctx, lab)
+	}
+}
+
 func (d *DB) mergeTrackGenresFromScan(ctx context.Context, trackID uuid.UUID, albumID uuid.UUID, genreFromTag string) error {
 	genreFromTag = strings.TrimSpace(genreFromTag)
 	if genreFromTag == "" {
 		return nil
 	}
+	d.RecordGenreLabelsFromTaggedText(ctx, genreFromTag)
 	var manual bool
 	if err := d.Pool.QueryRow(ctx, `SELECT genres_manual FROM tracks WHERE id = $1`, trackID).Scan(&manual); err != nil {
 		return err

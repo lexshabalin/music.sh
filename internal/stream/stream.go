@@ -31,6 +31,12 @@ func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) err
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", ct)
 
+	if r.Method == http.MethodHead {
+		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+		w.WriteHeader(http.StatusOK)
+		return nil
+	}
+
 	ra := r.Header.Get("Range")
 	if ra == "" {
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
