@@ -121,12 +121,16 @@ func (h *Worker) runOne(ctx context.Context) error {
 				TrackID string   `json:"trackId"`
 				Fields  []string `json:"fields"`
 				Overrides *struct {
-					Title   *string `json:"title,omitempty"`
-					Artist  *string `json:"artist,omitempty"`
-					Album   *string `json:"album,omitempty"`
-					Year    *int    `json:"year,omitempty"`
-					TrackNo *int    `json:"trackNo,omitempty"`
-					DiscNo  *int    `json:"discNo,omitempty"`
+					Title       *string `json:"title,omitempty"`
+					Artist      *string `json:"artist,omitempty"`
+					Album       *string `json:"album,omitempty"`
+					AlbumArtist *string `json:"albumArtist,omitempty"`
+					Genre       *string `json:"genre,omitempty"`
+					Composer    *string `json:"composer,omitempty"`
+					Comment     *string `json:"comment,omitempty"`
+					Year    *int `json:"year,omitempty"`
+					TrackNo *int `json:"trackNo,omitempty"`
+					DiscNo  *int `json:"discNo,omitempty"`
 				} `json:"overrides,omitempty"`
 			} `json:"tracks"`
 		}
