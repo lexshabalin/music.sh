@@ -260,7 +260,6 @@ const dict = {
     "view.aria": "Выбор вида отображения",
     "view.grid": "Плитка",
     "view.table": "Таблица",
-    "view.profile.title": "Вид отображения по разделам",
 
     "album.imprint.intro":
       "Предпросмотр перед записью тегов в файлы. Для каждого трека всегда показаны исполнитель, название, альбом и год; остальные поля видны только если значение отличается от текущего в файле. По умолчанию отмечены только изменяющиеся поля. Расширенный режим показывает все поддерживаемые поля. После успешной записи тегов файл переименовывается в «Исполнитель - Название.расширение» в той же папке (расширение как у текущего файла). Если имя занято, добавляется « (2)», « (3)» и т. д.",
@@ -489,7 +488,6 @@ const dict = {
     "view.aria": "Choose view mode",
     "view.grid": "Grid",
     "view.table": "Table",
-    "view.profile.title": "View mode per section",
 
     "album.imprint.intro":
       "Preview before writing tags to files. Artist, title, album, and year appear for every track; other fields only show when the value differs from what is in the file. By default only fields that change are checked. Advanced mode reveals all supported fields. After tags are written successfully each file is renamed to Artist - Title.extension in the same folder (same extension as the current file). If that name is taken, suffixes « (2)», « (3)» etc. are used.",

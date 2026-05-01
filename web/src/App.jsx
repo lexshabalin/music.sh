@@ -28,8 +28,6 @@ import { Genres } from "./pages/Genres";
 import { Genre } from "./pages/Genre";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { GlobalSearch } from "./components/GlobalSearch";
-import { readViewPrefs, SECTIONS, setSectionViewMode } from "./viewPrefs";
-import { ViewModeControl } from "./components/ViewModeControl";
 import {
   IFastForward,
   IHeart,
@@ -1852,31 +1850,6 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
   const [busy, setBusy] = React.useState(false);
   const [cur, setCur] = React.useState("");
   const [next, setNext] = React.useState("");
-  const [viewPrefs, setViewPrefs] = React.useState(() => readViewPrefs());
-
-  React.useEffect(() => {
-    const sync = () => setViewPrefs(readViewPrefs());
-    window.addEventListener("musicsh:viewprefs", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("musicsh:viewprefs", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-
-  const sectionLabel = React.useCallback(
-    (s) => {
-      if (s === "home") return t("nav.home");
-      if (s === "songs") return t("nav.songs");
-      if (s === "artists") return t("nav.artists");
-      if (s === "albums") return t("nav.albums");
-      if (s === "genres") return t("nav.genres");
-      if (s === "playlists") return t("nav.playlists");
-      if (s === "likes") return t("nav.likes");
-      return s;
-    },
-    [t]
-  );
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -2080,35 +2053,6 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
 
             <div className="muted" style={{ fontSize: 12 }}>
               {t("profile.bg.hint")}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-          <h4 style={{ margin: "0 0 8px" }}>{t("view.profile.title")}</h4>
-          <div style={{ display: "grid", gap: 10 }}>
-            {SECTIONS.map((s) => (
-              <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ fontWeight: 800 }}>{sectionLabel(s)}</div>
-                <ViewModeControl
-                  value={viewPrefs?.[s] || "grid"}
-                  onChange={(m) => {
-                    setSectionViewMode(s, m);
-                    setViewPrefs(readViewPrefs());
-                  }}
-                  compact
-                  modes={
-                    s === "home" || s === "albums" || s === "artists" || s === "genres" || s === "playlists"
-                      ? ["grid"]
-                      : s === "songs"
-                        ? ["table", "grid"]
-                        : ["table", "grid"]
-                  }
-                />
-              </div>
-            ))}
-            <div className="muted" style={{ fontSize: 12 }}>
-              {t("view.title")}: {t("view.grid")} / {t("view.table")}
             </div>
           </div>
         </div>
