@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -754,6 +755,7 @@ func (a *App) albumImprintDryRun(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.DB.GetAlbumTracksForImprint(r.Context(), albumID)
 	if err != nil {
+		log.Printf("imprint dry-run: GetAlbumTracksForImprint(album=%s): %v", albumID, err)
 		JSONError(w, 500, "db")
 		return
 	}
