@@ -228,6 +228,10 @@ const dict = {
     "album.meta.saveError": "Ошибка сохранения",
     "album.meta.uploadError": "Ошибка загрузки",
     "album.editButton": "Редактировать альбом",
+
+    "album.imprint.advanced": "Расширенный режим",
+    "album.imprint.advancedHint": "Показать и отредактировать все поддерживаемые поля тегов (даже если они не меняются).",
+    "album.imprint.coverEditHint": "Обложка берётся из выбранного источника в библиотеке; хеш нельзя отредактировать вручную.",
   },
   en: {
     "auth.login": "Log in",
@@ -405,6 +409,10 @@ const dict = {
     "album.meta.saveError": "Save failed",
     "album.meta.uploadError": "Upload failed",
     "album.editButton": "Edit album",
+
+    "album.imprint.advanced": "Advanced mode",
+    "album.imprint.advancedHint": "Show and edit all supported tag fields (even if unchanged).",
+    "album.imprint.coverEditHint": "Cover is taken from the library-selected source; the hash cannot be edited manually.",
   },
 };
 

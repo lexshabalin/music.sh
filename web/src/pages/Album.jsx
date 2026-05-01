@@ -176,14 +176,52 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
 }
 
 function ImprintModal({ albumId, onClose }) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [dry, setDry] = useState(null);
   const [sel, setSel] = useState({}); // trackId -> field -> bool
+  const [advanced, setAdvanced] = useState(false);
+  // trackId -> field -> edited "after" string (text fields only)
+  const [overrides, setOverrides] = useState({});
   const [jobId, setJobId] = useState("");
   const [job, setJob] = useState(null);
   const [results, setResults] = useState(null);
+
+  const afterStr = (d) => {
+    if (!d) return "";
+    if (d.after == null) return "";
+    return String(d.after);
+  };
+
+  const setOverride = (trackId, field, value) => {
+    setOverrides((prev) => ({
+      ...prev,
+      [trackId]: { ...(prev[trackId] || {}), [field]: value },
+    }));
+  };
+
+  const getOverride = (trackId, field, d) => {
+    const v = overrides?.[trackId]?.[field];
+    if (typeof v === "string") return v;
+    return afterStr(d);
+  };
+
+  const visibleDiffs = (tr) => {
+    const list = Array.isArray(tr?.diff) ? tr.diff : [];
+    if (advanced) return list;
+    return list.filter((d) => !!d?.changed);
+  };
+
+  const defaultSelectionForTrack = (tr, adv) => {
+    const m = {};
+    for (const it of Array.isArray(tr?.diff) ? tr.diff : []) {
+      if (!it?.supported) continue;
+      if (adv || it.changed) m[it.field] = true;
+    }
+    return m;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -195,15 +233,21 @@ function ImprintModal({ albumId, onClose }) {
         const d = await lib.albumImprintDryRun(albumId);
         if (cancelled) return;
         setDry(d);
-        const next = {};
+        const nextSel = {};
+        const nextOv = {};
         for (const tr of Array.isArray(d?.tracks) ? d.tracks : []) {
-          const m = {};
+          // Initial selection should reflect "simple mode" (changed fields only),
+          // then the advanced toggle effect can expand selection if needed.
+          nextSel[tr.trackId] = defaultSelectionForTrack(tr, false);
+          const o = {};
           for (const it of Array.isArray(tr?.diff) ? tr.diff : []) {
-            if (it?.supported) m[it.field] = true;
+            if (!it?.field) continue;
+            o[it.field] = afterStr(it);
           }
-          next[tr.trackId] = m;
+          nextOv[tr.trackId] = o;
         }
-        setSel(next);
+        setSel(nextSel);
+        setOverrides(nextOv);
       } catch (e) {
         if (!cancelled) setErr(e.message || "Ошибка dry-run");
       } finally {
@@ -214,6 +258,17 @@ function ImprintModal({ albumId, onClose }) {
       cancelled = true;
     };
   }, [albumId]);
+
+  useEffect(() => {
+    if (!dry?.tracks) return;
+    setSel((prev) => {
+      const next = { ...prev };
+      for (const tr of dry.tracks) {
+        next[tr.trackId] = defaultSelectionForTrack(tr, advanced);
+      }
+      return next;
+    });
+  }, [advanced, dry]);
 
   const toggle = (trackId, field) => {
     setSel((s) => ({ ...s, [trackId]: { ...(s[trackId] || {}), [field]: !(s?.[trackId]?.[field]) } }));
@@ -233,7 +288,57 @@ function ImprintModal({ albumId, onClose }) {
         const fields = Object.entries(m)
           .filter(([, v]) => !!v)
           .map(([k]) => k);
-        if (fields.length) tracks.push({ trackId: tr.trackId, fields });
+        if (!fields.length) continue;
+
+        const ov = {};
+        const o = overrides?.[tr.trackId] || {};
+        const pickStr = (field) => {
+          const v = o?.[field];
+          return typeof v === "string" ? v : "";
+        };
+
+        const wants = (f) => fields.includes(f);
+        if (wants("title")) ov.title = pickStr("title");
+        if (wants("artist")) ov.artist = pickStr("artist");
+        if (wants("album")) ov.album = pickStr("album");
+
+        if (wants("year")) {
+          const s = pickStr("year").trim();
+          if (!s) {
+            // explicit JSON null (clear) — avoid Go omitempty dropping the field
+            ov.year = null;
+          } else {
+            const y = parseInt(s, 10);
+            if (!Number.isFinite(y)) throw new Error("Некорректный year");
+            ov.year = y;
+          }
+        }
+        if (wants("trackNo")) {
+          const s = pickStr("trackNo").trim();
+          if (!s) {
+            ov.trackNo = null;
+          } else {
+            const n = parseInt(s, 10);
+            if (!Number.isFinite(n)) throw new Error("Некорректный trackNo");
+            ov.trackNo = n;
+          }
+        }
+        if (wants("discNo")) {
+          const s = pickStr("discNo").trim();
+          if (!s) {
+            ov.discNo = null;
+          } else {
+            const n = parseInt(s, 10);
+            if (!Number.isFinite(n)) throw new Error("Некорректный discNo");
+            ov.discNo = n;
+          }
+        }
+
+        tracks.push({
+          trackId: tr.trackId,
+          fields,
+          overrides: Object.keys(ov).length ? ov : undefined,
+        });
       }
       if (!tracks.length) throw new Error("Ничего не выбрано");
       const r = await lib.albumImprintApply(albumId, { confirm: true, tracks });
@@ -287,9 +392,20 @@ function ImprintModal({ albumId, onClose }) {
       >
         <h3 style={{ marginTop: 0 }}>Imprint metadata</h3>
         <p className="muted" style={{ marginTop: "-0.5rem" }}>
-          Предпросмотр изменений перед записью тегов в файлы. По умолчанию выбраны все поддерживаемые поля.
+          Предпросмотр изменений перед записью тегов в файлы. По умолчанию выбраны только поля, которые реально меняются; включите расширенный режим, чтобы увидеть и отредактировать остальные поддерживаемые поля.
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
+        {!loading ? (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(!!e.target.checked)} disabled={busy || !!jobId} />
+            <span>
+              <strong>{t("album.imprint.advanced")}</strong>
+              <span className="muted" style={{ display: "block", fontSize: "0.85rem", marginTop: 2 }}>
+                {t("album.imprint.advancedHint")}
+              </span>
+            </span>
+          </label>
+        ) : null}
         {loading ? (
           <p className="muted">Загрузка…</p>
         ) : (
@@ -345,45 +461,69 @@ function ImprintModal({ albumId, onClose }) {
                     </div>
                   ) : null}
                   <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                    {(tr.diff || []).map((d) => (
-                      <label
-                        key={d.field}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "22px 140px minmax(0, 1fr) minmax(0, 1fr)",
-                          gap: 8,
-                          alignItems: "baseline",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          disabled={busy || !d.supported}
-                          checked={!!(sel?.[tr.trackId]?.[d.field]) && !!d.supported}
-                          onChange={() => toggle(tr.trackId, d.field)}
-                        />
-                        <span className="muted">{d.field}</span>
-                        <span
+                    {visibleDiffs(tr).map((d) => {
+                      const isCover = String(d.field) === "cover";
+                      const disabledRow = busy || !d.supported || !!jobId;
+                      const afterVal = getOverride(tr.trackId, d.field, d);
+                      return (
+                        <div
+                          key={d.field}
                           style={{
-                            opacity: d.changed ? 1 : 0.6,
-                            minWidth: 0,
-                            overflowWrap: "anywhere",
-                            wordBreak: "break-word",
+                            display: "grid",
+                            gridTemplateColumns: "22px 140px minmax(0, 1fr) minmax(0, 1fr)",
+                            gap: 8,
+                            alignItems: "start",
                           }}
                         >
-                          {d.before ?? "—"}
-                        </span>
-                        <span
-                          style={{
-                            opacity: d.changed ? 1 : 0.6,
-                            minWidth: 0,
-                            overflowWrap: "anywhere",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {d.after ?? "—"}
-                        </span>
-                      </label>
-                    ))}
+                          <input
+                            type="checkbox"
+                            disabled={disabledRow}
+                            checked={!!(sel?.[tr.trackId]?.[d.field]) && !!d.supported}
+                            onChange={() => toggle(tr.trackId, d.field)}
+                          />
+                          <div className="muted" style={{ paddingTop: 6 }}>
+                            {d.field}
+                            {isCover ? (
+                              <div className="muted" style={{ fontSize: "0.78rem", marginTop: 4, lineHeight: 1.25 }}>
+                                {t("album.imprint.coverEditHint")}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div
+                            style={{
+                              opacity: d.changed ? 1 : 0.75,
+                              minWidth: 0,
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word",
+                              paddingTop: 6,
+                            }}
+                          >
+                            {d.before ?? "—"}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            {d.supported && !isCover ? (
+                              <input
+                                value={afterVal}
+                                disabled={disabledRow || !sel?.[tr.trackId]?.[d.field]}
+                                onChange={(e) => setOverride(tr.trackId, d.field, e.target.value)}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  opacity: d.changed ? 1 : 0.75,
+                                  minWidth: 0,
+                                  overflowWrap: "anywhere",
+                                  wordBreak: "break-word",
+                                  paddingTop: 6,
+                                }}
+                              >
+                                {d.after ?? "—"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

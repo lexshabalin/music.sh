@@ -120,6 +120,14 @@ func (h *Worker) runOne(ctx context.Context) error {
 			Tracks  []struct {
 				TrackID string   `json:"trackId"`
 				Fields  []string `json:"fields"`
+				Overrides *struct {
+					Title   *string `json:"title,omitempty"`
+					Artist  *string `json:"artist,omitempty"`
+					Album   *string `json:"album,omitempty"`
+					Year    *int    `json:"year,omitempty"`
+					TrackNo *int    `json:"trackNo,omitempty"`
+					DiscNo  *int    `json:"discNo,omitempty"`
+				} `json:"overrides,omitempty"`
 			} `json:"tracks"`
 		}
 		if uerr := json.Unmarshal([]byte(payload), &p); uerr != nil {

@@ -654,6 +654,15 @@ type imprintApplyIn struct {
 	Tracks  []struct {
 		TrackID string   `json:"trackId"`
 		Fields  []string `json:"fields"`
+		// Optional per-field overrides for imprint apply (library metadata is the default).
+		Overrides *struct {
+			Title   *string `json:"title,omitempty"`
+			Artist  *string `json:"artist,omitempty"`
+			Album   *string `json:"album,omitempty"`
+			Year    *int    `json:"year,omitempty"`
+			TrackNo *int    `json:"trackNo,omitempty"`
+			DiscNo  *int    `json:"discNo,omitempty"`
+		} `json:"overrides,omitempty"`
 	} `json:"tracks"`
 }
 

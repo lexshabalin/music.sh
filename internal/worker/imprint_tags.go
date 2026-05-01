@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,14 +12,39 @@ import (
 func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uuid.UUID, tracks []struct {
 	TrackID string   `json:"trackId"`
 	Fields  []string `json:"fields"`
+	Overrides *struct {
+		Title   *string `json:"title,omitempty"`
+		Artist  *string `json:"artist,omitempty"`
+		Album   *string `json:"album,omitempty"`
+		Year    *int    `json:"year,omitempty"`
+		TrackNo *int    `json:"trackNo,omitempty"`
+		DiscNo  *int    `json:"discNo,omitempty"`
+	} `json:"overrides,omitempty"`
 }) error {
 	rows, err := h.DB.GetAlbumTracksForImprint(ctx, albumID)
 	if err != nil {
 		return err
 	}
+
+	ovByTrack := map[string]*struct {
+		Title   *string `json:"title,omitempty"`
+		Artist  *string `json:"artist,omitempty"`
+		Album   *string `json:"album,omitempty"`
+		Year    *int    `json:"year,omitempty"`
+		TrackNo *int    `json:"trackNo,omitempty"`
+		DiscNo  *int    `json:"discNo,omitempty"`
+	}{}
+	for _, jt := range tracks {
+		tid := strings.TrimSpace(jt.TrackID)
+		if tid == "" || jt.Overrides == nil {
+			continue
+		}
+		ovByTrack[tid] = jt.Overrides
+	}
+
 	var targets []imprint.TrackTarget
 	for _, tr := range rows {
-		targets = append(targets, imprint.TrackTarget{
+		tgt := imprint.TrackTarget{
 			TrackID:      tr.TrackID,
 			FilePath:     tr.FilePath,
 			Format:       tr.Format,
@@ -31,7 +55,31 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 			TrackNo:      tr.TrackNo,
 			DiscNo:       tr.DiscNo,
 			CoverRelPath: tr.CoverRelPath,
-		})
+		}
+
+		ov := ovByTrack[tr.TrackID.String()]
+		if ov != nil {
+			if ov.Title != nil {
+				tgt.Title = strings.TrimSpace(*ov.Title)
+			}
+			if ov.Artist != nil {
+				tgt.Artist = strings.TrimSpace(*ov.Artist)
+			}
+			if ov.Album != nil {
+				tgt.Album = strings.TrimSpace(*ov.Album)
+			}
+			if ov.Year != nil {
+				tgt.Year = ov.Year
+			}
+			if ov.TrackNo != nil {
+				tgt.TrackNo = ov.TrackNo
+			}
+			if ov.DiscNo != nil {
+				tgt.DiscNo = ov.DiscNo
+			}
+		}
+
+		targets = append(targets, tgt)
 	}
 
 	// selection: trackId -> field -> bool
