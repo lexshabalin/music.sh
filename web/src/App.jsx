@@ -14,18 +14,19 @@ import {
 } from "./api";
 import { usePlayer } from "./usePlayer";
 import { Login } from "./pages/Login";
-import { Library } from "./pages/Library";
-import { Album } from "./pages/Album";
-import { Playlists } from "./pages/Playlists";
-import { Likes } from "./pages/Likes";
 import { Register } from "./pages/Register";
-import { Artists } from "./pages/Artists";
-import { Albums } from "./pages/Albums";
-import { Artist } from "./pages/Artist";
-import { Playlist } from "./pages/Playlist";
-import { Songs } from "./pages/Songs";
-import { Genres } from "./pages/Genres";
-import { Genre } from "./pages/Genre";
+
+const Library = React.lazy(() => import("./pages/Library").then((m) => ({ default: m.Library })));
+const Album = React.lazy(() => import("./pages/Album").then((m) => ({ default: m.Album })));
+const Playlists = React.lazy(() => import("./pages/Playlists").then((m) => ({ default: m.Playlists })));
+const Likes = React.lazy(() => import("./pages/Likes").then((m) => ({ default: m.Likes })));
+const Artists = React.lazy(() => import("./pages/Artists").then((m) => ({ default: m.Artists })));
+const Albums = React.lazy(() => import("./pages/Albums").then((m) => ({ default: m.Albums })));
+const Artist = React.lazy(() => import("./pages/Artist").then((m) => ({ default: m.Artist })));
+const Playlist = React.lazy(() => import("./pages/Playlist").then((m) => ({ default: m.Playlist })));
+const Songs = React.lazy(() => import("./pages/Songs").then((m) => ({ default: m.Songs })));
+const Genres = React.lazy(() => import("./pages/Genres").then((m) => ({ default: m.Genres })));
+const Genre = React.lazy(() => import("./pages/Genre").then((m) => ({ default: m.Genre })));
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { GlobalSearch } from "./components/GlobalSearch";
 import {
@@ -114,7 +115,6 @@ function Shell({ children }) {
   const location = useLocation();
   const p = usePlayer();
   const { t, lang, setLang } = useI18n();
-  const [isPlaying, setIsPlaying] = React.useState(false);
   const [curT, setCurT] = React.useState(0);
   const [dur, setDur] = React.useState(0);
   const [playErr, setPlayErr] = React.useState("");
@@ -735,9 +735,7 @@ function Shell({ children }) {
     if (!el) return;
     localProgressUiLastRef.current = 0;
 
-    const onPlay = () => setIsPlaying(true);
     const onPause = () => {
-      setIsPlaying(false);
       try {
         flushPlaybackRef.current();
       } catch (_) {}
@@ -755,7 +753,6 @@ function Shell({ children }) {
     const onMeta = () => setDur(el.duration || 0);
     const onError = async () => {
       // Don't auto-skip: browsers can mark the media as ended after a failed load.
-      setIsPlaying(false);
       const mediaErr = el.error?.code ? `mediaErr=${el.error.code}` : "";
       const src = p.current?.url || el.currentSrc || "";
       let http = "";
@@ -781,7 +778,6 @@ function Shell({ children }) {
       p.next();
     };
 
-    el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("loadedmetadata", onMeta);
@@ -792,11 +788,9 @@ function Shell({ children }) {
     // initial
     onMeta();
     onTime();
-    setIsPlaying(!el.paused);
     setPlayErr("");
 
     return () => {
-      el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("loadedmetadata", onMeta);
@@ -974,7 +968,7 @@ function Shell({ children }) {
 
     // Playback state hint helps some devices decide which buttons to show.
     try {
-      ms.playbackState = isPlaying ? "playing" : "paused";
+      ms.playbackState = p.isPlaying ? "playing" : "paused";
     } catch (_) {}
 
     return () => {
@@ -985,7 +979,7 @@ function Shell({ children }) {
       try { ms.setActionHandler("previoustrack", null); } catch (_) {}
       try { ms.setActionHandler("seekto", null); } catch (_) {}
     };
-  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, isPlaying, dur]);
+  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, p.isPlaying, dur]);
 
   // Lock-screen position: low frequency so we don’t couple Media Session updates to every progress tick.
   React.useEffect(() => {
@@ -1018,14 +1012,14 @@ function Shell({ children }) {
       } catch (_) {}
     };
 
-    if (!isPlaying) {
+    if (!p.isPlaying) {
       push();
       return undefined;
     }
     push();
     const id = window.setInterval(push, 3000);
     return () => clearInterval(id);
-  }, [p.current?.id, isPlaying, dur, p.ref]);
+  }, [p.current?.id, p.isPlaying, dur, p.ref]);
 
   return (
     <>
@@ -1134,16 +1128,18 @@ function Shell({ children }) {
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch(() => {
-                    setIsPlaying(false);
+                    try {
+                      el.pause();
+                    } catch (_) {}
                     setPlayErr("Playback blocked or failed.");
                   });
                 }
               }
               else el.pause();
             }}
-            title={isPlaying ? t("player.pause") : t("player.play")}
+            title={p.isPlaying ? t("player.pause") : t("player.play")}
           >
-            {isPlaying ? <IPause /> : <IPlay />}
+            {p.isPlaying ? <IPause /> : <IPlay />}
           </button>
 
           <button
@@ -1360,9 +1356,9 @@ function Shell({ children }) {
                     el.pause();
                   }
                 }}
-                title={isPlaying ? "Pause" : "Play"}
+                title={p.isPlaying ? "Pause" : "Play"}
               >
-                {isPlaying ? <IPause /> : <IPlay />}
+                {p.isPlaying ? <IPause /> : <IPlay />}
               </button>
               <button
                 className="player-skip"
@@ -1601,9 +1597,9 @@ function Shell({ children }) {
                             el.pause();
                           }
                         }}
-                        title={isPlaying ? t("player.pause") : t("player.play")}
+                        title={p.isPlaying ? t("player.pause") : t("player.play")}
                       >
-                        {isPlaying ? <IPause /> : <IPlay />}
+                        {p.isPlaying ? <IPause /> : <IPlay />}
                       </button>
                       <button
                         className="player-skip"
@@ -1826,13 +1822,9 @@ function BackgroundLayer({ bg }) {
     return <div className="bg-layer bg-waves" aria-hidden="true" />;
   }
   if (bg.type === "custom" && bg.url) {
+    // Legacy: saved video backgrounds are no longer supported.
     if (typeof bg.mime === "string" && bg.mime.startsWith("video/")) {
-      return (
-        <div className="bg-layer bg-custom" aria-hidden="true">
-          <video className="bg-video" autoPlay loop muted playsInline preload="auto" src={bg.url} />
-          <div className="bg-dim" />
-        </div>
-      );
+      return null;
     }
     return <div className="bg-layer bg-custom" aria-hidden="true" style={{ backgroundImage: `url(${bg.url})` }} />;
   }
@@ -2078,7 +2070,7 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
                 {t("profile.bg.upload")}
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
                   style={{ display: "none" }}
                   onChange={async (e) => {
                     const f = e.target.files?.[0];
@@ -2258,6 +2250,7 @@ export function App() {
     <I18nProvider>
       <Shell>
         <ErrorBoundary>
+          <React.Suspense fallback={<div className="route-fallback" aria-hidden="true" />}>
           <Routes>
             <Route path="/" element={<HomeRedirect />} />
             <Route
@@ -2303,6 +2296,7 @@ export function App() {
               element={!getToken() ? <Navigate to="/login" replace /> : <Likes />}
             />
           </Routes>
+          </React.Suspense>
         </ErrorBoundary>
       </Shell>
     </I18nProvider>

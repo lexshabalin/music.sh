@@ -223,8 +223,7 @@ func (a *App) bgPathFor(uid string, ext string) (abs string, rel string) {
 
 func (a *App) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	uid, _ := userIDFromCtx(r.Context())
-	// allow larger files (gif/video). still reasonable.
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(16 << 20); err != nil {
 		JSONError(w, 400, "bad multipart")
 		return
 	}
@@ -239,8 +238,7 @@ func (a *App) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	n, _ := io.ReadFull(f, buf)
 	ct := http.DetectContentType(buf[:n])
 
-	ok := ct == "image/png" || ct == "image/jpeg" || ct == "image/webp" || ct == "image/gif" ||
-		strings.HasPrefix(ct, "video/")
+	ok := ct == "image/png" || ct == "image/jpeg" || ct == "image/webp" || ct == "image/gif"
 	if !ok {
 		JSONError(w, 400, "unsupported background type")
 		return
@@ -259,7 +257,7 @@ func (a *App) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		case "image/gif":
 			ext = ".gif"
 		default:
-			ext = ".mp4"
+			ext = ".bin"
 		}
 	}
 

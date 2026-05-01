@@ -30,6 +30,10 @@ body {
   min-height: 100vh;
 }
 
+.route-fallback {
+  min-height: 30vh;
+}
+
 /* Background layer (behind everything) */
 .bg-layer {
   position: fixed;
@@ -75,19 +79,6 @@ body {
   inset: 0;
   background: rgba(14, 14, 18, 0.55);
 }
-.bg-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.bg-dim {
-  position: absolute;
-  inset: 0;
-  background: rgba(14, 14, 18, 0.55);
-}
-
 /* Lava lamp preset (red/yellow animated blobs) */
 .bg-lava {
   /* Base molten color field */
@@ -567,6 +558,7 @@ select.lang-select {
   min-width: 0;
   position: relative;
   z-index: 0;
+  contain: layout style;
 }
 .mobile-nav-toggle {
   position: fixed;

@@ -1,10 +1,14 @@
-import React, { useContext, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { releasePlaybackServerSync } from "./api";
 
 const Ctx = React.createContext(null);
 export function PlayerProvider({ children }) {
   const ref = useRef(null);
   const queueRef = useRef([]);
+  const indexRef = useRef(-1);
+  const volumeRef = useRef(1);
+  const mutedRef = useRef(false);
+  const lastVolumeRef = useRef(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
   const [idx, setIdx] = useState(-1);
@@ -15,83 +19,127 @@ export function PlayerProvider({ children }) {
   const current = idx >= 0 && idx < queue.length ? queue[idx] : null;
 
   queueRef.current = queue;
+  indexRef.current = idx;
+  volumeRef.current = volume;
+  mutedRef.current = muted;
+  lastVolumeRef.current = lastVolume;
 
-  const api = useMemo(() => {
-    const applyVolume = (v) => {
-      const el = ref.current;
-      if (el) el.volume = v;
-    };
-    const applyMuted = (m) => {
-      const el = ref.current;
-      if (el) el.muted = m;
-    };
-    const setAudioEl = (el) => {
-      // React calls with null on unmount. Keep both state + ref accurate.
-      ref.current = el;
-      try {
-        if (el) {
-          el.volume = volume;
-          el.muted = muted;
-          setIsPlaying(!el.paused);
-        } else {
-          setIsPlaying(false);
-        }
-      } catch (_) {
+  const applyVolume = useCallback((v) => {
+    const el = ref.current;
+    if (el) el.volume = v;
+  }, []);
+  const applyMuted = useCallback((m) => {
+    const el = ref.current;
+    if (el) el.muted = m;
+  }, []);
+
+  const setAudioEl = useCallback((el) => {
+    ref.current = el;
+    try {
+      if (el) {
+        el.volume = volumeRef.current;
+        el.muted = mutedRef.current;
+        setIsPlaying(!el.paused);
+      } else {
         setIsPlaying(false);
       }
-    };
-    const playQueue = (items, startIndex) => {
-      releasePlaybackServerSync();
-      setQueue(items || []);
-      setIdx(typeof startIndex === "number" ? startIndex : 0);
-    };
-    const playOne = (id, label, url) => playQueue([{ id, label, url }], 0);
-    const playNext = (item) => {
-      if (!item) return;
-      releasePlaybackServerSync();
-      setQueue((q) => {
-        const base = Array.isArray(q) ? q.slice() : [];
-        const insertAt = idx >= 0 ? idx + 1 : base.length;
-        base.splice(insertAt, 0, item);
-        return base;
-      });
-    };
-    const jumpTo = (i) => {
-      const n = typeof i === "number" ? i : -1;
-      const q = queueRef.current;
-      const len = Array.isArray(q) ? q.length : 0;
-      if (!len) {
-        setIdx(-1);
-        return;
-      }
-      setIdx(Math.max(0, Math.min(len - 1, n)));
-    };
-    const next = () => setIdx((i) => (queue.length ? Math.min(queue.length - 1, i + 1) : -1));
-    const prev = () => setIdx((i) => (queue.length ? Math.max(0, i - 1) : -1));
-    const setVol = (v) => {
+    } catch (_) {
+      setIsPlaying(false);
+    }
+  }, []);
+
+  const playQueue = useCallback((items, startIndex) => {
+    releasePlaybackServerSync();
+    setQueue(items || []);
+    setIdx(typeof startIndex === "number" ? startIndex : 0);
+  }, []);
+
+  const playOne = useCallback(
+    (id, label, url) => {
+      playQueue([{ id, label, url }], 0);
+    },
+    [playQueue]
+  );
+
+  const playNext = useCallback((item) => {
+    if (!item) return;
+    releasePlaybackServerSync();
+    setQueue((q) => {
+      const base = Array.isArray(q) ? q.slice() : [];
+      const curIdx = indexRef.current;
+      const insertAt = curIdx >= 0 ? curIdx + 1 : base.length;
+      base.splice(insertAt, 0, item);
+      return base;
+    });
+  }, []);
+
+  const jumpTo = useCallback((i) => {
+    const n = typeof i === "number" ? i : -1;
+    const q = queueRef.current;
+    const len = Array.isArray(q) ? q.length : 0;
+    if (!len) {
+      setIdx(-1);
+      return;
+    }
+    setIdx(Math.max(0, Math.min(len - 1, n)));
+  }, []);
+
+  const next = useCallback(() => {
+    setIdx((i) => {
+      const len = queueRef.current.length;
+      return len ? Math.min(len - 1, i + 1) : -1;
+    });
+  }, []);
+
+  const prev = useCallback(() => {
+    setIdx((i) => {
+      const len = queueRef.current.length;
+      return len ? Math.max(0, i - 1) : -1;
+    });
+  }, []);
+
+  const setVol = useCallback(
+    (v) => {
       const vv = Math.max(0, Math.min(1, v));
       setVolume(vv);
-      if (vv > 0) setLastVolume(vv);
+      if (vv > 0) {
+        setLastVolume(vv);
+        lastVolumeRef.current = vv;
+      }
       applyVolume(vv);
-    };
-    const toggleMute = () => {
-      setMuted((m) => {
-        const nextM = !m;
-        applyMuted(nextM);
-        if (!nextM) {
-          // restore volume to last non-zero
-          setVol(lastVolume || 1);
-        }
-        return nextM;
-      });
-    };
-    const setMute = (m) => {
+    },
+    [applyVolume]
+  );
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const nextM = !m;
+      applyMuted(nextM);
+      if (!nextM) {
+        const restore = lastVolumeRef.current || 1;
+        setVolume(restore);
+        applyVolume(restore);
+      }
+      return nextM;
+    });
+  }, [applyMuted, applyVolume]);
+
+  const setMute = useCallback(
+    (m) => {
       const mm = !!m;
       setMuted(mm);
       applyMuted(mm);
-      if (!mm) setVol(lastVolume || volume || 1);
-    };
-    return {
+      if (!mm) {
+        const restore = lastVolumeRef.current || volumeRef.current || 1;
+        setVolume(restore);
+        applyVolume(restore);
+      }
+    },
+    [applyMuted, applyVolume]
+  );
+
+  const api = useMemo(
+    () => ({
       ref,
       isPlaying,
       setAudioEl,
@@ -109,8 +157,26 @@ export function PlayerProvider({ children }) {
       setVolume: setVol,
       toggleMute,
       setMute,
-    };
-  }, [queue, idx, current, volume, muted, lastVolume, isPlaying]);
+    }),
+    [
+      isPlaying,
+      setAudioEl,
+      queue,
+      idx,
+      current,
+      volume,
+      muted,
+      playQueue,
+      playOne,
+      playNext,
+      jumpTo,
+      next,
+      prev,
+      setVol,
+      toggleMute,
+      setMute,
+    ]
+  );
 
   React.useEffect(() => {
     const el = ref.current;
