@@ -1,7 +1,6 @@
 package imprint
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,13 +59,13 @@ func ApplySelection(targets []TrackTarget, dataDir string, selection map[string]
 
 		var warn []string
 		var err error
-		switch res.Format {
-		case "mp3":
+		switch {
+		case res.Format == "mp3":
 			warn, err = writeMP3Tags(t.FilePath, t, sel, coverBytes, coverMime)
-		case "flac":
+		case res.Format == "flac":
 			warn, err = writeFLACTags(t.FilePath, t, sel, coverBytes, coverMime)
 		default:
-			err = fmt.Errorf("unsupported format: %s", res.Format)
+			warn, err = writeFFmpegTags(t.FilePath, t, sel, coverBytes, coverMime)
 		}
 		res.Warnings = append(res.Warnings, warn...)
 		if err != nil {

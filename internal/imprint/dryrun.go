@@ -99,7 +99,7 @@ func readCurrent(path, format string) (currentTags, []string, error) {
 			trackNo: t.TrackNo, discNo: t.DiscNo, coverHash: t.CoverHash,
 		}, warn, nil
 	default:
-		return currentTags{}, nil, fmt.Errorf("unsupported format: %s", format)
+		return readFFmpegTags(path)
 	}
 }
 
