@@ -473,6 +473,11 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) stream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	tw := &trackWriteState{ResponseWriter: w}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -532,20 +537,38 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := filepath.Join(a.DataDir, rel)
+	if r.Method == http.MethodHead {
+		fi, err := os.Stat(abs)
+		if err != nil {
+			JSONError(w, 404, "file")
+			return
+		}
+		a.setAlbumCoverResponseHeaders(w, abs)
+		w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	f, err := os.Open(abs)
 	if err != nil {
 		JSONError(w, 404, "file")
 		return
 	}
 	_ = f.Close()
-	// re-open for sendfile-style
+	a.setAlbumCoverResponseHeaders(w, abs)
+	http.ServeFile(w, r, abs)
+}
+
+func (*App) setAlbumCoverResponseHeaders(w http.ResponseWriter, abs string) {
+	ext := filepath.Ext(abs)
 	ct := "image/jpeg"
-	if filepath.Ext(abs) == ".png" {
+	switch ext {
+	case ".png":
 		ct = "image/png"
+	case ".webp":
+		ct = "image/webp"
 	}
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	http.ServeFile(w, r, abs)
 }
 
 func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
@@ -565,7 +588,8 @@ func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	abs := filepath.Join(a.DataDir, rel)
-	if _, err := os.Stat(abs); err != nil {
+	fi, err := os.Stat(abs)
+	if err != nil {
 		JSONError(w, 404, "file")
 		return
 	}
@@ -578,6 +602,11 @@ func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if r.Method == http.MethodHead {
+		w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.ServeFile(w, r, abs)
 }
 

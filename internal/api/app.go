@@ -89,10 +89,12 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/auth/register", a.register)
 		g.Post("/api/auth/login", a.login)
 	})
-	r.Method(http.MethodHead, "/api/tracks/{id}/stream", a.stream)
-	r.Get("/api/tracks/{id}/stream", a.stream) // may use ?token= for <audio>
-	r.Get("/api/tracks/{id}/cover", a.trackCover)
-	r.Get("/api/albums/{id}/cover", a.albumCover)
+	// chi.Get omits HEAD; use Handle for stream-only route. Covers also need GET/HEAD explicitly so POST uploads stay routed to guarded handlers inside the auth group.
+	r.Handle("/api/tracks/{id}/stream", http.HandlerFunc(a.stream))
+	r.Method(http.MethodGet, "/api/tracks/{id}/cover", http.HandlerFunc(a.trackCover))
+	r.Method(http.MethodHead, "/api/tracks/{id}/cover", http.HandlerFunc(a.trackCover))
+	r.Method(http.MethodGet, "/api/albums/{id}/cover", http.HandlerFunc(a.albumCover))
+	r.Method(http.MethodHead, "/api/albums/{id}/cover", http.HandlerFunc(a.albumCover))
 	r.Get("/api/me/background", a.getBackgroundAsset)
 
 	r.Group(func(g chi.Router) {

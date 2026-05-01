@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,26 @@ import (
 
 type DB struct {
 	Pool *pgxpool.Pool
+
+	imprintGenreOnce sync.Once
+	imprintGenreSQL  string // fragment including "AS disp_genre"
+}
+
+func (d *DB) imprintGenreDispGenreClause() string {
+	d.imprintGenreOnce.Do(func() {
+		var n int
+		// Detection must not inherit a caller-cancelled ctx (would lock wrong SQL for process lifetime).
+		err := d.Pool.QueryRow(context.Background(), `
+			SELECT COUNT(*) FROM information_schema.tables
+			WHERE table_schema = 'public'
+			  AND table_name IN ('track_genres', 'album_genres', 'library_genres')`).Scan(&n)
+		if err == nil && n == 3 {
+			d.imprintGenreSQL = sqlDispImprintGenre
+			return
+		}
+		d.imprintGenreSQL = sqlDispImprintGenreLegacy
+	})
+	return d.imprintGenreSQL
 }
 
 // ErrAlbumNotForArtist is returned when PATCH sets albumId that is not associated with the resolved track artist.
@@ -33,6 +54,14 @@ const sqlDispImprintGenre = `COALESCE(
      FROM track_genres tg INNER JOIN library_genres lg ON lg.id = tg.genre_id WHERE tg.track_id = t.id),
   (SELECT NULLIF(trim(both FROM string_agg(lg.label, '; ' ORDER BY ag.position ASC, lg.normalized ASC)), '')
      FROM album_genres ag INNER JOIN library_genres lg ON lg.id = ag.genre_id WHERE ag.album_id = t.album_id)
+) AS disp_genre`
+
+// sqlDispImprintGenreLegacy is used when junction tables from migration 018 are absent (deploy without that migration).
+const sqlDispImprintGenreLegacy = `COALESCE(
+  NULLIF(BTRIM(CASE WHEN al.meta_user_genre IS NOT NULL AND BTRIM(COALESCE(al.meta_user_genre::text, '')) <> ''
+    THEN al.meta_user_genre::text ELSE NULL END), ''),
+  NULLIF(BTRIM(COALESCE(t.tag_genre, '')), ''),
+  NULLIF(BTRIM(COALESCE(al.genre::text, '')), '')
 ) AS disp_genre`
 
 func splitDispGenresAgg(ns sql.NullString) []string {
@@ -987,7 +1016,7 @@ func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([
 				NULLIF(BTRIM(t.tag_album_artist), ''),
 				BTRIM(COALESCE(aal.name, ''))
 			) AS disp_aa,
-			` + sqlDispImprintGenre + `,
+			` + d.imprintGenreDispGenreClause() + `,
 			BTRIM(COALESCE(t.tag_composer, '')) AS disp_composer,
 			BTRIM(COALESCE(t.tag_comment, '')) AS disp_comment,
 			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
@@ -1668,7 +1697,7 @@ func (d *DB) ListPlaylists(ctx context.Context, userID uuid.UUID, query string) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Playlist
+	out := make([]Playlist, 0)
 	for rows.Next() {
 		var p Playlist
 		var desc sql.NullString
