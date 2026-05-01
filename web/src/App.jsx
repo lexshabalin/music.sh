@@ -449,8 +449,7 @@ function Shell({ children }) {
   }, [isMobile, showMobilePlayer]);
 
   React.useEffect(() => {
-    const onRelease = (ev) => {
-      const acknowledge = typeof ev.detail?.acknowledge === "function" ? ev.detail.acknowledge : null;
+    const onRelease = () => {
       suspendPlaybackPushRef.current = false;
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
@@ -461,18 +460,11 @@ function Shell({ children }) {
       remoteOwnerLockRef.current = null;
       lastRemotePlayingSeenAtRef.current = 0;
       remoteServerPlayingRef.current = false;
-      void (async () => {
-        try {
-          await pushTakeoverNow();
-          // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
-          // would send isPlaying:false and mute server state the user is about to resume.
-        } catch (_) {
-        } finally {
-          try {
-            acknowledge?.();
-          } catch (_) {}
-        }
-      })();
+      // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
+      // would send isPlaying:false and mute server state the user is about to resume.
+      try {
+        void pushTakeoverNow();
+      } catch (_) {}
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
@@ -1030,7 +1022,7 @@ function Shell({ children }) {
 
     try {
       ms.setActionHandler("play", async () => {
-        await releasePlaybackServerSync();
+        releasePlaybackServerSync();
         const el = p.ref.current;
         if (!el) return;
         const pr = el.play();
@@ -1220,11 +1212,11 @@ function Shell({ children }) {
           <button
             className="player-play"
             type="button"
-            onClick={async () => {
+            onClick={() => {
               const el = p.ref.current;
               if (!el) return;
               if (el.paused) {
-                await claimPlaybackSync();
+                claimPlaybackSync();
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch(() => {
@@ -1452,12 +1444,12 @@ function Shell({ children }) {
               <button
                 className="player-play"
                 type="button"
-                onClick={async (e) => {
+              onClick={(e) => {
                   e.stopPropagation();
                   const el = p.ref.current;
                   if (!el) return;
                   if (el.paused) {
-                    await claimPlaybackSync();
+                  claimPlaybackSync();
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") pr.catch(() => {});
                   } else {
@@ -1694,11 +1686,11 @@ function Shell({ children }) {
                       <button
                         className="player-play"
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           const el = p.ref.current;
                           if (!el) return;
                           if (el.paused) {
-                            await claimPlaybackSync();
+                            claimPlaybackSync();
                             const pr = el.play();
                             if (pr && typeof pr.catch === "function") pr.catch(() => {});
                           } else {

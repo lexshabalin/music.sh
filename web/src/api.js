@@ -270,28 +270,11 @@ export function getPlaybackClientId() {
   }
 }
 
-/** Resolves after Shell finishes takeover handshake + flush (or after a timeout if no listener). */
 export function releasePlaybackServerSync() {
-  if (typeof window === "undefined") return Promise.resolve();
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    try {
-      window.dispatchEvent(
-        new CustomEvent(PLAYBACK_SYNC_RELEASE_EVENT, {
-          detail: { acknowledge: finish },
-        })
-      );
-    } catch (_) {
-      finish();
-      return;
-    }
-    window.setTimeout(finish, 12000);
-  });
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent(PLAYBACK_SYNC_RELEASE_EVENT));
+  } catch (_) {}
 }
 
 /** Cross-device playback resume (server stores last queue + position). */
