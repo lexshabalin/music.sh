@@ -487,6 +487,14 @@ func (d *DB) albumHasUserMeta(ctx context.Context, albumID uuid.UUID) (bool, err
 	return ok, err
 }
 
+func sqlNullTrim(s string) interface{} {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // UpsertTrack reads metadata from the scanner and inserts or updates a file row.
 func (d *DB) UpsertTrack(
 	ctx context.Context,
@@ -497,6 +505,7 @@ func (d *DB) UpsertTrack(
 	durationMS *int,
 	format *string,
 	bitrateKbps *int,
+	tagAlbumArtist, tagGenre, tagComposer, tagComment string,
 ) (trackID, albumID uuid.UUID, isNewOrChanged bool, err error) {
 	artistID, err := d.FindOrCreateArtist(ctx, artistName)
 	if err != nil {
@@ -605,9 +614,11 @@ func (d *DB) UpsertTrack(
 			UPDATE tracks SET
 				file_size = $2, file_mtime_ns = $3, duration_ms = $4, title = $5,
 				format = $6, bitrate_kbps = $7,
-				track_no = $8, disc_no = $9, year = $10, album_id = $11, artist_id = $12
+				track_no = $8, disc_no = $9, year = $10, album_id = $11, artist_id = $12,
+				tag_album_artist = $13, tag_genre = $14, tag_composer = $15, tag_comment = $16
 			WHERE id = $1
-		`, id, fileSize, mtimeNs, durationMS, finalTitle, format, bitrateKbps, finalTrackNo, finalDiscNo, finalYear, finalAlbumID, finalArtistID)
+		`, id, fileSize, mtimeNs, durationMS, finalTitle, format, bitrateKbps, finalTrackNo, finalDiscNo, finalYear, finalAlbumID, finalArtistID,
+			sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagGenre), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 		if e != nil {
 			err = e
 			return
@@ -623,9 +634,11 @@ func (d *DB) UpsertTrack(
 	_, err = d.Pool.Exec(ctx, `
 		INSERT INTO tracks (
 			id, file_path, file_size, file_mtime_ns, duration_ms, title, format, bitrate_kbps,
-			track_no, disc_no, year, album_id, artist_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID)
+			track_no, disc_no, year, album_id, artist_id,
+			tag_album_artist, tag_genre, tag_composer, tag_comment
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID,
+		sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagGenre), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 	if err != nil {
 		return
 	}
@@ -890,9 +903,13 @@ type ImprintTrackRow struct {
 	FilePath string
 	Format   string
 
-	Title      string
-	ArtistName string
-	AlbumTitle string
+	Title       string
+	ArtistName  string
+	AlbumTitle  string
+	AlbumArtist string
+	Genre       string
+	Composer    string
+	Comment     string
 	Year       *int
 	TrackNo    *int
 	DiscNo     *int
@@ -911,6 +928,14 @@ func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([
 			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) AS disp_title,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
+			COALESCE(
+				NULLIF(BTRIM(t.meta_user_album_artist), ''),
+				NULLIF(BTRIM(t.tag_album_artist), ''),
+				BTRIM(COALESCE(aal.name, ''))
+			) AS disp_aa,
+			BTRIM(COALESCE(t.tag_genre, '')) AS disp_genre,
+			BTRIM(COALESCE(t.tag_composer, '')) AS disp_composer,
+			BTRIM(COALESCE(t.tag_comment, '')) AS disp_comment,
 			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
 			ELSE COALESCE(CASE WHEN al.meta_user_year IS NOT NULL THEN al.meta_user_year ELSE al.year END, t.year) END AS disp_year,
 			COALESCE(t.meta_user_track_no, t.track_no) AS disp_track_no,
@@ -923,6 +948,7 @@ func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([
 		FROM tracks t
 		LEFT JOIN albums al ON t.album_id = al.id
 		LEFT JOIN artists ar ON t.artist_id = ar.id
+		LEFT JOIN artists aal ON al.artist_id = aal.id
 		WHERE t.album_id = $1
 		ORDER BY
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
@@ -950,6 +976,10 @@ func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([
 			&r.Title,
 			&r.ArtistName,
 			&r.AlbumTitle,
+			&r.AlbumArtist,
+			&r.Genre,
+			&r.Composer,
+			&r.Comment,
 			&y,
 			&tno,
 			&dno,

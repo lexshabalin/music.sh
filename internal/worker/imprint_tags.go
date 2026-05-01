@@ -14,9 +14,13 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 	TrackID string   `json:"trackId"`
 	Fields  []string `json:"fields"`
 	Overrides *struct {
-		Title   *string `json:"title,omitempty"`
-		Artist  *string `json:"artist,omitempty"`
-		Album   *string `json:"album,omitempty"`
+		Title       *string `json:"title,omitempty"`
+		Artist      *string `json:"artist,omitempty"`
+		Album       *string `json:"album,omitempty"`
+		AlbumArtist *string `json:"albumArtist,omitempty"`
+		Genre       *string `json:"genre,omitempty"`
+		Composer    *string `json:"composer,omitempty"`
+		Comment     *string `json:"comment,omitempty"`
 		Year    *int    `json:"year,omitempty"`
 		TrackNo *int    `json:"trackNo,omitempty"`
 		DiscNo  *int    `json:"discNo,omitempty"`
@@ -28,9 +32,13 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 	}
 
 	ovByTrack := map[string]*struct {
-		Title   *string `json:"title,omitempty"`
-		Artist  *string `json:"artist,omitempty"`
-		Album   *string `json:"album,omitempty"`
+		Title       *string `json:"title,omitempty"`
+		Artist      *string `json:"artist,omitempty"`
+		Album       *string `json:"album,omitempty"`
+		AlbumArtist *string `json:"albumArtist,omitempty"`
+		Genre       *string `json:"genre,omitempty"`
+		Composer    *string `json:"composer,omitempty"`
+		Comment     *string `json:"comment,omitempty"`
 		Year    *int    `json:"year,omitempty"`
 		TrackNo *int    `json:"trackNo,omitempty"`
 		DiscNo  *int    `json:"discNo,omitempty"`
@@ -52,6 +60,10 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 			Title:        tr.Title,
 			Artist:       tr.ArtistName,
 			Album:        tr.AlbumTitle,
+			AlbumArtist:  tr.AlbumArtist,
+			Genre:        tr.Genre,
+			Composer:     tr.Composer,
+			Comment:      tr.Comment,
 			Year:         tr.Year,
 			TrackNo:      tr.TrackNo,
 			DiscNo:       tr.DiscNo,
@@ -68,6 +80,18 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 			}
 			if ov.Album != nil {
 				tgt.Album = strings.TrimSpace(*ov.Album)
+			}
+			if ov.AlbumArtist != nil {
+				tgt.AlbumArtist = strings.TrimSpace(*ov.AlbumArtist)
+			}
+			if ov.Genre != nil {
+				tgt.Genre = strings.TrimSpace(*ov.Genre)
+			}
+			if ov.Composer != nil {
+				tgt.Composer = strings.TrimSpace(*ov.Composer)
+			}
+			if ov.Comment != nil {
+				tgt.Comment = strings.TrimSpace(*ov.Comment)
 			}
 			if ov.Year != nil {
 				tgt.Year = ov.Year
@@ -103,6 +127,14 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 				m[imprint.FieldArtist] = true
 			case "album", "albumtitle":
 				m[imprint.FieldAlbum] = true
+			case "albumartist", "album_artist":
+				m[imprint.FieldAlbumArtist] = true
+			case "genre":
+				m[imprint.FieldGenre] = true
+			case "composer":
+				m[imprint.FieldComposer] = true
+			case "comment":
+				m[imprint.FieldComment] = true
 			case "year":
 				m[imprint.FieldYear] = true
 			case "trackno", "track":

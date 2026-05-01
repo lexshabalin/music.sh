@@ -9,14 +9,15 @@ import (
 
 type currentTags struct {
 	title, artist, album string
-	year, trackNo, discNo string
-	coverHash string
+	albumArtist, genre, composer, comment string
+	year, trackNo, discNo                 string
+	coverHash                             string
 }
 
 func DryRunAlbum(targets []TrackTarget, dataDir string) (AlbumDryRun, error) {
 	out := AlbumDryRun{
 		// AlbumID is set by caller.
-		AvailableFields: []Field{FieldTitle, FieldArtist, FieldAlbum, FieldYear, FieldTrackNo, FieldDiscNo, FieldCover},
+		AvailableFields: []Field{FieldTitle, FieldArtist, FieldAlbum, FieldAlbumArtist, FieldGenre, FieldComposer, FieldComment, FieldYear, FieldTrackNo, FieldDiscNo, FieldCover},
 	}
 
 	for _, t := range targets {
@@ -60,6 +61,10 @@ func DryRunAlbum(targets []TrackTarget, dataDir string) (AlbumDryRun, error) {
 			diffText(FieldTitle, ct.title, t.Title),
 			diffText(FieldArtist, ct.artist, t.Artist),
 			diffText(FieldAlbum, ct.album, t.Album),
+			diffText(FieldAlbumArtist, ct.albumArtist, t.AlbumArtist),
+			diffText(FieldGenre, ct.genre, t.Genre),
+			diffText(FieldComposer, ct.composer, t.Composer),
+			diffText(FieldComment, ct.comment, t.Comment),
 			diffText(FieldYear, ct.year, yearStr(t.Year)),
 			diffText(FieldTrackNo, ct.trackNo, intStr(t.TrackNo)),
 			diffText(FieldDiscNo, ct.discNo, intStr(t.DiscNo)),
@@ -86,8 +91,9 @@ func readCurrent(path, format string) (currentTags, []string, error) {
 			return currentTags{}, warn, err
 		}
 		return currentTags{
-			title: t.Title, artist: t.Artist, album: t.Album, year: t.Year,
-			trackNo: t.TrackNo, discNo: t.DiscNo, coverHash: t.CoverHash,
+			title: t.Title, artist: t.Artist, album: t.Album,
+			albumArtist: t.AlbumArtist, genre: t.Genre, composer: t.Composer, comment: t.Comment,
+			year: t.Year, trackNo: t.TrackNo, discNo: t.DiscNo, coverHash: t.CoverHash,
 		}, warn, nil
 	case "flac":
 		t, warn, err := readFLACTags(path)
@@ -95,8 +101,9 @@ func readCurrent(path, format string) (currentTags, []string, error) {
 			return currentTags{}, warn, err
 		}
 		return currentTags{
-			title: t.Title, artist: t.Artist, album: t.Album, year: t.Year,
-			trackNo: t.TrackNo, discNo: t.DiscNo, coverHash: t.CoverHash,
+			title: t.Title, artist: t.Artist, album: t.Album,
+			albumArtist: t.AlbumArtist, genre: t.Genre, composer: t.Composer, comment: t.Comment,
+			year: t.Year, trackNo: t.TrackNo, discNo: t.DiscNo, coverHash: t.CoverHash,
 		}, warn, nil
 	default:
 		return readFFmpegTags(path)

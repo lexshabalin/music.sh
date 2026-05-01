@@ -33,7 +33,7 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
 			return e
 		}
@@ -77,7 +77,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		st := info.Size()
 		mt := info.ModTime()
 		meta := readTrackMeta(path)
-		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
 			return e
 		}
@@ -102,12 +102,14 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 }
 
 type trackMeta struct {
-	artist, albumArtist, album, title   string
-	track, disc, year                  *int
-	durationMS                        *int
-	format                            *string
-	bitrateKbps                        *int
-	inferred                          bool
+	artist, albumArtist, album, title string
+	track, disc, year                *int
+	durationMS                      *int
+	format                          *string
+	bitrateKbps                     *int
+	inferred                        bool
+	// Optional tag-derived strings stored on tracks for imprint (raw from tags / file).
+	tagAlbumArtist, genre, composer, comment string
 }
 
 var reArtistTitle = regexp.MustCompile(`\s*-\s*`)
@@ -290,6 +292,10 @@ func readTrackMeta(p string) trackMeta {
 		y := m.Year()
 		out.year = &y
 	}
+	out.genre = strings.TrimSpace(m.Genre())
+	out.composer = strings.TrimSpace(m.Composer())
+	out.comment = strings.TrimSpace(m.Comment())
+	out.tagAlbumArtist = strings.TrimSpace(albumArtistRaw)
 
 	// Basic audio meta: expose container/format by extension; estimate bitrate if duration is known.
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))

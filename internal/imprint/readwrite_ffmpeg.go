@@ -181,12 +181,16 @@ func readFFmpegTags(path string) (currentTags, []string, error) {
 	}
 
 	ct := currentTags{
-		title:   tagPick(m, "title", "©nam", "tit2", "name"),
-		artist:  tagPick(m, "artist", "©art", "author", "album_artist", "album artist", "aartist", "©wrt"),
-		album:   tagPick(m, "album", "©alb", "talb"),
-		year:    normalizeYearTag(tagPick(m, "date", "year", "©day", "tyer", "tdrc")),
-		trackNo: tagPick(m, "track", "tracknumber", "trck", "©trk", "trkn"),
-		discNo:  tagPick(m, "disc", "discnumber", "disk", "tpos", "part"),
+		title:       tagPick(m, "title", "©nam", "tit2", "name"),
+		artist:      tagPick(m, "artist", "©art", "author"),
+		album:       tagPick(m, "album", "©alb", "talb"),
+		albumArtist: tagPick(m, "album_artist", "albumartist", "album artist", "aartist", "©aart", "band", "tpe2"),
+		genre:       tagPick(m, "genre", "©gen", "tcon"),
+		composer:    tagPick(m, "composer", "©wrt", "tcom"),
+		comment:     tagPick(m, "comment", "description", "©cmt", "synopsis"),
+		year:        normalizeYearTag(tagPick(m, "date", "year", "©day", "tyer", "tdrc")),
+		trackNo:     tagPick(m, "track", "tracknumber", "trck", "©trk", "trkn"),
+		discNo:      tagPick(m, "disc", "discnumber", "disk", "tpos", "part"),
 	}
 
 	if idx, ok := pickCoverStreamIndex(p); ok {
@@ -287,6 +291,18 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 	}
 	if writeFields[FieldAlbum] {
 		args = append(args, "-metadata", "album="+desired.Album)
+	}
+	if writeFields[FieldAlbumArtist] {
+		args = append(args, "-metadata", "album_artist="+desired.AlbumArtist)
+	}
+	if writeFields[FieldGenre] {
+		args = append(args, "-metadata", "genre="+desired.Genre)
+	}
+	if writeFields[FieldComposer] {
+		args = append(args, "-metadata", "composer="+desired.Composer)
+	}
+	if writeFields[FieldComment] {
+		args = append(args, "-metadata", "comment="+desired.Comment)
 	}
 	if writeFields[FieldYear] {
 		if desired.Year != nil {

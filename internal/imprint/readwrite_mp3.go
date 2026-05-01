@@ -9,12 +9,16 @@ import (
 )
 
 type mp3Tags struct {
-	Title   string
-	Artist  string
-	Album   string
-	Year    string
-	TrackNo string
-	DiscNo  string
+	Title       string
+	Artist      string
+	Album       string
+	AlbumArtist string
+	Genre       string
+	Composer    string
+	Comment     string
+	Year        string
+	TrackNo     string
+	DiscNo      string
 
 	CoverHash string
 }
@@ -28,10 +32,26 @@ func readMP3Tags(path string) (mp3Tags, []string, error) {
 	defer tag.Close()
 
 	out := mp3Tags{
-		Title:  strings.TrimSpace(tag.Title()),
-		Artist: strings.TrimSpace(tag.Artist()),
-		Album:  strings.TrimSpace(tag.Album()),
-		Year:   strings.TrimSpace(tag.Year()),
+		Title:       strings.TrimSpace(tag.Title()),
+		Artist:      strings.TrimSpace(tag.Artist()),
+		Album:       strings.TrimSpace(tag.Album()),
+		AlbumArtist: strings.TrimSpace(tag.GetTextFrame(tag.CommonID("Band/Orchestra/Accompaniment")).Text),
+		Genre:       strings.TrimSpace(tag.Genre()),
+		Composer:    strings.TrimSpace(tag.GetTextFrame(tag.CommonID("Composer")).Text),
+		Year:        strings.TrimSpace(tag.Year()),
+	}
+	for _, fr := range tag.GetFrames(tag.CommonID("Comments")) {
+		if cf, ok := fr.(id3v2.CommentFrame); ok {
+			txt := strings.TrimSpace(cf.Text)
+			if txt == "" {
+				continue
+			}
+			if out.Comment == "" {
+				out.Comment = txt
+			} else {
+				out.Comment += "\n" + txt
+			}
+		}
 	}
 
 	// TRCK/TPOS are text frames; id3v2 has helpers only for common ones, so fetch raw.
@@ -80,6 +100,39 @@ func writeMP3Tags(path string, desired TrackTarget, writeFields map[Field]bool, 
 	}
 	if writeFields[FieldAlbum] {
 		tag.SetAlbum(desired.Album)
+	}
+	if writeFields[FieldAlbumArtist] {
+		aa := tag.CommonID("Band/Orchestra/Accompaniment")
+		tag.DeleteFrames(aa)
+		if strings.TrimSpace(desired.AlbumArtist) != "" {
+			tag.AddTextFrame(aa, tag.DefaultEncoding(), strings.TrimSpace(desired.AlbumArtist))
+		}
+	}
+	if writeFields[FieldGenre] {
+		gid := tag.CommonID("Content type")
+		tag.DeleteFrames(gid)
+		if strings.TrimSpace(desired.Genre) != "" {
+			tag.AddTextFrame(gid, tag.DefaultEncoding(), strings.TrimSpace(desired.Genre))
+		}
+	}
+	if writeFields[FieldComposer] {
+		cid := tag.CommonID("Composer")
+		tag.DeleteFrames(cid)
+		if strings.TrimSpace(desired.Composer) != "" {
+			tag.AddTextFrame(cid, tag.DefaultEncoding(), strings.TrimSpace(desired.Composer))
+		}
+	}
+	if writeFields[FieldComment] {
+		cfid := tag.CommonID("Comments")
+		tag.DeleteFrames(cfid)
+		if strings.TrimSpace(desired.Comment) != "" {
+			tag.AddCommentFrame(id3v2.CommentFrame{
+				Encoding:    tag.DefaultEncoding(),
+				Language:    "eng",
+				Description: "",
+				Text:        strings.TrimSpace(desired.Comment),
+			})
+		}
 	}
 	if writeFields[FieldYear] {
 		if desired.Year != nil {

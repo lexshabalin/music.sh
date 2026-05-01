@@ -10,13 +10,17 @@ import (
 )
 
 type flacTags struct {
-	Title   string
-	Artist  string
-	Album   string
-	Year    string
-	TrackNo string
-	DiscNo  string
-	CoverHash string
+	Title       string
+	Artist      string
+	Album       string
+	AlbumArtist string
+	Genre       string
+	Composer    string
+	Comment     string
+	Year        string
+	TrackNo     string
+	DiscNo      string
+	CoverHash   string
 }
 
 func readFLACTags(path string) (flacTags, []string, error) {
@@ -52,6 +56,14 @@ func readFLACTags(path string) (flacTags, []string, error) {
 		out.Year = date
 		out.TrackNo = strings.TrimSpace(firstVorbis(vc, flacvorbis.FIELD_TRACKNUMBER))
 		out.DiscNo = strings.TrimSpace(firstVorbis(vc, "DISCNUMBER"))
+		out.AlbumArtist = strings.TrimSpace(firstVorbis(vc, "ALBUMARTIST"))
+		out.Genre = strings.TrimSpace(firstVorbis(vc, "GENRE"))
+		out.Composer = strings.TrimSpace(firstVorbis(vc, "COMPOSER"))
+		co := strings.TrimSpace(firstVorbis(vc, "COMMENT"))
+		if co == "" {
+			co = strings.TrimSpace(firstVorbis(vc, "DESCRIPTION"))
+		}
+		out.Comment = co
 	}
 	return out, warn, nil
 }
@@ -130,6 +142,42 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 	if writeFields[FieldAlbum] {
 		if err := setVorbis(vc, flacvorbis.FIELD_ALBUM, desired.Album); err != nil {
 			return warn, err
+		}
+	}
+	if writeFields[FieldAlbumArtist] {
+		if strings.TrimSpace(desired.AlbumArtist) != "" {
+			if err := setVorbis(vc, "ALBUMARTIST", desired.AlbumArtist); err != nil {
+				return warn, err
+			}
+		} else {
+			deleteVorbis(vc, "ALBUMARTIST")
+		}
+	}
+	if writeFields[FieldGenre] {
+		if strings.TrimSpace(desired.Genre) != "" {
+			if err := setVorbis(vc, "GENRE", desired.Genre); err != nil {
+				return warn, err
+			}
+		} else {
+			deleteVorbis(vc, "GENRE")
+		}
+	}
+	if writeFields[FieldComposer] {
+		if strings.TrimSpace(desired.Composer) != "" {
+			if err := setVorbis(vc, "COMPOSER", desired.Composer); err != nil {
+				return warn, err
+			}
+		} else {
+			deleteVorbis(vc, "COMPOSER")
+		}
+	}
+	if writeFields[FieldComment] {
+		deleteVorbis(vc, "COMMENT")
+		deleteVorbis(vc, "DESCRIPTION")
+		if strings.TrimSpace(desired.Comment) != "" {
+			if err := setVorbis(vc, "COMMENT", desired.Comment); err != nil {
+				return warn, err
+			}
 		}
 	}
 	if writeFields[FieldYear] {

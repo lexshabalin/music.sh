@@ -175,6 +175,12 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
   );
 }
 
+function imprintFieldLabel(t, field) {
+  const key = `album.imprint.field.${field}`;
+  const lbl = t(key);
+  return lbl !== key ? lbl : field;
+}
+
 function ImprintModal({ albumId, onClose }) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -301,6 +307,10 @@ function ImprintModal({ albumId, onClose }) {
         if (wants("title")) ov.title = pickStr("title");
         if (wants("artist")) ov.artist = pickStr("artist");
         if (wants("album")) ov.album = pickStr("album");
+        if (wants("albumArtist")) ov.albumArtist = pickStr("albumArtist");
+        if (wants("genre")) ov.genre = pickStr("genre");
+        if (wants("composer")) ov.composer = pickStr("composer");
+        if (wants("comment")) ov.comment = pickStr("comment");
 
         if (wants("year")) {
           const s = pickStr("year").trim();
@@ -482,7 +492,7 @@ function ImprintModal({ albumId, onClose }) {
                             onChange={() => toggle(tr.trackId, d.field)}
                           />
                           <div className="muted" style={{ paddingTop: 6 }}>
-                            {d.field}
+                            {imprintFieldLabel(t, d.field)}
                             {isCover ? (
                               <div className="muted" style={{ fontSize: "0.78rem", marginTop: 4, lineHeight: 1.25 }}>
                                 {t("album.imprint.coverEditHint")}

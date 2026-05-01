@@ -5,13 +5,17 @@ import "github.com/google/uuid"
 type Field string
 
 const (
-	FieldTitle   Field = "title"
-	FieldArtist  Field = "artist"
-	FieldAlbum   Field = "album"
-	FieldYear    Field = "year"
-	FieldTrackNo Field = "trackNo"
-	FieldDiscNo  Field = "discNo"
-	FieldCover   Field = "cover"
+	FieldTitle        Field = "title"
+	FieldArtist       Field = "artist"
+	FieldAlbum        Field = "album"
+	FieldAlbumArtist  Field = "albumArtist"
+	FieldGenre        Field = "genre"
+	FieldComposer     Field = "composer"
+	FieldComment      Field = "comment"
+	FieldYear         Field = "year"
+	FieldTrackNo      Field = "trackNo"
+	FieldDiscNo       Field = "discNo"
+	FieldCover        Field = "cover"
 )
 
 type TrackTarget struct {
@@ -19,9 +23,13 @@ type TrackTarget struct {
 	FilePath string
 	Format   string
 
-	Title   string
-	Artist  string
-	Album   string
+	Title       string
+	Artist      string
+	Album       string
+	AlbumArtist string
+	Genre       string
+	Composer    string
+	Comment     string
 	Year    *int
 	TrackNo *int
 	DiscNo  *int

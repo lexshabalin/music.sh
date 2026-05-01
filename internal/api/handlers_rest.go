@@ -656,9 +656,13 @@ type imprintApplyIn struct {
 		Fields  []string `json:"fields"`
 		// Optional per-field overrides for imprint apply (library metadata is the default).
 		Overrides *struct {
-			Title   *string `json:"title,omitempty"`
-			Artist  *string `json:"artist,omitempty"`
-			Album   *string `json:"album,omitempty"`
+			Title        *string `json:"title,omitempty"`
+			Artist       *string `json:"artist,omitempty"`
+			Album        *string `json:"album,omitempty"`
+			AlbumArtist  *string `json:"albumArtist,omitempty"`
+			Genre        *string `json:"genre,omitempty"`
+			Composer     *string `json:"composer,omitempty"`
+			Comment      *string `json:"comment,omitempty"`
 			Year    *int    `json:"year,omitempty"`
 			TrackNo *int    `json:"trackNo,omitempty"`
 			DiscNo  *int    `json:"discNo,omitempty"`
@@ -686,6 +690,10 @@ func (a *App) albumImprintDryRun(w http.ResponseWriter, r *http.Request) {
 			Title:        tr.Title,
 			Artist:       tr.ArtistName,
 			Album:        tr.AlbumTitle,
+			AlbumArtist:  tr.AlbumArtist,
+			Genre:        tr.Genre,
+			Composer:     tr.Composer,
+			Comment:      tr.Comment,
 			Year:         tr.Year,
 			TrackNo:      tr.TrackNo,
 			DiscNo:       tr.DiscNo,
@@ -736,6 +744,14 @@ func (a *App) albumImprintApply(w http.ResponseWriter, r *http.Request) {
 				m[imprint.FieldArtist] = true
 			case "album", "albumtitle":
 				m[imprint.FieldAlbum] = true
+			case "albumartist", "album_artist":
+				m[imprint.FieldAlbumArtist] = true
+			case "genre":
+				m[imprint.FieldGenre] = true
+			case "composer":
+				m[imprint.FieldComposer] = true
+			case "comment":
+				m[imprint.FieldComment] = true
 			case "year":
 				m[imprint.FieldYear] = true
 			case "trackno", "track":
