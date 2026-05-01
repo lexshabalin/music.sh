@@ -52,8 +52,10 @@ type TrackDryRun struct {
 	TrackID  uuid.UUID   `json:"trackId"`
 	FileName string      `json:"fileName"`
 	Format   string      `json:"format"`
-	Warnings []string    `json:"warnings,omitempty"`
-	Diff     []FieldDiff `json:"diff"`
+	// ImprintFileName is the basename after imprint conventions ($Artist - $Title.ext) when it differs meaningfully from FileName.
+	ImprintFileName *string `json:"imprintFileName,omitempty"`
+	Warnings        []string  `json:"warnings,omitempty"`
+	Diff            []FieldDiff `json:"diff"`
 }
 
 type AlbumDryRun struct {

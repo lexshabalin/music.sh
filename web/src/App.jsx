@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import { I18nContext, I18nProvider, LANGS, normalizeLang, useI18n } from "./i18n";
 import {
   auth,
@@ -24,6 +24,8 @@ import { Albums } from "./pages/Albums";
 import { Artist } from "./pages/Artist";
 import { Playlist } from "./pages/Playlist";
 import { Songs } from "./pages/Songs";
+import { Genres } from "./pages/Genres";
+import { Genre } from "./pages/Genre";
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { GlobalSearch } from "./components/GlobalSearch";
 import {
@@ -160,6 +162,8 @@ function Shell({ children }) {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
   });
+  /** Genre shortcuts (same semantics as `/api/library/genres/catalog`). */
+  const [genreNavCatalog, setGenreNavCatalog] = React.useState([]);
   const userBtnRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
   const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
@@ -874,6 +878,25 @@ function Shell({ children }) {
   }, [!!getToken()]);
 
   React.useEffect(() => {
+    if (!getToken()) {
+      setGenreNavCatalog([]);
+      return undefined;
+    }
+    let cancelled = false;
+    lib
+      .libraryGenresCatalog(500)
+      .then((rows) => {
+        if (!cancelled) setGenreNavCatalog(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setGenreNavCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [!!getToken()]);
+
+  React.useEffect(() => {
     let stop = false;
     const check = async () => {
       try {
@@ -1049,9 +1072,27 @@ function Shell({ children }) {
               <Link to="/songs" onClick={() => setMobileNavOpen(false)}>{t("nav.songs")}</Link>
               <Link to="/artists" onClick={() => setMobileNavOpen(false)}>{t("nav.artists")}</Link>
               <Link to="/albums" onClick={() => setMobileNavOpen(false)}>{t("nav.albums")}</Link>
+              <Link to="/genres" onClick={() => setMobileNavOpen(false)}>{t("nav.genres")}</Link>
               <Link to="/playlists" onClick={() => setMobileNavOpen(false)}>{t("nav.playlists")}</Link>
               <Link to="/likes" onClick={() => setMobileNavOpen(false)}>{t("nav.likes")}</Link>
             </nav>
+            {genreNavCatalog.length ? (
+              <div className="sidebar-genres" aria-label={t("nav.genres")}>
+                <div className="sidebar-genres-scroll">
+                  {genreNavCatalog.map((g) => (
+                    <NavLink
+                      key={g.id}
+                      to={"/genre/" + g.id}
+                      className={({ isActive }) => "sidebar-genre-link" + (isActive ? " is-active" : "")}
+                      title={g.label}
+                      onClick={() => setMobileNavOpen(false)}
+                    >
+                      {g.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </aside>
         ) : null}
         <main className="main">
@@ -2238,6 +2279,8 @@ export function App() {
               path="/albums"
               element={!getToken() ? <Navigate to="/login" replace /> : <Albums />}
             />
+            <Route path="/genres" element={!getToken() ? <Navigate to="/login" replace /> : <Genres />} />
+            <Route path="/genre/:id" element={!getToken() ? <Navigate to="/login" replace /> : <Genre />} />
             <Route
               path="/playlists"
               element={!getToken() ? <Navigate to="/login" replace /> : <Playlists />}

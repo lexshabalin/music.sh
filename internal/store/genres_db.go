@@ -167,6 +167,47 @@ func (d *DB) ListGenreSuggestions(ctx context.Context, limit int) ([]string, err
 	return out, rows.Err()
 }
 
+// sqlGenreTrackMembership is true when genre_id matches displayed track genres
+// (track_genres wins over album_genres — same COALESCE semantics as listing).
+const sqlGenreTrackMembership = `(EXISTS (SELECT 1 FROM track_genres tg WHERE tg.track_id = t.id AND tg.genre_id = lg.id)
+  OR (NOT EXISTS (SELECT 1 FROM track_genres tg2 WHERE tg2.track_id = t.id)
+    AND EXISTS (SELECT 1 FROM album_genres ag WHERE ag.album_id = t.album_id AND ag.genre_id = lg.id)))`
+
+// ListGenresCatalog returns genres that appear on at least one track, sorted by label.
+func (d *DB) ListGenresCatalog(ctx context.Context, limit int) ([]GenreCatalogEntry, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	q := `
+		SELECT lg.id, lg.label, COUNT(DISTINCT t.id)::int AS track_count
+		FROM library_genres lg
+		INNER JOIN tracks t ON ` + sqlGenreTrackMembership + `
+		GROUP BY lg.id, lg.label
+		ORDER BY lower(lg.label), lg.label
+		LIMIT $1`
+	rows, err := d.Pool.Query(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []GenreCatalogEntry
+	for rows.Next() {
+		var e GenreCatalogEntry
+		if err := rows.Scan(&e.ID, &e.Label, &e.TrackCount); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// LibraryGenreLabel resolves a canonical genre row by id for UI titles.
+func (d *DB) LibraryGenreLabel(ctx context.Context, id uuid.UUID) (string, error) {
+	var lab string
+	err := d.Pool.QueryRow(ctx, `SELECT label FROM library_genres WHERE id = $1`, id).Scan(&lab)
+	return lab, err
+}
+
 func (d *DB) albumHasGenreTags(ctx context.Context, albumID uuid.UUID) bool {
 	var ok bool
 	_ = d.Pool.QueryRow(ctx, `

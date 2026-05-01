@@ -123,6 +123,13 @@ type PlaylistWithTracks struct {
 	Tracks []Track `json:"tracks"`
 }
 
+// GenreCatalogEntry is a normalized library genre with track count for navigation.
+type GenreCatalogEntry struct {
+	ID         uuid.UUID `json:"id"`
+	Label      string    `json:"label"`
+	TrackCount int       `json:"trackCount"`
+}
+
 type JobType string
 
 const (

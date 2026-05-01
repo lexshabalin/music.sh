@@ -113,6 +113,8 @@ func (a *App) Handlers() http.Handler {
 		g.Delete("/api/me/playback", a.deletePlayback)
 		g.Get("/api/artists", a.listArtists)
 		g.Get("/api/library/genres", a.listLibraryGenres)
+		g.Get("/api/library/genres/catalog", a.listGenreCatalog)
+		g.Get("/api/library/genres/{id}", a.getLibraryGenre)
 		g.Get("/api/albums", a.listAlbums)
 		g.Get("/api/albums/{id}", a.getAlbum)
 		g.Patch("/api/albums/{id}", a.patchAlbumMeta)

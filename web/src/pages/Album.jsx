@@ -545,6 +545,11 @@ function ImprintModal({ albumId, onClose }) {
                     <strong style={{ fontSize: "0.95rem" }}>{tr.fileName}</strong>
                     <span className="muted" style={{ fontSize: "0.85rem" }}>{tr.format}</span>
                   </div>
+                  {tr.imprintFileName ? (
+                    <div className="muted" style={{ fontSize: "0.82rem", marginTop: 4, lineHeight: 1.35 }}>
+                      {t("album.imprint.fileRenameHint")} <span style={{ color: "var(--text)" }}>{tr.imprintFileName}</span>
+                    </div>
+                  ) : null}
                   {Array.isArray(tr.warnings) && tr.warnings.length ? (
                     <div className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>
                       {tr.warnings.join(" · ")}
@@ -700,7 +705,7 @@ export function Album() {
   const p = usePlayer();
   const load = () => {
     lib
-      .tracks("", id)
+      .tracks("", { albumId: id })
       .then((x) => setTr(Array.isArray(x) ? x : []))
       .catch(() => setTr([]));
     lib

@@ -52,6 +52,39 @@ func (a *App) listLibraryGenres(w http.ResponseWriter, r *http.Request) {
 	JSON(w, 200, list)
 }
 
+func (a *App) listGenreCatalog(w http.ResponseWriter, r *http.Request) {
+	limit := 500
+	if s := strings.TrimSpace(r.URL.Query().Get("limit")); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	list, err := a.DB.ListGenresCatalog(r.Context(), limit)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, list)
+}
+
+func (a *App) getLibraryGenre(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	lab, err := a.DB.LibraryGenreLabel(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, map[string]any{"id": id.String(), "label": lab})
+}
+
 type albumOut struct {
 	store.Album
 	CoverURL *string `json:"coverUrl,omitempty"`
@@ -454,7 +487,16 @@ func (a *App) listTracks(w http.ResponseWriter, r *http.Request) {
 			artistID = &u
 		}
 	}
-	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID)
+	var genreID *uuid.UUID
+	if s := strings.TrimSpace(r.URL.Query().Get("genreId")); s != "" {
+		u, err := uuid.Parse(s)
+		if err != nil {
+			JSONError(w, 400, "bad genreId")
+			return
+		}
+		genreID = &u
+	}
+	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID, genreID)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return

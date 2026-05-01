@@ -45,7 +45,7 @@ export function Songs() {
 
   const load = React.useCallback(() => {
     lib
-      .tracks("")
+      .tracks("", {})
       .then((x) => {
         setErr("");
         setTracks(Array.isArray(x) ? x : []);

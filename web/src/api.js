@@ -132,7 +132,23 @@ export const lib = {
   /** Alphabetical genre labels seen in library (GET; auth). */
   libraryGenres: (limit) =>
     req("/api/library/genres?" + new URLSearchParams({ limit: String(limit || 500) })),
-  tracks: (q, albumId) => req("/api/tracks?" + new URLSearchParams({ query: q || "", ...(albumId && { albumId }) })),
+  /** Genres tied to tracks (id, label, trackCount); sorted by label (GET; auth). */
+  libraryGenresCatalog: (limit) =>
+    req("/api/library/genres/catalog?" + new URLSearchParams({ limit: String(limit || 500) })),
+  /** Genre row by id (for UI title); returns { id, label }. */
+  libraryGenre: (id) => req("/api/library/genres/" + id),
+  /**
+   * Track list. Filters: `{ albumId, artistId, genreId }` (omit unused).
+   * @param {string} [query]
+   * @param {{ albumId?: string; artistId?: string; genreId?: string }} [filters]
+   */
+  tracks: (query = "", filters = {}) => {
+    const params = new URLSearchParams({ query: query || "" });
+    if (filters?.albumId) params.set("albumId", filters.albumId);
+    if (filters?.artistId) params.set("artistId", filters.artistId);
+    if (filters?.genreId) params.set("genreId", filters.genreId);
+    return req("/api/tracks?" + params);
+  },
   track: (id) => req("/api/tracks/" + id),
   /** PATCH user metadata (pinned fields survive library rescan). */
   patchTrackMeta: (id, body) =>

@@ -3,11 +3,15 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"musicsh/internal/imprint"
+	"musicsh/internal/store"
 )
 
 func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uuid.UUID, tracks []struct {
@@ -165,10 +169,30 @@ func (h *Worker) imprintTagsJob(ctx context.Context, jobID uuid.UUID, albumID uu
 		// ApplySelection works on a slice; call per-track for progress granularity.
 		rs := imprint.ApplySelection([]imprint.TrackTarget{t}, h.Cfg.DataDir, sel)
 		if len(rs) > 0 {
-			results = append(results, rs[0])
+			res := rs[0]
+			if res.Error == nil && res.AppliedAbsPath != "" {
+				oldP := filepath.Clean(t.FilePath)
+				ap := filepath.Clean(res.AppliedAbsPath)
+				if ap != oldP {
+					if err := h.DB.UpdateTrackFilePath(ctx, oldP, ap); err != nil {
+						_ = os.Rename(ap, oldP)
+						errMsg := err.Error()
+						if store.IsUniqueViolation(err) {
+							errMsg = "another track already uses this filename; rename reverted (" + errMsg + ")"
+						}
+						res.Warnings = append(res.Warnings, fmt.Sprintf("db path update failed, rename reverted: %s", errMsg))
+						res.AppliedAbsPath = oldP
+						res.FileName = filepath.Base(oldP)
+					}
+				}
+			}
+			results = append(results, res)
 		}
 		done++
 		msg := t.FilePath
+		if len(rs) > 0 && rs[0].AppliedAbsPath != "" {
+			msg = rs[0].AppliedAbsPath
+		}
 		_ = h.DB.UpdateJobProgress(ctx, jobID, &done, &total, &msg)
 	}
 

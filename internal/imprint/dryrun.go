@@ -84,6 +84,14 @@ func DryRunAlbum(targets []TrackTarget, dataDir string) (AlbumDryRun, error) {
 		_ = coverBytes
 		_ = coverMime
 
+		if prop := ProposedImprintBasename(t.FilePath, t, t.Format); prop != "" {
+			cur := filepath.Base(t.FilePath)
+			if prop != cur {
+				p := prop
+				tr.ImprintFileName = &p
+			}
+		}
+
 		out.Tracks = append(out.Tracks, tr)
 	}
 	return out, nil

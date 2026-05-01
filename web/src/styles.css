@@ -479,6 +479,44 @@ select.lang-select {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
 }
+.sidebar-genres {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  border-top: 1px solid var(--glass-border);
+  padding-top: 10px;
+}
+.sidebar-genres-scroll {
+  flex: 1 1 auto;
+  min-height: 48px;
+  max-height: min(360px, 42vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+a.sidebar-genre-link {
+  display: block;
+  text-decoration: none;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+a.sidebar-genre-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+a.sidebar-genre-link.is-active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+}
 .main {
   min-width: 0;
   position: relative;

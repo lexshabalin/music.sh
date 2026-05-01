@@ -84,6 +84,7 @@ const dict = {
     "nav.songs": "Треки",
     "nav.artists": "Артисты",
     "nav.albums": "Альбомы",
+    "nav.genres": "Жанры",
     "nav.playlists": "Плейлисты",
     "nav.likes": "Любимое",
 
@@ -152,6 +153,10 @@ const dict = {
     "tracks.more": "Ещё",
     "tracks.nowPlaying": "Сейчас играет",
     "tracks.paused": "Пауза",
+    "genres.browseIntro":
+      "Список жанров из библиотеки (поле genres у трека и альбома). По каждому жанру — треки, у которых он отображается в интерфейсе.",
+    "genres.emptyLibrary": "Пока нет ни одного жанра с треками в библиотеке.",
+    "genres.noTracks": "Нет треков с этим жанром.",
     "tracks.shuffle": "Перемешать",
     "tracks.actions": "Действия с треком",
     "tracks.playAria": "Воспроизвести",
@@ -252,7 +257,8 @@ const dict = {
     "album.editButton": "Редактировать альбом",
 
     "album.imprint.intro":
-      "Предпросмотр перед записью тегов в файлы. Для каждого трека всегда показаны исполнитель, название, альбом и год; остальные поля видны только если значение отличается от текущего в файле. По умолчанию отмечены только изменяющиеся поля. Расширенный режим показывает все поддерживаемые поля.",
+      "Предпросмотр перед записью тегов в файлы. Для каждого трека всегда показаны исполнитель, название, альбом и год; остальные поля видны только если значение отличается от текущего в файле. По умолчанию отмечены только изменяющиеся поля. Расширенный режим показывает все поддерживаемые поля. После успешной записи тегов файл переименовывается в «Исполнитель - Название.расширение» в той же папке (расширение как у текущего файла). Если имя занято, добавляется « (2)», « (3)» и т. д.",
+    "album.imprint.fileRenameHint": "Имя файла после импринта:",
     "album.imprint.advanced": "Расширенный режим",
     "album.imprint.advancedHint": "Показать и отредактировать все поддерживаемые поля тегов (даже если они не меняются).",
     "album.imprint.coverEditHint": "Обложка берётся из выбранного источника в библиотеке; хеш нельзя отредактировать вручную.",
@@ -300,6 +306,7 @@ const dict = {
     "nav.songs": "Songs",
     "nav.artists": "Artists",
     "nav.albums": "Albums",
+    "nav.genres": "Genres",
     "nav.playlists": "Playlists",
     "nav.likes": "Likes",
 
@@ -368,6 +375,10 @@ const dict = {
     "tracks.more": "More",
     "tracks.nowPlaying": "Now playing",
     "tracks.paused": "Paused",
+    "genres.browseIntro":
+      "Genres derived from library metadata (track and album genres). Each entry lists tracks where that genre is shown in the app.",
+    "genres.emptyLibrary": "No genres with tracks yet.",
+    "genres.noTracks": "No tracks for this genre.",
     "tracks.shuffle": "Shuffle",
     "tracks.actions": "Track actions",
     "tracks.playAria": "Play",
@@ -469,7 +480,8 @@ const dict = {
     "album.editButton": "Edit album",
 
     "album.imprint.intro":
-      "Preview before writing tags to files. Artist, title, album, and year appear for every track; other fields only show when the value differs from what is in the file. By default only fields that change are checked. Advanced mode reveals all supported fields.",
+      "Preview before writing tags to files. Artist, title, album, and year appear for every track; other fields only show when the value differs from what is in the file. By default only fields that change are checked. Advanced mode reveals all supported fields. After tags are written successfully each file is renamed to Artist - Title.extension in the same folder (same extension as the current file). If that name is taken, suffixes « (2)», « (3)» etc. are used.",
+    "album.imprint.fileRenameHint": "Filename after imprint:",
     "album.imprint.advanced": "Advanced mode",
     "album.imprint.advancedHint": "Show and edit all supported tag fields (even if unchanged).",
     "album.imprint.coverEditHint": "Cover is taken from the library-selected source; the hash cannot be edited manually.",

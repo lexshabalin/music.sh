@@ -7,11 +7,13 @@ import (
 )
 
 type ApplyResult struct {
-	TrackID  string   `json:"trackId"`
-	FileName string   `json:"fileName"`
-	Format   string   `json:"format"`
-	Warnings []string `json:"warnings,omitempty"`
-	Error    *string  `json:"error,omitempty"`
+	TrackID  string `json:"trackId"`
+	FileName string `json:"fileName"`
+	Format   string `json:"format"`
+	// AppliedAbsPath is the absolute filesystem path after tag write and optional filesystem rename (for DB sync).
+	AppliedAbsPath string   `json:"appliedAbsPath,omitempty"`
+	Warnings       []string `json:"warnings,omitempty"`
+	Error          *string  `json:"error,omitempty"`
 }
 
 // ApplySelection writes selected fields for each track.
@@ -75,6 +77,12 @@ func ApplySelection(targets []TrackTarget, dataDir string, selection map[string]
 		if err != nil {
 			s := FormatApplyError(err)
 			res.Error = &s
+		} else {
+			ap, rwarn := RenameTrackAfterImprint(t.FilePath, t)
+			res.Warnings = append(res.Warnings, rwarn...)
+			ap = filepath.Clean(ap)
+			res.AppliedAbsPath = ap
+			res.FileName = filepath.Base(ap)
 		}
 		out = append(out, res)
 	}

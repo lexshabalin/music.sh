@@ -52,7 +52,7 @@ export function Artist() {
                     e.preventDefault();
                     e.stopPropagation();
                     try {
-                      const tr = await lib.tracks("", a.id);
+                      const tr = await lib.tracks("", { albumId: a.id });
                       const items = (Array.isArray(tr) ? tr : []).map((t) => ({
                         id: t.id,
                         label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),

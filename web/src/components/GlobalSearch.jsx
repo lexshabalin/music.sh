@@ -34,7 +34,7 @@ export function GlobalSearch() {
         return;
       }
       setOpen(true);
-      Promise.allSettled([lib.tracks(qq), lib.albums(qq), lib.artists(qq), lib.playlists(qq)]).then((all) => {
+      Promise.allSettled([lib.tracks(qq, {}), lib.albums(qq), lib.artists(qq), lib.playlists(qq)]).then((all) => {
         if (cancelled) return;
         const songs = all[0].status === "fulfilled" && Array.isArray(all[0].value) ? all[0].value : [];
         const albs = all[1].status === "fulfilled" && Array.isArray(all[1].value) ? all[1].value : [];

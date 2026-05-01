@@ -939,7 +939,7 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	return out, rows.Err()
 }
 
-func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uuid.UUID) ([]Track, error) {
+func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID) ([]Track, error) {
 	qs := strings.TrimSpace(query)
 	like := "%" + qs + "%"
 	rows, err := d.Pool.Query(ctx, `
@@ -974,13 +974,20 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 			(t.file_path ILIKE $2))
 		AND ($3::uuid IS NULL OR t.album_id = $3)
 		AND ($4::uuid IS NULL OR t.artist_id = $4)
+		AND ($5::uuid IS NULL OR (
+			EXISTS (SELECT 1 FROM track_genres tg WHERE tg.track_id = t.id AND tg.genre_id = $5)
+			OR (
+				NOT EXISTS (SELECT 1 FROM track_genres tg2 WHERE tg2.track_id = t.id)
+				AND EXISTS (SELECT 1 FROM album_genres ag WHERE ag.album_id = t.album_id AND ag.genre_id = $5)
+			)
+		))
 		ORDER BY
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
 			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST
-	`, qs, like, albumID, artistID)
+	`, qs, like, albumID, artistID, genreID)
 	if err != nil {
 		return nil, err
 	}
