@@ -738,6 +738,23 @@ func (d *DB) SetMBReleaseID(ctx context.Context, albumID uuid.UUID, mbID string)
 
 // --- Library queries ---
 
+// GetArtist returns one library artist row by primary key.
+func (d *DB) GetArtist(ctx context.Context, id uuid.UUID) (Artist, error) {
+	var a Artist
+	var mb sql.NullString
+	err := d.Pool.QueryRow(ctx, `
+		SELECT id, name, musicbrainz_id FROM artists WHERE id = $1
+	`, id).Scan(&a.ID, &a.Name, &mb)
+	if err != nil {
+		return Artist{}, err
+	}
+	if mb.Valid {
+		s := mb.String
+		a.MusicBrainzID = &s
+	}
+	return a, nil
+}
+
 func (d *DB) ListArtists(ctx context.Context, q string) ([]Artist, error) {
 	qn := "%" + normalizeSearch(q) + "%"
 	rows, err := d.Pool.Query(ctx, `

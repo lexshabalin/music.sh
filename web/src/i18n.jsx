@@ -177,7 +177,6 @@ const dict = {
     "likes.title": "Любимое",
 
     "artists.searchArtists": "Искать артистов…",
-    "artists.albumsArrow": "Альбомы →",
     "artists.back": "← Артисты",
     "artists.searchAlbums": "Искать альбомы…",
 
@@ -404,7 +403,6 @@ const dict = {
     "likes.title": "Likes",
 
     "artists.searchArtists": "Search artists…",
-    "artists.albumsArrow": "Albums →",
     "artists.back": "← Artists",
     "artists.searchAlbums": "Search albums…",
 

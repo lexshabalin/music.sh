@@ -5,6 +5,21 @@ import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
 import { useI18n } from "../i18n";
 
+function ArtistPagePortrait({ artistId }) {
+  const [hidden, setHidden] = useState(false);
+  if (!artistId || hidden) return null;
+  return (
+    <img
+      src={lib.artistImageUrl(artistId)}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      className="artist-page-portrait"
+      onError={() => setHidden(true)}
+    />
+  );
+}
+
 export function Artist() {
   const { t } = useI18n();
   const { id } = useParams();
@@ -28,11 +43,14 @@ export function Artist() {
 
   return (
     <div>
-      <p>
-        <Link to="/artists" className="muted">
-          {t("artists.back")}
-        </Link>
-      </p>
+      <div className="artist-page-head">
+        <ArtistPagePortrait artistId={id} />
+        <p className="artist-page-back">
+          <Link to="/artists" className="muted">
+            {t("artists.back")}
+          </Link>
+        </p>
+      </div>
       <div className="search">
         <input placeholder={t("artists.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

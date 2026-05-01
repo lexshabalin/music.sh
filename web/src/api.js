@@ -182,6 +182,11 @@ export const lib = {
     const t = getToken();
     return base() + "/api/albums/" + id + "/cover" + (t ? "?token=" + encodeURIComponent(t) : "");
   },
+  /** Fetched/cached artist portrait (JPEG); 404 if no match. */
+  artistImageUrl: (id) => {
+    const t = getToken();
+    return base() + "/api/artists/" + id + "/image" + (t ? "?token=" + encodeURIComponent(t) : "");
+  },
   playlists: (q) => req("/api/playlists?" + new URLSearchParams({ query: q || "" })),
   playlist: (id) => req("/api/playlists/" + id),
   createPl: (name, description) =>

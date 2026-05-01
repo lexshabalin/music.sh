@@ -15,6 +15,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"golang.org/x/sync/singleflight"
 
 	"musicsh/internal/auth"
 	"musicsh/internal/config"
@@ -30,6 +31,8 @@ type App struct {
 
 	scanMu    sync.Mutex
 	scanState scanState
+
+	artistImgSf singleflight.Group
 }
 
 type scanState struct {
@@ -95,6 +98,8 @@ func (a *App) Handlers() http.Handler {
 	r.Method(http.MethodHead, "/api/tracks/{id}/cover", http.HandlerFunc(a.trackCover))
 	r.Method(http.MethodGet, "/api/albums/{id}/cover", http.HandlerFunc(a.albumCover))
 	r.Method(http.MethodHead, "/api/albums/{id}/cover", http.HandlerFunc(a.albumCover))
+	r.Method(http.MethodGet, "/api/artists/{id}/image", http.HandlerFunc(a.artistImage))
+	r.Method(http.MethodHead, "/api/artists/{id}/image", http.HandlerFunc(a.artistImage))
 	r.Get("/api/me/background", a.getBackgroundAsset)
 
 	r.Group(func(g chi.Router) {

@@ -3,6 +3,23 @@ import { Link } from "react-router-dom";
 import { lib } from "../api";
 import { useI18n } from "../i18n";
 
+function ArtistCardImage({ artistId }) {
+  const [hidden, setHidden] = useState(false);
+  if (hidden) {
+    return <div className="album-art" aria-hidden />;
+  }
+  return (
+    <img
+      className="album-art"
+      src={lib.artistImageUrl(artistId)}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => setHidden(true)}
+    />
+  );
+}
+
 export function Artists() {
   const { t } = useI18n();
   const [q, setQ] = useState("");
@@ -36,12 +53,14 @@ export function Artists() {
       <div className="grid">
         {sortedArtists.map((a) => (
           <Link key={a.id} to={"/artist/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
-            <div className="card" style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 92, justifyContent: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: "1.02rem", letterSpacing: 0.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {a.name}
+            <div className="card album-tile" style={{ height: "100%" }}>
+              <div className="tile-media">
+                <ArtistCardImage artistId={a.id} />
               </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {t("artists.albumsArrow")}
+              <div className="album-meta">
+                <div className="album-title" style={{ fontWeight: 900, letterSpacing: 0.2 }}>
+                  {a.name}
+                </div>
               </div>
             </div>
           </Link>
@@ -50,4 +69,3 @@ export function Artists() {
     </div>
   );
 }
-
