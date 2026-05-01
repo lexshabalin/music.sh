@@ -7,6 +7,6 @@ pgdata/
 appdata/
 .pgdata/
 .appdata/
-music/**
+music
 !music/.gitkeep
 docker-compose.yml

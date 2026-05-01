@@ -203,17 +203,22 @@ function Shell({ children }) {
   const takeoverGuardUntilRef = React.useRef(0);
   const ownerEpochRef = React.useRef(0);
 
-  const takeoverRemotePlaybackUI = React.useCallback(() => {
-    // Important ordering: block outgoing flush BEFORE pausing, because pause
-    // event handler triggers an immediate flush.
+  /** Pause local `<audio>` and stop passive `/playback` PUTs — same client must not overwrite remote owner on server. */
+  const suspendPlaybackForRemoteSession = React.useCallback(() => {
     suspendPlaybackPushRef.current = true;
     try {
       const el = p.ref.current;
       if (el) el.pause();
     } catch (_) {}
+  }, [p.ref]);
+
+  const takeoverRemotePlaybackUI = React.useCallback(() => {
+    // Important ordering: block outgoing flush BEFORE pausing, because pause
+    // event handler triggers an immediate flush.
+    suspendPlaybackForRemoteSession();
     setRemotePlayingNotice(t("player.playingRemote"));
     window.setTimeout(() => setRemotePlayingNotice(""), 9000);
-  }, [p.ref, t]);
+  }, [suspendPlaybackForRemoteSession, t]);
 
   const flushPlayback = React.useCallback(async (opts = {}) => {
     const forceNow = !!opts.forceNow;
@@ -424,6 +429,7 @@ function Shell({ children }) {
       remoteOwnerLockRef.current = null;
       lastRemotePlayingSeenAtRef.current = 0;
       remoteServerPlayingRef.current = false;
+      suspendPlaybackPushRef.current = false;
       return;
     }
     const REMOTE_UI_INACTIVE_GRACE_MS = 1100;
@@ -444,6 +450,7 @@ function Shell({ children }) {
           remoteOwnerLockRef.current = null;
           lastRemotePlayingSeenAtRef.current = 0;
           remoteInactiveStreakRef.current = 0;
+          suspendPlaybackPushRef.current = false;
           if (remotePlaybackActiveRef.current) {
             remotePlaybackActiveRef.current = false;
             setRemotePlaybackActive(false);
@@ -455,6 +462,7 @@ function Shell({ children }) {
           remoteOwnerLockRef.current = { epoch: stEpoch, clientId: stCid };
           lastRemotePlayingSeenAtRef.current = Date.now();
           remoteInactiveStreakRef.current = 0;
+          suspendPlaybackForRemoteSession();
           if (!remotePlaybackActiveRef.current) {
             remotePlaybackActiveRef.current = true;
             setRemotePlaybackActive(true);
@@ -472,6 +480,7 @@ function Shell({ children }) {
               setRemotePlaybackActive(false);
               remoteOwnerLockRef.current = null;
               lastRemotePlayingSeenAtRef.current = 0;
+              suspendPlaybackPushRef.current = false;
             }
           }
         }
@@ -490,7 +499,7 @@ function Shell({ children }) {
     const id = window.setInterval(syncRemote, 1000);
     syncRemote();
     return () => clearInterval(id);
-  }, [p.current?.id]);
+  }, [p.current?.id, suspendPlaybackForRemoteSession]);
 
   React.useEffect(() => {
     if (!remotePlaybackActive) return;
