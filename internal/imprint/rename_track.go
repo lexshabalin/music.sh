@@ -110,7 +110,8 @@ func renameViaTemp(dir, oldAbs, destAbs string) error {
 func pickUniqueRenameTarget(dir, stem, ext, oldAbs string) (string, error) {
 	want := filepath.Join(dir, stem+ext)
 
-	if _, err := os.Stat(want); err == nil {
+	_, statErr := os.Stat(want)
+	if statErr == nil {
 		if isSameUnderlyingFile(oldAbs, want) && filepath.Base(oldAbs) == filepath.Base(want) {
 			return filepath.Clean(oldAbs), nil
 		}
@@ -133,8 +134,8 @@ func pickUniqueRenameTarget(dir, stem, ext, oldAbs string) (string, error) {
 		}
 		return "", fmt.Errorf("could not allocate a free filename beside %s", stem+ext)
 	}
-	if !os.IsNotExist(err) {
-		return "", err
+	if !os.IsNotExist(statErr) {
+		return "", statErr
 	}
 	return filepath.Clean(want), nil
 }
