@@ -32,7 +32,8 @@ type App struct {
 	scanMu    sync.Mutex
 	scanState scanState
 
-	artistImgSf singleflight.Group
+	artistImgSf  singleflight.Group
+	albumCoverSf singleflight.Group
 }
 
 type scanState struct {

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"musicsh/internal/artistimage"
 	"musicsh/internal/coverproc"
 	"musicsh/internal/genres"
 	"musicsh/internal/imprint"
@@ -102,9 +103,7 @@ func (a *App) getAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ao := albumOut{Album: al}
-	if al.CoverPath != nil && *al.CoverPath != "" {
-		ao.CoverURL = a.coverURLFor(al.ID)
-	}
+	ao.CoverURL = a.albumCoverURLForAPI(al)
 	JSON(w, 200, ao)
 }
 
@@ -125,9 +124,7 @@ func (a *App) listAlbums(w http.ResponseWriter, r *http.Request) {
 	var out []albumOut
 	for _, al := range list {
 		ao := albumOut{Album: al}
-		if al.CoverPath != nil && *al.CoverPath != "" {
-			ao.CoverURL = a.coverURLFor(al.ID)
-		}
+		ao.CoverURL = a.albumCoverURLForAPI(al)
 		out = append(out, ao)
 	}
 	JSON(w, 200, out)
@@ -136,6 +133,16 @@ func (a *App) listAlbums(w http.ResponseWriter, r *http.Request) {
 func (a *App) coverURLFor(id uuid.UUID) *string {
 	s := "/api/albums/" + id.String() + "/cover"
 	return &s
+}
+
+// albumCoverURLForAPI sets coverUrl when a file exists or when lazy-fetch (Deezer) is allowed (cover slot not user-locked).
+func (a *App) albumCoverURLForAPI(al store.Album) *string {
+	hasPath := al.CoverPath != nil && strings.TrimSpace(*al.CoverPath) != ""
+	locked := al.Meta != nil && al.Meta.Cover
+	if !hasPath && locked {
+		return nil
+	}
+	return a.coverURLFor(al.ID)
 }
 
 type albumMetaJSON struct {
@@ -210,9 +217,7 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ao := albumOut{Album: al}
-	if al.CoverPath != nil && *al.CoverPath != "" {
-		ao.CoverURL = a.coverURLFor(al.ID)
-	}
+	ao.CoverURL = a.albumCoverURLForAPI(al)
 	JSON(w, 200, ao)
 }
 
@@ -221,6 +226,12 @@ type coverURLRequest struct {
 }
 
 func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []byte) error {
+	return a.persistAlbumCoverJPEGLocked(ctx, id, jpeg, true)
+}
+
+// persistAlbumCoverJPEGLocked writes JPEG to covers/{id}.jpg. If userPinned, marks meta_cover_locked (user upload);
+// otherwise only sets cover_path (same as scanner / lazy Deezer) so scans can still replace art later.
+func (a *App) persistAlbumCoverJPEGLocked(ctx context.Context, id uuid.UUID, jpeg []byte, userPinned bool) error {
 	if len(jpeg) == 0 {
 		return errors.New("empty jpeg")
 	}
@@ -248,8 +259,14 @@ func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []by
 		_ = os.Remove(tmp)
 		return err
 	}
-	if err := a.DB.SetAlbumCoverUser(ctx, id, storeRel); err != nil {
-		return err
+	var dbErr error
+	if userPinned {
+		dbErr = a.DB.SetAlbumCoverUser(ctx, id, storeRel)
+	} else {
+		dbErr = a.DB.SetAlbumCoverPath(ctx, id, storeRel)
+	}
+	if dbErr != nil {
+		return dbErr
 	}
 	a.propagateAlbumCoverToTracksWithoutArt(ctx, id, jpeg)
 	return nil
@@ -408,9 +425,7 @@ func (a *App) jsonAlbumCoverOut(w http.ResponseWriter, ctx context.Context, albu
 		return
 	}
 	ao := albumOut{Album: al}
-	if al.CoverPath != nil && *al.CoverPath != "" {
-		ao.CoverURL = a.coverURLFor(al.ID)
-	}
+	ao.CoverURL = a.albumCoverURLForAPI(al)
 	JSON(w, 200, ao)
 }
 
@@ -679,16 +694,56 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 401, "unauthorized")
 		return
 	}
-	rel, err := a.DB.GetAlbumCoverPath(r.Context(), id)
+	ctx := r.Context()
+	al, err := a.DB.GetAlbum(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+
+	rel := ""
+	if al.CoverPath != nil {
+		rel = strings.TrimSpace(*al.CoverPath)
+	}
+	if rel != "" {
+		abs := imprint.AbsDataPath(a.DataDir, rel)
+		if abs != "" {
+			if fi, stErr := os.Stat(abs); stErr == nil && fi.Size() > 0 {
+				a.serveAlbumCoverFile(w, r, abs)
+				return
+			}
+		}
+	}
+
+	locked := al.Meta != nil && al.Meta.Cover
+	if locked {
 		JSONError(w, 404, "no cover")
 		return
 	}
-	abs := imprint.AbsDataPath(a.DataDir, rel)
-	if abs == "" {
-		JSONError(w, 404, "file")
+
+	if r.Method == http.MethodHead {
+		JSONError(w, 404, "no cover")
 		return
 	}
+
+	absReady, err := a.ensureAlbumCoverDeezer(ctx, id)
+	if err != nil {
+		if errors.Is(err, artistimage.ErrNotFound) {
+			JSONError(w, 404, "no cover")
+			return
+		}
+		log.Printf("album cover lazy fetch album=%s: %v", id, err)
+		JSONError(w, 502, "fetch")
+		return
+	}
+	a.serveAlbumCoverFile(w, r, absReady)
+}
+
+func (a *App) serveAlbumCoverFile(w http.ResponseWriter, r *http.Request, abs string) {
 	if r.Method == http.MethodHead {
 		fi, err := os.Stat(abs)
 		if err != nil {
@@ -708,6 +763,59 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 	_ = f.Close()
 	a.setAlbumCoverResponseHeaders(w, abs)
 	http.ServeFile(w, r, abs)
+}
+
+func (a *App) ensureAlbumCoverDeezer(ctx context.Context, albumID uuid.UUID) (string, error) {
+	storeRel := "covers/" + albumID.String() + ".jpg"
+
+	v, err, _ := a.albumCoverSf.Do(albumID.String(), func() (interface{}, error) {
+		cur, err := a.DB.GetAlbum(ctx, albumID)
+		if err != nil {
+			return "", err
+		}
+		rel := ""
+		if cur.CoverPath != nil {
+			rel = strings.TrimSpace(*cur.CoverPath)
+		}
+		if rel != "" {
+			p := imprint.AbsDataPath(a.DataDir, rel)
+			if p != "" {
+				if fi, e := os.Stat(p); e == nil && fi.Size() > 0 {
+					return p, nil
+				}
+			}
+		}
+		artist := ""
+		if cur.ArtistName != nil {
+			artist = strings.TrimSpace(*cur.ArtistName)
+		}
+		title := strings.TrimSpace(cur.Title)
+		pic, err := artistimage.DeezerAlbumCoverURL(ctx, artist, title, cur.Year)
+		if err != nil {
+			return "", err
+		}
+		raw, err := coverproc.FetchImageURL(ctx, pic)
+		if err != nil {
+			return "", err
+		}
+		jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+		if err != nil {
+			return "", err
+		}
+		if err := a.persistAlbumCoverJPEGLocked(ctx, albumID, jpeg, false); err != nil {
+			return "", err
+		}
+		outAbs := imprint.AbsDataPath(a.DataDir, storeRel)
+		if outAbs == "" {
+			return "", errors.New("bad cover path")
+		}
+		return outAbs, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	abs, _ := v.(string)
+	return abs, nil
 }
 
 func (*App) setAlbumCoverResponseHeaders(w http.ResponseWriter, abs string) {
