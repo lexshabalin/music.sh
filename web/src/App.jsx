@@ -175,6 +175,9 @@ function Shell({ children }) {
   const lastRemotePlayingSeenAtRef = React.useRef(0);
   /** Mirrors server: another client owns playback and is playing (drives progress interpolation). */
   const remoteServerPlayingRef = React.useRef(false);
+  /** `timeupdate` fires very often; throttling avoids re-rendering the whole shell every tick. */
+  const localProgressUiLastRef = React.useRef(0);
+  const mobileScrollRafRef = React.useRef(0);
 
   const skipAutoplayOnceRef = React.useRef(false);
   const skipPlaybackPushUntilRef = React.useRef(0);
@@ -502,7 +505,7 @@ function Shell({ children }) {
       setCurT(nextSec);
     };
     tick();
-    const id = window.setInterval(tick, 250);
+    const id = window.setInterval(tick, 500);
     return () => clearInterval(id);
   }, [remotePlaybackActive, p.current?.id]);
 
@@ -580,24 +583,34 @@ function Shell({ children }) {
     }
     lastScrollYRef.current = window.scrollY || 0;
     const onScroll = () => {
-      if (mobileNavOpen) {
-        lastScrollYRef.current = window.scrollY || 0;
-        return;
-      }
-      const y = window.scrollY || 0;
-      const prev = lastScrollYRef.current;
-      const delta = y - prev;
-      lastScrollYRef.current = y;
-      if (y < 48) {
-        setMobileTopChromeHidden(false);
-        return;
-      }
-      const t = 10;
-      if (delta > t) setMobileTopChromeHidden(true);
-      else if (delta < -t) setMobileTopChromeHidden(false);
+      if (mobileScrollRafRef.current) return;
+      mobileScrollRafRef.current = window.requestAnimationFrame(() => {
+        mobileScrollRafRef.current = 0;
+        if (mobileNavOpen) {
+          lastScrollYRef.current = window.scrollY || 0;
+          return;
+        }
+        const y = window.scrollY || 0;
+        const prev = lastScrollYRef.current;
+        const delta = y - prev;
+        lastScrollYRef.current = y;
+        if (y < 48) {
+          setMobileTopChromeHidden(false);
+          return;
+        }
+        const t = 10;
+        if (delta > t) setMobileTopChromeHidden(true);
+        else if (delta < -t) setMobileTopChromeHidden(false);
+      });
     };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (mobileScrollRafRef.current) {
+        window.cancelAnimationFrame(mobileScrollRafRef.current);
+        mobileScrollRafRef.current = 0;
+      }
+    };
   }, [isMobile, mobileNavOpen]);
 
   React.useEffect(() => {
@@ -720,6 +733,7 @@ function Shell({ children }) {
   React.useEffect(() => {
     const el = p.ref.current;
     if (!el) return;
+    localProgressUiLastRef.current = 0;
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => {
@@ -732,7 +746,11 @@ function Shell({ children }) {
       // When remote playback is active, we drive progress from server-updated base+updatedAt.
       // Prevent audio timeupdate events from fighting and causing UI "jitter".
       if (remotePlaybackActiveRef.current) return;
-      setCurT(el.currentTime || 0);
+      const t = el.currentTime || 0;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (now - localProgressUiLastRef.current < 220) return;
+      localProgressUiLastRef.current = now;
+      setCurT(t);
     };
     const onMeta = () => setDur(el.duration || 0);
     const onError = async () => {
@@ -959,17 +977,6 @@ function Shell({ children }) {
       ms.playbackState = isPlaying ? "playing" : "paused";
     } catch (_) {}
 
-    // Position state improves scrubbing on lockscreen.
-    try {
-      if (Number.isFinite(dur) && dur > 0) {
-        ms.setPositionState?.({
-          duration: dur,
-          playbackRate: 1,
-          position: Math.max(0, Math.min(dur, curT || 0)),
-        });
-      }
-    } catch (_) {}
-
     return () => {
       // Avoid keeping stale handlers when logging out / switching tracks.
       try { ms.setActionHandler("play", null); } catch (_) {}
@@ -978,7 +985,47 @@ function Shell({ children }) {
       try { ms.setActionHandler("previoustrack", null); } catch (_) {}
       try { ms.setActionHandler("seekto", null); } catch (_) {}
     };
-  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, isPlaying, curT, dur]);
+  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, isPlaying, dur]);
+
+  // Lock-screen position: low frequency so we don’t couple Media Session updates to every progress tick.
+  React.useEffect(() => {
+    if (!getToken()) return;
+    if (typeof navigator === "undefined") return;
+    const ms = navigator.mediaSession;
+    if (!ms?.setPositionState) return;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+
+    const readPositionSec = () => {
+      if (remotePlaybackActiveRef.current) {
+        const baseMs = remoteProgressBaseMsRef.current;
+        const updatedAt = remoteProgressUpdatedAtRef.current || Date.now();
+        if (!remoteServerPlayingRef.current) {
+          return Math.max(0, baseMs / 1000);
+        }
+        return Math.max(0, (baseMs + Math.max(0, Date.now() - updatedAt)) / 1000);
+      }
+      const el = p.ref.current;
+      return el ? Math.max(0, el.currentTime || 0) : 0;
+    };
+
+    const push = () => {
+      try {
+        ms.setPositionState({
+          duration: dur,
+          playbackRate: 1,
+          position: Math.max(0, Math.min(dur, readPositionSec())),
+        });
+      } catch (_) {}
+    };
+
+    if (!isPlaying) {
+      push();
+      return undefined;
+    }
+    push();
+    const id = window.setInterval(push, 3000);
+    return () => clearInterval(id);
+  }, [p.current?.id, isPlaying, dur, p.ref]);
 
   return (
     <>

@@ -9,10 +9,18 @@
   --glass-strong: rgba(17, 17, 25, 0.78);
   --glass-card: rgba(24, 24, 31, 0.58);
   --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-blur: 14px;
+  /* Backdrop blur is extremely expensive during scroll (each card/layer composites). Limit to fixed chrome only via --chrome-backdrop-blur. */
+  --glass-blur: 0px;
+  --chrome-backdrop-blur: 10px;
   font-family: "Inter", system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --chrome-backdrop-blur: 0px;
+  }
 }
 * {
   box-sizing: border-box;
@@ -50,9 +58,7 @@ body {
   line-height: 1.35;
   text-align: center;
   color: var(--text);
-  background: var(--glass-strong);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: rgba(26, 26, 34, 0.97);
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
@@ -112,10 +118,8 @@ body {
     radial-gradient(circle at 60% 88%, rgba(255, 90, 40, 0.90) 0 11%, transparent 13%),
     radial-gradient(circle at 78% 96%, rgba(255, 210, 70, 0.86) 0 10%, transparent 12%),
     radial-gradient(circle at 30% 62%, rgba(255, 120, 35, 0.45) 0 13%, transparent 18%);
-  /* Keep it GPU-composable: transform-only animation, lighter filters */
-  filter: blur(16px) saturate(1.20);
+  filter: blur(16px) saturate(1.2);
   opacity: 0.86;
-  will-change: transform, opacity;
   animation: lavaLoop 42s ease-in-out infinite;
   z-index: 1;
 }
@@ -192,6 +196,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bg-lava::before {
     animation: none;
+  }
+  .bg-grain::before,
+  .bg-grid::before,
+  .bg-waves::before {
+    animation: none !important;
+  }
+  .track-row--playing .np-eq__bar {
+    animation: none !important;
   }
 }
 
@@ -413,12 +425,10 @@ button.ghost {
   right: 0;
   top: calc(100% + 8px);
   width: 220px;
-  background: var(--glass-strong);
+  background: #1f1f29;
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   padding: 6px;
   z-index: 5000;
 }
@@ -476,9 +486,7 @@ select.lang-select {
   padding: 12px;
   border: 1px solid var(--glass-border);
   border-radius: 12px;
-  background: var(--glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: rgba(26, 26, 34, 0.96);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -574,10 +582,8 @@ select.lang-select {
   flex-direction: column;
   gap: 4px;
   z-index: 1200;
-  background: rgba(17, 17, 25, 0.74);
+  background: rgba(26, 26, 34, 0.95);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 .mobile-nav-toggle span {
   width: 16px;
@@ -594,12 +600,11 @@ select.lang-select {
   gap: 1rem;
 }
 .card {
-  background: var(--glass-card);
+  background: var(--card);
   border-radius: 10px;
   padding: 0.75rem;
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  contain: layout style;
 }
 .album-tile {
   display: flex;
@@ -756,22 +761,18 @@ select.lang-select {
 }
 .gsearch-scan {
   margin-top: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(24, 24, 31, 0.95);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 10px;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 .gsearch-popover {
   margin-top: 10px;
-  background: var(--glass-strong);
+  background: rgba(26, 26, 34, 0.98);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .pl-collage {
@@ -1131,29 +1132,30 @@ select.lang-select {
 }
 .modal {
   width: min(520px, 95vw);
-  background: rgba(24, 24, 31, 0.88);
+  background: rgba(28, 28, 36, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 14px;
-  backdrop-filter: blur(calc(var(--glass-blur) + 4px));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px));
   position: relative;
   z-index: 10001;
+}
+.modal,
+.player {
+  backdrop-filter: blur(var(--chrome-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--chrome-backdrop-blur));
 }
 .player {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(17, 17, 25, 0.66);
+  background: rgba(22, 22, 30, 0.88);
   border-top: 1px solid var(--glass-border);
   padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   z-index: 50;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 .player-mini-controls {
   display: flex;
@@ -1206,9 +1208,9 @@ select.lang-select {
   --mobile-player-bottom-gap: 5vh;
   width: 100%;
   min-height: 100%;
-  background: rgba(10, 10, 14, 0.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(16, 16, 22, 0.98);
+  backdrop-filter: blur(var(--chrome-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--chrome-backdrop-blur));
   /* Push the UI lower, but keep some breathing room at the bottom */
   padding: 72px 14px calc(var(--mobile-player-bottom-gap) + 18px + env(safe-area-inset-bottom));
   display: flex;
@@ -1219,7 +1221,6 @@ select.lang-select {
   transform: translateY(10px);
   opacity: 0;
   animation: mobilePlayerSheetIn 160ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
-  will-change: transform;
 }
 .mobile-player-sheet--dragging {
   animation: none;
@@ -1308,7 +1309,6 @@ select.lang-select {
   flex-direction: row;
   gap: 0;
   transition: transform 220ms ease;
-  will-change: transform;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -1361,9 +1361,7 @@ select.lang-select {
   bottom: 0;
   z-index: 1401;
   width: min(360px, 86vw);
-  background: rgba(10, 10, 14, 0.96);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(18, 18, 26, 0.99);
   border-left: 1px solid rgba(255, 255, 255, 0.10);
   display: flex;
   flex-direction: column;
