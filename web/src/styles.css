@@ -1840,10 +1840,8 @@ select.lang-select {
 .player.player--playing .nowplaying-art {
   animation-play-state: running;
 }
-/* Hover: return to square + rotate back to 0 nicely. */
+/* Hover: square + shadow; rotation unwind is handled in JS (snapshot matrix → rotate(0)). */
 .player .nowplaying:hover .nowplaying-art {
-  animation-play-state: paused;
-  --disc-rot: 0deg;
   border-radius: 8px;
   box-shadow: 0 12px 30px rgba(0,0,0,0.45);
 }

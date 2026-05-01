@@ -73,6 +73,18 @@ function seekMediaWhenReady(mediaRef, sec) {
   else el.addEventListener("loadedmetadata", run, { once: true });
 }
 
+/** Current 2D rotation in degrees from `transform: matrix(...)` / `rotate(...)`. */
+function cssRotationDegFromTransform(transform) {
+  if (!transform || transform === "none") return 0;
+  if (typeof DOMMatrixReadOnly === "undefined") return 0;
+  try {
+    const m = new DOMMatrixReadOnly(transform);
+    return (Math.atan2(m.b, m.a) * 180) / Math.PI;
+  } catch (_) {
+    return 0;
+  }
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -186,6 +198,7 @@ function Shell({ children }) {
     return window.matchMedia("(max-width: 900px)").matches;
   });
   const userBtnRef = React.useRef(null);
+  const desktopNowplayingRef = React.useRef(null);
   const [bg, setBg] = React.useState({ type: "none", preset: "", url: "", mime: "" });
   const [remotePlayingNotice, setRemotePlayingNotice] = React.useState("");
   const [remotePlaybackActive, setRemotePlaybackActive] = React.useState(false);
@@ -329,6 +342,44 @@ function Shell({ children }) {
   }, [p.queue, p.index, p.ref]);
 
   const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
+
+  /** Disc art uses @keyframes on --disc-rot; CSS cannot smoothly unwind to 0 on hover, so we snapshot matrix → rotate(0). */
+  const onDesktopNowplayingDiscEnter = React.useCallback((e) => {
+    const el = e.currentTarget?.querySelector?.(".nowplaying-art");
+    if (!el || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return;
+    let angle = cssRotationDegFromTransform(window.getComputedStyle(el).transform);
+    if (!Number.isFinite(angle)) angle = 0;
+    el.dataset.discHoverUnwind = "1";
+    el.style.animation = "none";
+    el.style.transform = `rotate(${angle}deg)`;
+    void el.offsetHeight;
+    el.style.transition = "transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (el.dataset.discHoverUnwind !== "1") return;
+        el.style.transform = "rotate(0deg)";
+      });
+    });
+  }, []);
+
+  const onDesktopNowplayingDiscLeave = React.useCallback((e) => {
+    const el = e.currentTarget?.querySelector?.(".nowplaying-art");
+    if (!el) return;
+    delete el.dataset.discHoverUnwind;
+    el.style.animation = "";
+    el.style.transform = "";
+    el.style.transition = "";
+  }, []);
+
+  React.useEffect(() => {
+    const wrap = desktopNowplayingRef.current;
+    const el = wrap?.querySelector?.(".nowplaying-art");
+    if (!el) return;
+    delete el.dataset.discHoverUnwind;
+    el.style.animation = "";
+    el.style.transform = "";
+    el.style.transition = "";
+  }, [p.current?.id]);
 
   const doLogout = React.useCallback(async () => {
     try {
@@ -1223,7 +1274,12 @@ function Shell({ children }) {
             onChange={(e) => p.setVolume(Number(e.target.value))}
           />
 
-          <div className="nowplaying">
+          <div
+            ref={desktopNowplayingRef}
+            className="nowplaying"
+            onMouseEnter={onDesktopNowplayingDiscEnter}
+            onMouseLeave={onDesktopNowplayingDiscLeave}
+          >
             {p.current.coverUrl ? (
               <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
             ) : (
