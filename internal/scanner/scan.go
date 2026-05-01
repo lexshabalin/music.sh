@@ -15,6 +15,28 @@ import (
 	"musicsh/internal/store"
 )
 
+// normalizeAudioPathOnDisk renames "Title .mp3" -> "Title.mp3" when the target name is free, and updates DB paths.
+func normalizeAudioPathOnDisk(ctx context.Context, s *store.DB, path string) (string, error) {
+	base := filepath.Base(path)
+	clean := store.NormalizeAudioFileName(base)
+	if clean == base {
+		return path, nil
+	}
+	dir := filepath.Dir(path)
+	newPath := filepath.Join(dir, clean)
+	if _, err := os.Stat(newPath); err == nil {
+		return path, nil
+	}
+	if err := os.Rename(path, newPath); err != nil {
+		return path, err
+	}
+	if err := s.UpdateTrackFilePath(ctx, path, newPath); err != nil {
+		_ = os.Rename(newPath, path)
+		return path, err
+	}
+	return newPath, nil
+}
+
 // Scan walks MUSIC_DIR, upserts tracks, returns how many files were new or had mtime change
 func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err error) {
 	if musicDir == "" {
@@ -29,6 +51,14 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		}
 		if !store.IsAudioFilename(info.Name()) {
 			return nil
+		}
+		path, e := normalizeAudioPathOnDisk(ctx, s, path)
+		if e != nil {
+			return e
+		}
+		info, e = os.Stat(path)
+		if e != nil {
+			return e
 		}
 		st := info.Size()
 		mt := info.ModTime()
@@ -71,6 +101,14 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		}
 		if !store.IsAudioFilename(info.Name()) {
 			return nil
+		}
+		path, e := normalizeAudioPathOnDisk(ctx, s, path)
+		if e != nil {
+			return e
+		}
+		info, e = os.Stat(path)
+		if e != nil {
+			return e
 		}
 		scanned++
 		found++

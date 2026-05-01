@@ -69,7 +69,7 @@ func ApplySelection(targets []TrackTarget, dataDir string, selection map[string]
 		}
 		res.Warnings = append(res.Warnings, warn...)
 		if err != nil {
-			s := err.Error()
+			s := FormatApplyError(err)
 			res.Error = &s
 		}
 		out = append(out, res)

@@ -42,3 +42,23 @@ func IsAudioFilename(name string) bool {
 	}
 	return isAudioExt(lower[dot:])
 }
+
+// NormalizeAudioFileName trims trailing spaces and tabs in the filename stem (before the last extension).
+// Example: "Artist - Song .mp3" -> "Artist - Song.mp3". Unknown extensions are returned unchanged.
+func NormalizeAudioFileName(name string) string {
+	if name == "" || name == "." || name == ".." {
+		return name
+	}
+	lower := strings.ToLower(name)
+	dot := strings.LastIndexByte(lower, '.')
+	if dot < 0 {
+		return strings.TrimRight(name, " \t")
+	}
+	ext := name[dot:]
+	if !isAudioExt(strings.ToLower(ext)) {
+		return name
+	}
+	stem := name[:dot]
+	stem = strings.TrimRight(stem, " \t")
+	return stem + ext
+}

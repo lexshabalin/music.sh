@@ -34,7 +34,7 @@ services:
       - type: bind
         source: ./music 
         target: /music
-        read_only: true
+       #read_only: true
       - ./appdata:/data
     depends_on:
       db:

@@ -713,6 +713,15 @@ func baseNameNoExt(p string) string {
 	return p
 }
 
+// UpdateTrackFilePath updates the stored path when a file was renamed on disk (e.g. trailing space before extension).
+func (d *DB) UpdateTrackFilePath(ctx context.Context, oldPath, newPath string) error {
+	if oldPath == newPath {
+		return nil
+	}
+	_, err := d.Pool.Exec(ctx, `UPDATE tracks SET file_path = $2 WHERE file_path = $1`, oldPath, newPath)
+	return err
+}
+
 func (d *DB) SetAlbumCoverPath(ctx context.Context, albumID uuid.UUID, relPath string) error {
 	_, err := d.Pool.Exec(ctx, `UPDATE albums SET cover_path = $2 WHERE id = $1`, albumID, relPath)
 	return err
