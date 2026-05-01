@@ -64,20 +64,24 @@ func (a *App) Handlers() http.Handler {
 	r.Use(accessLogNoQuery())
 	r.Use(securityHeaders())
 
-	// CORS is opt-in. Default (no middleware) is safest for same-origin deployments.
+	// CORS: empty CORS_ORIGIN in config becomes Orig ["*"]. Wildcard mode disables AllowCredentials (Fetch + browser rules).
+	// For a credentialed cross-origin SPA list exact origins in CORS_ORIGIN (comma-separated).
+	corsWildcard := corsOriginsAllowAny(a.Orig)
 	if len(a.Orig) > 0 {
 		c := cors.New(cors.Options{
 			AllowedOrigins:   a.Orig,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			ExposedHeaders:   []string{},
-			AllowCredentials: true,
+			// Browsers disallow Access-Control-Allow-Origin * together with Allow-Credentials: true on credentialed requests.
+			AllowCredentials: !corsWildcard,
 			MaxAge:           86400,
 		})
 		r.Use(c.Handler)
 	}
 
 	r.Get("/api/healthz", a.health)
+	r.Get("/api/health", a.health)
 
 	// Rate-limit auth endpoints to reduce brute-force / abuse.
 	r.Group(func(g chi.Router) {
@@ -256,6 +260,15 @@ func middlewareUser(a *App) func(http.Handler) http.Handler {
 }
 
 // ---
+
+func corsOriginsAllowAny(origins []string) bool {
+	for _, o := range origins {
+		if strings.TrimSpace(o) == "*" {
+			return true
+		}
+	}
+	return false
+}
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) { JSON(w, 200, map[string]string{"status": "ok"}) }
 

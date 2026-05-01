@@ -29,19 +29,8 @@ func userIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
-func (a *App) parseUserIDFromRequest(r *http.Request) (uuid.UUID, error) {
-	h := r.Header.Get("Authorization")
-	if strings.HasPrefix(strings.ToLower(h), "bearer ") {
-		return a.parseToken(strings.TrimSpace(h[7:]))
-	}
-	return uuid.UUID{}, errors.New("no token")
-}
-
-// parseUserIDFromMediaRequest authenticates stream/cover without leaking tokens in URL.
-// Supports:
-// - Authorization: Bearer <jwt> (preferred)
-// - HttpOnly cookie (set by /api/auth/login and /api/auth/register)
-func (a *App) parseUserIDFromMediaRequest(r *http.Request) (uuid.UUID, error) {
+// parseUserIDFromAuth resolves the JWT for JSON API routes: same cookie as login as for media endpoints.
+func (a *App) parseUserIDFromAuth(r *http.Request) (uuid.UUID, error) {
 	h := r.Header.Get("Authorization")
 	if strings.HasPrefix(strings.ToLower(h), "bearer ") {
 		return a.parseToken(strings.TrimSpace(h[7:]))
@@ -49,6 +38,23 @@ func (a *App) parseUserIDFromMediaRequest(r *http.Request) (uuid.UUID, error) {
 	c, err := r.Cookie(authCookieName)
 	if err == nil && strings.TrimSpace(c.Value) != "" {
 		return a.parseToken(c.Value)
+	}
+	return uuid.UUID{}, errors.New("no token")
+}
+
+func (a *App) parseUserIDFromRequest(r *http.Request) (uuid.UUID, error) {
+	return a.parseUserIDFromAuth(r)
+}
+
+// parseUserIDFromMediaRequest authenticates stream/cover/background URLs that cannot rely on Bearer headers alone.
+// Order: Authorization Bearer, HttpOnly cookie (musicsh_at), then ?token= for <audio>/<img>-style requests (same caveat as URLs).
+func (a *App) parseUserIDFromMediaRequest(r *http.Request) (uuid.UUID, error) {
+	id, err := a.parseUserIDFromAuth(r)
+	if err == nil {
+		return id, nil
+	}
+	if t := strings.TrimSpace(r.URL.Query().Get("token")); t != "" {
+		return a.parseToken(t)
 	}
 	return uuid.UUID{}, errors.New("no token")
 }
