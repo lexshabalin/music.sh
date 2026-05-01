@@ -2098,17 +2098,17 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
                   }}
                   compact
                   modes={
-                    s === "home" || s === "albums" || s === "playlists"
-                      ? ["grid", "list"]
-                      : s === "artists" || s === "genres"
-                        ? ["list", "grid", "split"]
-                        : ["table", "list", "grid", "split"]
+                    s === "home" || s === "albums" || s === "artists" || s === "genres" || s === "playlists"
+                      ? ["grid"]
+                      : s === "songs"
+                        ? ["table", "grid"]
+                        : ["table", "grid"]
                   }
                 />
               </div>
             ))}
             <div className="muted" style={{ fontSize: 12 }}>
-              {t("view.title")}: {t("view.grid")} / {t("view.list")} / {t("view.table")} / {t("view.split")}
+              {t("view.title")}: {t("view.grid")} / {t("view.table")}
             </div>
           </div>
         </div>

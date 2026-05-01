@@ -259,9 +259,7 @@ const dict = {
     "view.title": "Вид",
     "view.aria": "Выбор вида отображения",
     "view.grid": "Плитка",
-    "view.list": "Список",
     "view.table": "Таблица",
-    "view.split": "Разделённый",
     "view.profile.title": "Вид отображения по разделам",
 
     "album.imprint.intro":
@@ -490,9 +488,7 @@ const dict = {
     "view.title": "View",
     "view.aria": "Choose view mode",
     "view.grid": "Grid",
-    "view.list": "List",
     "view.table": "Table",
-    "view.split": "Split",
     "view.profile.title": "View mode per section",
 
     "album.imprint.intro":

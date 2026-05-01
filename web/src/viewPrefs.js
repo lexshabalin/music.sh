@@ -14,17 +14,15 @@ export const SECTIONS = /** @type {const} */ ([
 
 export const VIEW_MODES = /** @type {const} */ ([
   "grid", // tiles
-  "list", // media rows
   "table", // track table / plain table-like list
-  "split", // finder-like split view (where supported)
 ]);
 
 export const DEFAULT_VIEW_BY_SECTION = {
   home: "grid",
   songs: "table",
-  artists: "list",
+  artists: "grid",
   albums: "grid",
-  genres: "list",
+  genres: "grid",
   playlists: "grid",
   likes: "table",
 };
@@ -39,15 +37,45 @@ function normalizeMode(m) {
   return VIEW_MODES.includes(x) ? x : null;
 }
 
+export function allowedModesForSection(section) {
+  const s = normalizeSection(section);
+  if (s === "songs" || s === "likes") return ["table", "grid"];
+  return ["grid"];
+}
+
+function coerceModeForSection(section, mode) {
+  const s = normalizeSection(section);
+  const m = String(mode || "").trim().toLowerCase();
+  const allowed = allowedModesForSection(s);
+  if (allowed.includes(m)) return m;
+  // Migrate old values (list/split/unknown) to a sane default per section.
+  return DEFAULT_VIEW_BY_SECTION[s] || allowed[0] || "grid";
+}
+
 export function readViewPrefs() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return { ...DEFAULT_VIEW_BY_SECTION };
+    if (!raw) {
+      const def = { ...DEFAULT_VIEW_BY_SECTION };
+      // Write defaults once so Profile can show consistent persisted state.
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(def));
+      } catch (_) {}
+      return def;
+    }
     const obj = JSON.parse(raw);
     const out = { ...DEFAULT_VIEW_BY_SECTION };
+    let changed = false;
     for (const s of SECTIONS) {
-      const v = normalizeMode(obj?.[s]);
-      if (v) out[s] = v;
+      const v = coerceModeForSection(s, obj?.[s]);
+      if (out[s] !== v) changed = true;
+      out[s] = v;
+    }
+    // Persist migration (removes split/list from old installs).
+    if (changed) {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(out));
+      } catch (_) {}
     }
     return out;
   } catch (_) {
@@ -60,8 +88,8 @@ export function writeViewPrefs(next) {
     const cur = readViewPrefs();
     const out = { ...cur };
     for (const s of SECTIONS) {
-      const v = normalizeMode(next?.[s]);
-      if (v) out[s] = v;
+      const v = coerceModeForSection(s, next?.[s]);
+      out[s] = v;
     }
     localStorage.setItem(LS_KEY, JSON.stringify(out));
     try {
@@ -72,8 +100,7 @@ export function writeViewPrefs(next) {
 
 export function setSectionViewMode(section, mode) {
   const s = normalizeSection(section);
-  const m = normalizeMode(mode);
-  if (!m) return;
+  const m = coerceModeForSection(s, mode);
   const cur = readViewPrefs();
   writeViewPrefs({ ...cur, [s]: m });
 }
