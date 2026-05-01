@@ -766,6 +766,11 @@ select.lang-select {
   letter-spacing: 0.08em;
   font-size: 0.72rem;
 }
+/* Flush to grid lines so header labels line up with row text (row cells have no inset). */
+.track-header .track-head-btn {
+  padding-left: 0;
+  padding-right: 0;
+}
 .track-head-btn:disabled {
   cursor: default;
 }
@@ -818,25 +823,30 @@ select.lang-select {
   flex: 1;
   min-width: 0;
 }
-.track-grid {
+/*
+ * Songs / full-width track lists: header and rows MUST share the same template
+ * or TITLE / ARTIST / ALBUM / TIME columns drift apart.
+ * Title takes remaining space; artist & album get stable mins; time is fixed for clean right edge.
+ */
+.track-grid:not(.track-grid--album) {
   display: grid;
-  grid-template-columns: minmax(320px, 3fr) minmax(180px, 1.9fr) minmax(220px, 2fr) 72px;
-  gap: 16px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(9.5rem, 16%)
+    minmax(10.5rem, 20%)
+    4.25rem;
+  column-gap: 20px;
+  row-gap: 0;
   align-items: center;
   min-width: 0;
 }
-.track-grid {
-  /* Give time column a bit more breathing room */
-  grid-template-columns: minmax(320px, 3fr) minmax(180px, 1.9fr) minmax(220px, 2fr) 84px;
-}
 .track-grid--album {
-  grid-template-columns: minmax(360px, 3.3fr) minmax(220px, 2.2fr) 72px;
-}
-.track-grid--album {
-  grid-template-columns: minmax(360px, 3.3fr) minmax(220px, 2.2fr) 84px;
-}
-.track-header .track-grid {
-  grid-template-columns: minmax(220px, 2.4fr) minmax(140px, 1.4fr) minmax(140px, 1.6fr) 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10.5rem, 22%) 4.25rem;
+  column-gap: 20px;
+  row-gap: 0;
+  align-items: center;
+  min-width: 0;
 }
 .track-col {
   min-width: 0;
@@ -846,7 +856,8 @@ select.lang-select {
 }
 .track-dur {
   text-align: right;
-  padding-right: 10px;
+  padding-right: 4px;
+  font-variant-numeric: tabular-nums;
 }
 .track-album--hidden {
   display: none;
