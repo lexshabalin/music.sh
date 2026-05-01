@@ -37,6 +37,7 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
   const [year, setYear] = useState(album?.year != null ? String(album.year) : "");
   const [genreStr, setGenreStr] = useState(() => genresToInputValue(album?.genres));
   const [genreOpts, setGenreOpts] = useState([]);
+  const [coverUrlInput, setCoverUrlInput] = useState("");
 
   useEffect(() => {
     lib
@@ -154,7 +155,7 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
             )}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,image/gif,.gif"
               disabled={busy}
               onChange={async (e) => {
                 const file = e.target.files?.[0];
@@ -171,6 +172,39 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
                 setBusy(false);
               }}
             />
+            <span className="muted" style={{ fontSize: "0.85rem", width: "100%" }}>
+              {t("album.meta.coverUrlHint")}
+            </span>
+            <input
+              type="url"
+              value={coverUrlInput}
+              onChange={(e) => setCoverUrlInput(e.target.value)}
+              placeholder={t("album.meta.coverUrlPlaceholder")}
+              disabled={busy}
+              style={{ minWidth: 220, flex: "1 1 200px", maxWidth: "100%" }}
+            />
+            <button
+              type="button"
+              disabled={busy || !coverUrlInput.trim()}
+              onClick={async () => {
+                setBusy(true);
+                setErr("");
+                try {
+                  await lib.uploadAlbumCoverFromUrl(albumId, coverUrlInput);
+                  setCoverUrlInput("");
+                  onRefresh();
+                } catch (ex) {
+                  let msg = ex.message || t("album.meta.uploadError");
+                  if (ex.httpStatus === 502) msg = t("album.meta.coverUrlFetchFailed");
+                  if (msg === "bad url" || msg === "json") msg = t("album.meta.coverUrlInvalid");
+                  if (msg === "image") msg = t("album.meta.coverUrlNotImage");
+                  setErr(msg);
+                }
+                setBusy(false);
+              }}
+            >
+              {t("album.meta.coverFromUrl")}
+            </button>
             {(album?.coverUrl || m.cover) && (
               <button
                 type="button"

@@ -149,8 +149,8 @@ export function GlobalSearch() {
             <>
               <ResultSection title={t("search.songs")}>
                 {res.songs.length ? (
-                  res.songs.map((t) => (
-                    <div key={t.id} className="search-item">
+                  res.songs.map((track) => (
+                    <div key={track.id} className="search-item">
                       <button
                         type="button"
                         className="ghost search-play"
@@ -158,13 +158,15 @@ export function GlobalSearch() {
                         aria-label={t("search.play")}
                         onClick={() => {
                           const item = {
-                            id: t.id,
-                            label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
-                            url: lib.streamUrl(t.id),
-                            artist: t.artist?.name || "",
-                            title: t.title || t("common.track"),
-                            album: t.album?.title || "",
-                            coverUrl: effectiveTrackCoverUrl(t),
+                            id: track.id,
+                            label:
+                              (track.artist ? track.artist.name + " — " : "") +
+                              (track.title || t("common.track")),
+                            url: lib.streamUrl(track.id),
+                            artist: track.artist?.name || "",
+                            title: track.title || t("common.track"),
+                            album: track.album?.title || "",
+                            coverUrl: effectiveTrackCoverUrl(track),
                           };
                           player.playQueue([item], 0);
                           // iOS Safari: call play() from the click handler to avoid "needs 2 taps".
@@ -182,9 +184,9 @@ export function GlobalSearch() {
                         <IPlay size={16} />
                       </button>
                       <div className="search-item-main">
-                        <div className="search-item-title">{t.title || t("common.track")}</div>
+                        <div className="search-item-title">{track.title || t("common.track")}</div>
                         <div className="muted" style={{ fontSize: 12 }}>
-                          {t.artist?.name || "—"} {t.album?.title ? `• ${t.album.title}` : ""}
+                          {track.artist?.name || "—"} {track.album?.title ? `• ${track.album.title}` : ""}
                         </div>
                       </div>
                     </div>

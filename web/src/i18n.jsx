@@ -229,6 +229,13 @@ const dict = {
       "Несколько через «;» или «|». В списке — названия уже встречавшиеся в библиотеке.",
     "album.meta.genreRolloutHint": "Сохраняется для альбома и копируется во все его треки; при скане теги файла подмешиваются только если жанры альбома не заданы.",
     "album.meta.cover": "Обложка",
+    "album.meta.coverUrlHint":
+      "Можно вставить ссылку (https): сервер загрузит картинку, приведёт к разумному размеру и сохранит как JPEG. При импринте она попадёт в теги треков, если включена обложка.",
+    "album.meta.coverUrlPlaceholder": "https://…",
+    "album.meta.coverFromUrl": "Загрузить по ссылке",
+    "album.meta.coverUrlInvalid": "Некорректная или недоступная ссылка на обложку.",
+    "album.meta.coverUrlNotImage": "По ссылке не удалось получить поддерживаемое изображение.",
+    "album.meta.coverUrlFetchFailed": "Не удалось скачать обложку по ссылке (сеть или удалённый сервер).",
     "album.meta.yearExample": "Напр. 2020",
     "album.meta.reset": "Сбросить",
     "album.meta.needTitle": "Укажите название альбома",
@@ -432,6 +439,13 @@ const dict = {
     "album.meta.genreRolloutHint":
       "Saved on the album and copied to every track; file-tag genres from scan merge in only when the album has no genre tags set.",
     "album.meta.cover": "Cover",
+    "album.meta.coverUrlHint":
+      "Or paste an HTTPS URL: the server downloads the image, scales it down, saves as JPEG, and imprint can embed it in track tags when cover is selected.",
+    "album.meta.coverUrlPlaceholder": "https://…",
+    "album.meta.coverFromUrl": "Load from URL",
+    "album.meta.coverUrlInvalid": "Invalid or disallowed cover URL.",
+    "album.meta.coverUrlNotImage": "The URL did not yield a supported image.",
+    "album.meta.coverUrlFetchFailed": "Could not download the cover from the URL (network or remote server error).",
     "album.meta.yearExample": "e.g. 2020",
     "album.meta.reset": "Reset",
     "album.meta.needTitle": "Please provide an album title",

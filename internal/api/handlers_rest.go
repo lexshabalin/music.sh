@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"musicsh/internal/coverproc"
 	"musicsh/internal/genres"
 	"musicsh/internal/imprint"
 	"musicsh/internal/store"
@@ -180,6 +181,34 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 	JSON(w, 200, ao)
 }
 
+type albumCoverFromURLJSON struct {
+	CoverURL string `json:"coverUrl"`
+}
+
+func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []byte) error {
+	if len(jpeg) == 0 {
+		return errors.New("empty jpeg")
+	}
+	dir := filepath.Join(a.DataDir, "covers")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if rel, err := a.DB.GetAlbumCoverPath(ctx, id); err == nil && strings.TrimSpace(rel) != "" {
+		_ = os.Remove(filepath.Join(a.DataDir, rel))
+	}
+	rel := filepath.Join("covers", id.String()+".jpg")
+	abs := filepath.Join(a.DataDir, rel)
+	tmp := abs + ".tmp"
+	if err := os.WriteFile(tmp, jpeg, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, abs); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return a.DB.SetAlbumCoverUser(ctx, id, rel)
+}
+
 func (a *App) uploadAlbumCover(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -190,6 +219,40 @@ func (a *App) uploadAlbumCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "not found")
 		return
 	}
+	ctx := r.Context()
+
+	ctype := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(ctype, "application/json") {
+		var body albumCoverFromURLJSON
+		dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
+			JSONError(w, 400, "json")
+			return
+		}
+		raw, err := coverproc.FetchImageURL(ctx, body.CoverURL)
+		if err != nil {
+			switch {
+			case errors.Is(err, coverproc.ErrCoverURL), errors.Is(err, coverproc.ErrCoverHost):
+				JSONError(w, 400, "bad url")
+			default:
+				JSONError(w, 502, "fetch")
+			}
+			return
+		}
+		jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+		if err != nil {
+			JSONError(w, 400, "image")
+			return
+		}
+		if err := a.persistAlbumCoverJPEG(ctx, id, jpeg); err != nil {
+			JSONError(w, 500, "write")
+			return
+		}
+		a.jsonAlbumCoverOut(w, ctx, id)
+		return
+	}
+
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		JSONError(w, 400, "bad multipart")
 		return
@@ -204,74 +267,25 @@ func (a *App) uploadAlbumCover(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	buf := make([]byte, 512)
-	n, readErr := f.Read(buf)
-	if readErr != nil && readErr != io.EOF {
-		JSONError(w, 400, "read")
-		return
-	}
-	if n == 0 {
+	raw, err := io.ReadAll(io.LimitReader(f, 22<<20))
+	if err != nil || len(raw) == 0 {
 		JSONError(w, 400, "empty file")
 		return
 	}
-	ct := http.DetectContentType(buf[:n])
-	if !strings.HasPrefix(ct, "image/") {
+	jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+	if err != nil {
 		JSONError(w, 400, "invalid image")
 		return
 	}
-	var ext string
-	switch ct {
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/png":
-		ext = ".png"
-	case "image/webp":
-		ext = ".webp"
-	default:
-		JSONError(w, 400, "unsupported image type")
+	if err := a.persistAlbumCoverJPEG(ctx, id, jpeg); err != nil {
+		JSONError(w, 500, "write")
 		return
 	}
+	a.jsonAlbumCoverOut(w, ctx, id)
+}
 
-	dir := filepath.Join(a.DataDir, "covers")
-	_ = os.MkdirAll(dir, 0o755)
-	if rel, err := a.DB.GetAlbumCoverPath(r.Context(), id); err == nil && strings.TrimSpace(rel) != "" {
-		_ = os.Remove(filepath.Join(a.DataDir, rel))
-	}
-	rel := filepath.Join("covers", id.String()+ext)
-	abs := filepath.Join(a.DataDir, rel)
-	tmp := abs + ".tmp"
-	out, err := os.Create(tmp)
-	if err != nil {
-		JSONError(w, 500, "write")
-		return
-	}
-	if _, err = out.Write(buf[:n]); err != nil {
-		_ = out.Close()
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if _, err = io.Copy(out, f); err != nil {
-		_ = out.Close()
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err = out.Close(); err != nil {
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err = os.Rename(tmp, abs); err != nil {
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err := a.DB.SetAlbumCoverUser(r.Context(), id, rel); err != nil {
-		JSONError(w, 500, "db")
-		return
-	}
-	al, err := a.DB.GetAlbum(r.Context(), id)
+func (a *App) jsonAlbumCoverOut(w http.ResponseWriter, ctx context.Context, albumID uuid.UUID) {
+	al, err := a.DB.GetAlbum(ctx, albumID)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return

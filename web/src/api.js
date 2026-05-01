@@ -122,6 +122,12 @@ export const lib = {
     fd.append("cover", file);
     return req("/api/albums/" + id + "/cover", { method: "POST", body: fd });
   },
+  /** Download image from HTTPS URL, normalize to JPEG on server, save as album cover. */
+  uploadAlbumCoverFromUrl: (id, coverUrl) =>
+    req("/api/albums/" + id + "/cover", {
+      method: "POST",
+      body: JSON.stringify({ coverUrl: coverUrl?.trim() || "" }),
+    }),
   deleteAlbumCover: (id) => req("/api/albums/" + id + "/cover", { method: "DELETE" }),
   /** Alphabetical genre labels seen in library (GET; auth). */
   libraryGenres: (limit) =>
