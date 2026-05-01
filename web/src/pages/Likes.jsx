@@ -3,9 +3,13 @@ import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
+import { useSectionViewMode } from "../viewPrefs";
+import { ViewModeControl } from "../components/ViewModeControl";
+import { IPlay } from "../components/icons";
 
 export function Likes() {
   const { t } = useI18n();
+  const { mode, setMode } = useSectionViewMode("likes");
   const [tracks, setT] = useState([]);
   const p = usePlayer();
   const likedSet = new Set(tracks.map((t) => t.id));
@@ -56,24 +60,53 @@ export function Likes() {
 
   return (
     <div>
-      <h2>{t("likes.title")}</h2>
-      <ul className="plain-list">
-        {tracks.map((t, i) => (
-          <TrackRow
-            key={t.id}
-            track={t}
-            index={i}
-            onPlayAt={(idx) => playAt(idx)}
-            onPlayNext={(trk) => playNext(trk)}
-            isLiked={likedSet.has(t.id)}
-            onToggleLike={() => unlike(t.id)}
-            label={`${t.title || t("common.untitled")}`}
-            isNowPlaying={p.current?.id === t.id}
-            isPlaying={p.isPlaying}
-            onMetaSaved={load}
-          />
-        ))}
-      </ul>
+      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>{t("likes.title")}</h2>
+        <ViewModeControl value={mode} onChange={setMode} modes={["table", "list", "grid"]} />
+      </div>
+      {mode === "grid" ? (
+        <div className="grid">
+          {tracks.map((tr, i) => {
+            const title = tr?.title || t("common.untitled");
+            const artist = tr?.artist?.name || t("common.unknownArtist");
+            const cover = effectiveTrackCoverUrl(tr);
+            return (
+              <div key={tr.id} className="card album-tile" style={{ cursor: "pointer" }} onClick={() => playAt(i)} role="button" tabIndex={0}>
+                <div className="tile-media">
+                  {cover ? <img className="album-art" src={cover} alt="" /> : <div className="album-art" />}
+                  <button type="button" className="tile-play-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); playAt(i); }} title={t("tracks.playAria")} aria-label={t("tracks.playAria")}>
+                    <IPlay size={16} />
+                  </button>
+                </div>
+                <div className="album-meta" style={{ minHeight: 80 }}>
+                  <div className="album-title">{title}</div>
+                  <div className="album-sub" style={{ justifyContent: "flex-start" }}>
+                    <span>{artist}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className="plain-list">
+          {tracks.map((t2, i) => (
+            <TrackRow
+              key={t2.id}
+              track={t2}
+              index={i}
+              onPlayAt={(idx) => playAt(idx)}
+              onPlayNext={(trk) => playNext(trk)}
+              isLiked={likedSet.has(t2.id)}
+              onToggleLike={() => unlike(t2.id)}
+              label={`${t2.title || t("common.untitled")}`}
+              isNowPlaying={p.current?.id === t2.id}
+              isPlaying={p.isPlaying}
+              onMetaSaved={load}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

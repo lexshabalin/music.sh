@@ -4,6 +4,8 @@ import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
+import { useSectionViewMode } from "../viewPrefs";
+import { ViewModeControl } from "../components/ViewModeControl";
 
 /** Loose UUID acceptance for route param (PostgreSQL IDs are lowercase v4 hex). */
 const UUID_RE =
@@ -42,6 +44,7 @@ function sortTracks(list, key, dir) {
 export function Genre() {
   const { id } = useParams();
   const { t } = useI18n();
+  const { mode, setMode } = useSectionViewMode("genres");
   const genreId = (id || "").trim();
   const validId = UUID_RE.test(genreId);
   const [label, setLabel] = React.useState("");
@@ -153,25 +156,30 @@ export function Genre() {
       </p>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>{label || genreId}</h2>
-        <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")}>
-          {t("tracks.shuffle")}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <ViewModeControl value={mode} onChange={setMode} modes={["table", "list"]} />
+          <button type="button" className="ghost" onClick={shuffle} disabled={!items.length} title={t("tracks.shuffle")}>
+            {t("tracks.shuffle")}
+          </button>
+        </div>
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       {!tracks.length && !err ? <p className="muted">{t("genres.noTracks")}</p> : null}
       <ul className="plain-list">
-        <TrackHeader
-          columns="full"
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={(k) => {
-            if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-            else {
-              setSortKey(k);
-              setSortDir("asc");
-            }
-          }}
-        />
+        {mode === "table" ? (
+          <TrackHeader
+            columns="full"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={(k) => {
+              if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+              else {
+                setSortKey(k);
+                setSortDir("asc");
+              }
+            }}
+          />
+        ) : null}
         {sortedTracks.map((tr) => (
           <TrackRow
             key={tr.id}

@@ -4,6 +4,8 @@ import { effectiveTrackCoverUrl, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
 import { useI18n } from "../i18n";
+import { useSectionViewMode } from "../viewPrefs";
+import { ViewModeControl } from "../components/ViewModeControl";
 
 function hash32(s) {
   let h = 2166136261;
@@ -34,6 +36,7 @@ function pickCoversForPlaylist(plId, tracks) {
 
 export function Playlists() {
   const { t } = useI18n();
+  const { mode, setMode } = useSectionViewMode("playlists");
   const [list, setList] = useState([]);
   const [name, setN] = useState("");
   const [desc, setDesc] = useState("");
@@ -78,7 +81,10 @@ export function Playlists() {
 
   return (
     <div>
-      <h2>{t("playlist.playlists")}</h2>
+      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>{t("playlist.playlists")}</h2>
+        <ViewModeControl value={mode} onChange={setMode} modes={["grid", "list"]} />
+      </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <div className="card" style={{ marginBottom: 16, display: "flex", gap: 8 }}>
         <input placeholder={t("playlist.newPlaylist")} value={name} onChange={(e) => setN(e.target.value)} />
@@ -100,57 +106,108 @@ export function Playlists() {
           {t("playlist.create")}
         </button>
       </div>
-      <div className="grid">
-        {list.map((p) => (
-          <Link key={p.id} to={"/playlist/" + p.id} style={{ textDecoration: "none", color: "inherit" }}>
-            <div className="card album-tile">
-              <div className="tile-media">
-                <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")}>
-                  {(covers[p.id] || []).length ? (
-                    (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
-                  ) : (
-                    <div className="pl-collage-empty" />
-                  )}
+      {mode === "list" ? (
+        <ul className="plain-list">
+          {list.map((p) => (
+            <li key={p.id} style={{ padding: "10px 6px" }}>
+              <Link to={"/playlist/" + p.id} style={{ textDecoration: "none", color: "inherit", display: "flex", gap: 12, alignItems: "center", flex: 1, minWidth: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
+                  <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")} style={{ borderRadius: 0 }}>
+                    {(covers[p.id] || []).length ? (
+                      (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
+                    ) : (
+                      <div className="pl-collage-empty" />
+                    )}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="tile-play-btn"
-                  title={t("playlist.play")}
-                  aria-label={t("playlist.play")}
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    try {
-                      const pl = await lib.playlist(p.id);
-                      const tracks = Array.isArray(pl?.tracks) ? pl.tracks : [];
-                      const items = tracks.map((t) => ({
-                        id: t.id,
-                        label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
-                        url: lib.streamUrl(t.id),
-                        artist: t.artist?.name || "",
-                        title: t.title || t("common.track"),
-                        album: t.album?.title || "",
-                        coverUrl: effectiveTrackCoverUrl(t),
-                      }));
-                      if (items.length) player.playQueue(items, 0);
-                    } catch (e2) {
-                      setErr(e2?.message || "error");
-                    }
-                  }}
-                >
-                  <IPlay size={16} />
-                </button>
-              </div>
-              <div className="album-meta" style={{ minHeight: 80 }}>
-                <div className="album-title">{p.name}</div>
-                <div className="album-sub" style={{ justifyContent: "flex-start" }}>
-                  <span>{p.description || ""}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                  <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.description || ""}
+                  </div>
+                </div>
+              </Link>
+              <button
+                type="button"
+                className="ghost"
+                onClick={async () => {
+                  try {
+                    const pl = await lib.playlist(p.id);
+                    const tracks = Array.isArray(pl?.tracks) ? pl.tracks : [];
+                    const items = tracks.map((t2) => ({
+                      id: t2.id,
+                      label: (t2.artist ? t2.artist.name + " — " : "") + (t2.title || t("common.track")),
+                      url: lib.streamUrl(t2.id),
+                      artist: t2.artist?.name || "",
+                      title: t2.title || t("common.track"),
+                      album: t2.album?.title || "",
+                      coverUrl: effectiveTrackCoverUrl(t2),
+                    }));
+                    if (items.length) player.playQueue(items, 0);
+                  } catch (_) {}
+                }}
+                title={t("playlist.play")}
+                aria-label={t("playlist.play")}
+                style={{ marginLeft: 10, width: 36, height: 36, padding: 0, borderRadius: 999 }}
+              >
+                <IPlay size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="grid">
+          {list.map((p) => (
+            <Link key={p.id} to={"/playlist/" + p.id} style={{ textDecoration: "none", color: "inherit" }}>
+              <div className="card album-tile">
+                <div className="tile-media">
+                  <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")}>
+                    {(covers[p.id] || []).length ? (
+                      (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
+                    ) : (
+                      <div className="pl-collage-empty" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="tile-play-btn"
+                    title={t("playlist.play")}
+                    aria-label={t("playlist.play")}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try {
+                        const pl = await lib.playlist(p.id);
+                        const tracks = Array.isArray(pl?.tracks) ? pl.tracks : [];
+                        const items = tracks.map((t2) => ({
+                          id: t2.id,
+                          label: (t2.artist ? t2.artist.name + " — " : "") + (t2.title || t("common.track")),
+                          url: lib.streamUrl(t2.id),
+                          artist: t2.artist?.name || "",
+                          title: t2.title || t("common.track"),
+                          album: t2.album?.title || "",
+                          coverUrl: effectiveTrackCoverUrl(t2),
+                        }));
+                        if (items.length) player.playQueue(items, 0);
+                      } catch (e2) {
+                        setErr(e2?.message || "error");
+                      }
+                    }}
+                  >
+                    <IPlay size={16} />
+                  </button>
+                </div>
+                <div className="album-meta" style={{ minHeight: 80 }}>
+                  <div className="album-title">{p.name}</div>
+                  <div className="album-sub" style={{ justifyContent: "flex-start" }}>
+                    <span>{p.description || ""}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
