@@ -2185,6 +2185,17 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
   );
 }
 
+/** Scroll only `scroller` (do not use scrollIntoView — it climbs ancestors and fights user wheel/touch scrolling). */
+function scrollPopoverListToCenterRow(scroller, row) {
+  if (!scroller || !row) return;
+  const st = scroller.scrollTop;
+  const relTop = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + st;
+  const rowH = row.getBoundingClientRect().height || 1;
+  const next = relTop + rowH / 2 - scroller.clientHeight / 2;
+  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  scroller.scrollTop = Math.max(0, Math.min(next, max));
+}
+
 function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, historyUX = false }) {
   const { t } = useI18n();
   const popRef = React.useRef(null);
@@ -2205,7 +2216,13 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
       const left = Math.min(window.innerWidth - w - m, Math.max(m, r.right - w));
       let top = r.top - maxH - m;
       if (top < m) top = r.bottom + m;
-      setBox({ left, top, width: w, maxHeight: maxH });
+      const next = { left, top, width: w, maxHeight: maxH };
+      setBox((prev) => {
+        if (prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.maxHeight === next.maxHeight) {
+          return prev;
+        }
+        return next;
+      });
     };
     place();
     window.addEventListener("resize", place);
@@ -2230,16 +2247,18 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
   }, [onClose, anchorRef]);
 
   React.useLayoutEffect(() => {
-    if (!historyUX || !box) return;
+    if (!historyUX) return;
     if (currentIndex < 0 || currentIndex >= items.length) return;
-    const el = activeRowRef.current;
-    if (!el || typeof el.scrollIntoView !== "function") return;
-    el.scrollIntoView({ block: "center", behavior: "auto", inline: "nearest" });
-  }, [historyUX, box, currentIndex, items.length]);
+    const scroller = popRef.current;
+    const row = activeRowRef.current;
+    if (!scroller || !row) return;
+    scrollPopoverListToCenterRow(scroller, row);
+  }, [historyUX, currentIndex, items.length]);
 
   if (!box) return null;
 
-  const playedDim = 0.8; // 20% more muted vs upcoming rows
+  /** Upcoming rows look “normal”; played rows ≈70% more muted (retain ~30% of base opacity). */
+  const playedDim = 0.3;
 
   const panel = (
     <div
@@ -2251,6 +2270,7 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
         width: box.width,
         maxHeight: box.maxHeight,
         overflow: "auto",
+        overscrollBehavior: "contain",
         background: "#111119",
         border: "1px solid #2a2a33",
         borderRadius: 12,
