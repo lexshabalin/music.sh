@@ -1239,7 +1239,7 @@ function Shell({ children }) {
           </div>
 
           <button
-            className="ghost"
+            className={"player-icon-btn" + (liked ? " is-liked" : "")}
             type="button"
             title={liked ? t("player.unlike") : t("player.like")}
             onClick={async () => {
@@ -1250,12 +1250,11 @@ function Shell({ children }) {
                 setLiked(!liked);
               } catch (_) {}
             }}
-            style={{ color: liked ? "tomato" : undefined, borderColor: liked ? "tomato" : undefined }}
           >
             <IHeart />
           </button>
 
-          <button className="ghost" type="button" title={t("player.addToPlaylist")} onClick={() => setShowPlModal(true)}>
+          <button className="player-icon-btn" type="button" title={t("player.addToPlaylist")} onClick={() => setShowPlModal(true)}>
             <IPlus />
           </button>
 

@@ -1745,6 +1745,28 @@ select.lang-select {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 10px;
 }
+.player-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.player-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.player-icon-btn.is-liked {
+  color: tomato;
+}
 .queue-item:hover {
   background: rgba(255, 255, 255, 0.06) !important;
 }
