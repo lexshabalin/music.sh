@@ -123,6 +123,9 @@ export const lib = {
     return req("/api/albums/" + id + "/cover", { method: "POST", body: fd });
   },
   deleteAlbumCover: (id) => req("/api/albums/" + id + "/cover", { method: "DELETE" }),
+  /** Alphabetical genre labels seen in library (GET; auth). */
+  libraryGenres: (limit) =>
+    req("/api/library/genres?" + new URLSearchParams({ limit: String(limit || 500) })),
   tracks: (q, albumId) => req("/api/tracks?" + new URLSearchParams({ query: q || "", ...(albumId && { albumId }) })),
   track: (id) => req("/api/tracks/" + id),
   /** PATCH user metadata (pinned fields survive library rescan). */

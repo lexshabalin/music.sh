@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getToken, lib } from "../api";
+import GenreSuggestInput, {
+  genresToInputValue,
+  parseGenreInput,
+} from "./GenreSuggestInput";
 import { IClock, IHeart } from "./icons";
 import { useI18n } from "../i18n";
 
@@ -489,6 +493,8 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
   /** "library" = привязка к строке альбома в БД; "custom" = название вручную */
   const [albumSource, setAlbumSource] = useState("custom");
   const [libraryAlbumId, setLibraryAlbumId] = useState("");
+  const [genreStr, setGenreStr] = useState("");
+  const [genreOpts, setGenreOpts] = useState([]);
 
   const applyAlbumStateFromTrack = (t, albs) => {
     const list = Array.isArray(albs) ? albs : [];
@@ -555,6 +561,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       try {
         const t = await lib.track(trackId);
         if (cancelled || !t) return;
+        setGenreStr(genresToInputValue(t.genres));
         setFull(t);
         setTitle(t.title || "");
         setArtist(t.artist?.name || "");
@@ -574,6 +581,21 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       cancelled = true;
     };
   }, [trackId, loadAlbumsForArtistName]);
+
+  useEffect(() => {
+    let cancelled = false;
+    lib
+      .libraryGenres(500)
+      .then((x) => {
+        if (!cancelled) setGenreOpts(Array.isArray(x) ? x : []);
+      })
+      .catch(() => {
+        if (!cancelled) setGenreOpts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackId]);
 
   useEffect(() => {
     if (loading) return;
@@ -605,6 +627,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
     try {
       await lib.patchTrackMeta(trackId, { clear: [field] });
       const t = await lib.track(trackId);
+      setGenreStr(genresToInputValue(t.genres));
       setFull(t);
       setTitle(t.title || "");
       setArtist(t.artist?.name || "");
@@ -635,12 +658,15 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       const clear = [];
       if (!trackNo.trim() && full?.meta?.trackNo) clear.push("trackNo");
       if (!discNo.trim() && full?.meta?.discNo) clear.push("discNo");
+      const gParsed = parseGenreInput(genreStr);
+      if (!genreStr.trim() && full?.meta?.genres) clear.push("genres");
 
       const body = {
         title: title.trim(),
         artistName: artist.trim(),
         clear,
       };
+      if (gParsed.length) body.genres = gParsed;
 
       if (albumSource === "library" && libraryAlbumId) {
         body.albumId = libraryAlbumId;
@@ -772,6 +798,20 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                   {t("trackmeta.year.hint")}
                 </span>
               ) : null}
+            </p>
+            <p>
+              <label>
+                {t("trackmeta.field.genre")}{" "}
+                {m?.genres ? <ResetLink onClick={() => resetField("genres")} busy={busy} /> : null}
+              </label>
+              <GenreSuggestInput
+                datalistId={`track-meta-genres-${trackId}`}
+                suggestions={genreOpts}
+                value={genreStr}
+                onChange={setGenreStr}
+                disabled={busy}
+                hint={t("trackmeta.genreHint")}
+              />
             </p>
             <p style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <span>

@@ -196,6 +196,9 @@ const dict = {
     "trackmeta.field.title": "Название",
     "trackmeta.field.artist": "Исполнитель",
     "trackmeta.field.album": "Альбом",
+    "trackmeta.field.genre": "Жанры",
+    "trackmeta.genreHint":
+      "Несколько через «;» или «|». Выпадающий список — жанры, уже встречающиеся в библиотеке. «Сброс» вернёт теги с альбома.",
     "trackmeta.album.pick": "— выберите альбом из библиотеки —",
     "trackmeta.album.custom": "Другой альбом (ввести вручную)…",
     "trackmeta.album.title": "Название альбома",
@@ -216,12 +219,15 @@ const dict = {
     "trackmeta.optional": "Необязательно",
 
     "album.editTitle": "Альбом",
-    "album.meta.help": "Название, исполнитель, год и жанр для альбома. Жанр копируется на все треки альбома. Своя обложка не заменяется автоматически из MusicBrainz. «Сбросить» возвращает значение из тегов / снимает закрепление.",
+    "album.meta.help":
+      "Название, исполнитель, год и жанры (несколько тегов через «;») для альбома. Жанры копируются на все треки альбома. Своя обложка не заменяется автоматически из MusicBrainz. «Сбросить» возвращает значение из тегов / снимает закрепление.",
     "album.meta.title": "Название",
     "album.meta.artist": "Исполнитель",
     "album.meta.year": "Год",
-    "album.meta.genre": "Жанр",
-    "album.meta.genreRolloutHint": "Сохраняется для альбома и копируется во все его треки в библиотеке (для imprint и после скана сохраняется, пока жанр альбома закреплён).",
+    "album.meta.genre": "Жанры",
+    "album.meta.genreSuggestHint":
+      "Несколько через «;» или «|». В списке — названия уже встречавшиеся в библиотеке.",
+    "album.meta.genreRolloutHint": "Сохраняется для альбома и копируется во все его треки; при скане теги файла подмешиваются только если жанры альбома не заданы.",
     "album.meta.cover": "Обложка",
     "album.meta.yearExample": "Напр. 2020",
     "album.meta.reset": "Сбросить",
@@ -390,6 +396,9 @@ const dict = {
     "trackmeta.field.title": "Title",
     "trackmeta.field.artist": "Artist",
     "trackmeta.field.album": "Album",
+    "trackmeta.field.genre": "Genres",
+    "trackmeta.genreHint":
+      "Separate tags with ; or |. Dropdown lists genres already used in your library. Reset restores tags inherited from the album.",
     "trackmeta.album.pick": "— choose an album from library —",
     "trackmeta.album.custom": "Other album (enter manually)…",
     "trackmeta.album.title": "Album title",
@@ -410,12 +419,16 @@ const dict = {
     "trackmeta.optional": "Optional",
 
     "album.editTitle": "Album",
-    "album.meta.help": "Title, artist, year, and genre for this album; genre is rolled out to every track. Custom cover is not auto-replaced from MusicBrainz. “Reset” restores values / unpins the field.",
+    "album.meta.help":
+      "Title, artist, year, and genres (multiple tags with ;) for this album; genres roll out to every track. Custom cover is not auto-replaced from MusicBrainz. “Reset” restores values / unpins the field.",
     "album.meta.title": "Title",
     "album.meta.artist": "Artist",
     "album.meta.year": "Year",
-    "album.meta.genre": "Genre",
-    "album.meta.genreRolloutHint": "Saved on the album and copied to every track (used for imprint; rescan won’t overwrite file tags until you clear the pinned album genre).",
+    "album.meta.genre": "Genres",
+    "album.meta.genreSuggestHint":
+      "Separate tags with ; or |. Dropdown lists genre names already seen in your library.",
+    "album.meta.genreRolloutHint":
+      "Saved on the album and copied to every track; file-tag genres from scan merge in only when the album has no genre tags set.",
     "album.meta.cover": "Cover",
     "album.meta.yearExample": "e.g. 2020",
     "album.meta.reset": "Reset",

@@ -4,6 +4,10 @@ import { useParams, Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
+import GenreSuggestInput, {
+  genresToInputValue,
+  parseGenreInput,
+} from "../components/GenreSuggestInput";
 import { useI18n } from "../i18n";
 
 function ResetPinButton({ onClick, busy }) {
@@ -31,13 +35,21 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
   const [title, setTitle] = useState(album?.title || "");
   const [artist, setArtist] = useState(album?.artistName || "");
   const [year, setYear] = useState(album?.year != null ? String(album.year) : "");
-  const [genre, setGenre] = useState(album?.genre ?? "");
+  const [genreStr, setGenreStr] = useState(() => genresToInputValue(album?.genres));
+  const [genreOpts, setGenreOpts] = useState([]);
+
+  useEffect(() => {
+    lib
+      .libraryGenres(500)
+      .then((x) => setGenreOpts(Array.isArray(x) ? x : []))
+      .catch(() => setGenreOpts([]));
+  }, []);
 
   useEffect(() => {
     setTitle(album?.title || "");
     setArtist(album?.artistName || "");
     setYear(album?.year != null ? String(album.year) : "");
-    setGenre(album?.genre ?? "");
+    setGenreStr(genresToInputValue(album?.genres));
   }, [album]);
 
   const m = album?.meta || {};
@@ -64,13 +76,14 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
     try {
       const clear = [];
       if (!year.trim() && m.year) clear.push("year");
-      if (!genre.trim() && m.genre) clear.push("genre");
+      if (!genreStr.trim() && m.genre) clear.push("genres");
       const body = {
         title: title.trim(),
         artistName: artist.trim(),
         clear,
       };
-      if (genre.trim()) body.genre = genre.trim();
+      const gParsed = parseGenreInput(genreStr);
+      if (gParsed.length) body.genres = gParsed;
       if (year.trim()) {
         const y = parseInt(year, 10);
         if (!Number.isFinite(y)) throw new Error(t("album.meta.badYear"));
@@ -113,12 +126,17 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
         </p>
         <p>
           <label>
-            {t("album.meta.genre")} {m.genre ? <ResetPinButton onClick={() => resetField("genre")} busy={busy} /> : null}
+            {t("album.meta.genre")}{" "}
+            {m.genre ? <ResetPinButton onClick={() => resetField("genres")} busy={busy} /> : null}
           </label>
-          <input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="" />
-          <span className="muted" style={{ display: "block", fontSize: "0.82rem", marginTop: 4 }}>
-            {t("album.meta.genreRolloutHint")}
-          </span>
+          <GenreSuggestInput
+            datalistId={`album-meta-genres-${albumId}`}
+            suggestions={genreOpts}
+            value={genreStr}
+            onChange={setGenreStr}
+            disabled={busy}
+            hint={`${t("album.meta.genreSuggestHint")} ${t("album.meta.genreRolloutHint")}`}
+          />
         </p>
         <p>
           <label>
@@ -204,9 +222,17 @@ function ImprintModal({ albumId, onClose }) {
   const [advanced, setAdvanced] = useState(false);
   // trackId -> field -> edited "after" string (text fields only)
   const [overrides, setOverrides] = useState({});
+  const [genreOpts, setGenreOpts] = useState([]);
   const [jobId, setJobId] = useState("");
   const [job, setJob] = useState(null);
   const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    lib
+      .libraryGenres(500)
+      .then((x) => setGenreOpts(Array.isArray(x) ? x : []))
+      .catch(() => setGenreOpts([]));
+  }, []);
 
   const afterStr = (d) => {
     if (!d) return "";
@@ -525,11 +551,21 @@ function ImprintModal({ albumId, onClose }) {
                           </div>
                           <div style={{ minWidth: 0 }}>
                             {d.supported && !isCover ? (
-                              <input
-                                value={afterVal}
-                                disabled={disabledRow || !sel?.[tr.trackId]?.[d.field]}
-                                onChange={(e) => setOverride(tr.trackId, d.field, e.target.value)}
-                              />
+                              d.field === "genre" ? (
+                                <GenreSuggestInput
+                                  datalistId="imprint-genre-suggestions"
+                                  suggestions={genreOpts}
+                                  value={afterVal}
+                                  onChange={(v) => setOverride(tr.trackId, d.field, v)}
+                                  disabled={disabledRow || !sel?.[tr.trackId]?.[d.field]}
+                                />
+                              ) : (
+                                <input
+                                  value={afterVal}
+                                  disabled={disabledRow || !sel?.[tr.trackId]?.[d.field]}
+                                  onChange={(e) => setOverride(tr.trackId, d.field, e.target.value)}
+                                />
+                              )
                             ) : (
                               <div
                                 style={{
@@ -738,9 +774,9 @@ export function Album() {
             ) : null}
           </h2>
           <div className="muted">{a?.artistName}</div>
-          {a?.genre ? (
+          {Array.isArray(a?.genres) && a.genres.length ? (
             <div className="muted" style={{ marginTop: 4 }}>
-              {a.genre}
+              {a.genres.join(" · ")}
             </div>
           ) : null}
         </div>

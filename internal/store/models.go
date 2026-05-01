@@ -30,7 +30,7 @@ type Artist struct {
 type Album struct {
 	ID                 uuid.UUID  `json:"id"`
 	Title              string     `json:"title"`
-	Genre              *string    `json:"genre,omitempty"`
+	Genres             []string   `json:"genres,omitempty"`
 	Year               *int       `json:"year,omitempty"`
 	ArtistID           *uuid.UUID `json:"artistId,omitempty"`
 	ArtistName         *string    `json:"artistName,omitempty"`
@@ -50,15 +50,16 @@ type AlbumMetaPins struct {
 
 // AlbumMetaUpdate is input for PATCH /api/albums/{id}.
 type AlbumMetaUpdate struct {
-	ClearTitle, ClearArtist, ClearYear, ClearGenre, ClearCover bool
-	Title, ArtistName                                            *string
-	Genre                                                       *string
-	Year                                                         *int
+	ClearTitle, ClearArtist, ClearYear, ClearGenres, ClearCover bool
+	Title, ArtistName                                    *string
+	Genres                                                *[]string
+	Year                                                  *int
 }
 
 type Track struct {
 	ID           uuid.UUID  `json:"id"`
 	Title        *string    `json:"title,omitempty"`
+	Genres       []string   `json:"genres,omitempty"`
 	DurationMs   *int       `json:"durationMs,omitempty"`
 	Format       *string    `json:"format,omitempty"`
 	BitrateKbps  *int       `json:"bitrateKbps,omitempty"`
@@ -82,15 +83,17 @@ type TrackMetaPins struct {
 	Year    bool `json:"year,omitempty"`
 	TrackNo bool `json:"trackNo,omitempty"`
 	DiscNo  bool `json:"discNo,omitempty"`
+	Genres  bool `json:"genres,omitempty"`
 	Art     bool `json:"art,omitempty"`
 }
 
 // TrackMetaUpdate is the store layer input for PATCH /api/tracks/{id} metadata.
 type TrackMetaUpdate struct {
-	ClearTitle, ClearArtist, ClearAlbum, ClearYear, ClearTrackNo, ClearDiscNo, ClearArt bool
-	Title, ArtistName, AlbumTitle, AlbumArtistName                                      *string
-	Year                                                                                  *int
-	TrackNo, DiscNo                                                                       *int
+	ClearTitle, ClearArtist, ClearAlbum, ClearYear, ClearTrackNo, ClearDiscNo, ClearGenres, ClearArt bool
+	Title, ArtistName, AlbumTitle, AlbumArtistName                                                *string
+	Year                                                                                        *int
+	TrackNo, DiscNo                                                                             *int
+	Genres                                                                                      *[]string
 	// AlbumID links to an existing album row (library pick); string pins are cleared so the track inherits album metadata.
 	AlbumID *uuid.UUID
 }

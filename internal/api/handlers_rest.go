@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"musicsh/internal/genres"
 	"musicsh/internal/imprint"
 	"musicsh/internal/store"
 	"musicsh/internal/stream"
@@ -26,6 +28,21 @@ import (
 func (a *App) listArtists(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("query")
 	list, err := a.DB.ListArtists(r.Context(), q)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, list)
+}
+
+func (a *App) listLibraryGenres(w http.ResponseWriter, r *http.Request) {
+	limit := 500
+	if s := strings.TrimSpace(r.URL.Query().Get("limit")); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	list, err := a.DB.ListGenreSuggestions(r.Context(), limit)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
@@ -89,7 +106,10 @@ func (a *App) coverURLFor(id uuid.UUID) *string {
 type albumMetaJSON struct {
 	Title      *string `json:"title"`
 	ArtistName *string `json:"artistName"`
-	Genre      *string `json:"genre"`
+	// Genres replaces album_genres and rolls out to tracks (null = omit; [] = clear all).
+	Genres *[]string `json:"genres"`
+	// Genre is deprecated: split into tags (same as genres from a joined string).
+	Genre *string `json:"genre"`
 	Year       *int    `json:"year"`
 	Clear      []string `json:"clear"`
 }
@@ -108,8 +128,14 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 	up := store.AlbumMetaUpdate{
 		Title:      in.Title,
 		ArtistName: in.ArtistName,
-		Genre:      in.Genre,
 		Year:       in.Year,
+	}
+	if in.Genres != nil {
+		labs := genres.DedupePreserveOrder(*in.Genres)
+		up.Genres = &labs
+	} else if in.Genre != nil {
+		labs := genres.Split(strings.TrimSpace(*in.Genre))
+		up.Genres = &labs
 	}
 	for _, c := range in.Clear {
 		switch strings.ToLower(strings.TrimSpace(c)) {
@@ -119,11 +145,14 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 			up.ClearArtist = true
 		case "year":
 			up.ClearYear = true
-		case "genre":
-			up.ClearGenre = true
+		case "genre", "genres":
+			up.ClearGenres = true
 		case "art", "cover":
 			up.ClearCover = true
 		}
+	}
+	if up.ClearGenres && up.Genres != nil {
+		up.ClearGenres = false
 	}
 	if up.ClearCover {
 		if rel, err := a.DB.GetAlbumCoverPath(r.Context(), id); err == nil && strings.TrimSpace(rel) != "" {
@@ -355,6 +384,8 @@ type trackMetaJSON struct {
 	Year            *int    `json:"year"`
 	TrackNo         *int    `json:"trackNo"`
 	DiscNo          *int    `json:"discNo"`
+	Genres          *[]string `json:"genres"`
+	Genre           *string   `json:"genre"`
 	Clear           []string `json:"clear"`
 }
 
@@ -378,6 +409,13 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 		TrackNo:         in.TrackNo,
 		DiscNo:          in.DiscNo,
 	}
+	if in.Genres != nil {
+		labs := genres.DedupePreserveOrder(*in.Genres)
+		up.Genres = &labs
+	} else if in.Genre != nil {
+		labs := genres.Split(strings.TrimSpace(*in.Genre))
+		up.Genres = &labs
+	}
 	if in.AlbumID != nil && strings.TrimSpace(*in.AlbumID) != "" {
 		aid, err := uuid.Parse(strings.TrimSpace(*in.AlbumID))
 		if err != nil {
@@ -400,9 +438,14 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 			up.ClearTrackNo = true
 		case "discno", "disc":
 			up.ClearDiscNo = true
+		case "genre", "genres":
+			up.ClearGenres = true
 		case "art", "cover":
 			up.ClearArt = true
 		}
+	}
+	if up.ClearGenres && up.Genres != nil {
+		up.ClearGenres = false
 	}
 	if up.ClearArt {
 		if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {

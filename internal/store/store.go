@@ -20,6 +20,34 @@ type DB struct {
 // ErrAlbumNotForArtist is returned when PATCH sets albumId that is not associated with the resolved track artist.
 var ErrAlbumNotForArtist = errors.New("album not in artist context")
 
+// Track-level genre aggregation for JSON: prefers track_genres; falls back to album_genres. Labels joined with ||| for scan split.
+const sqlDispTrackGenres = `COALESCE(
+  (SELECT NULLIF(trim(both FROM string_agg(lg.label, '|||' ORDER BY tg.position ASC, lg.normalized ASC)), '')
+     FROM track_genres tg INNER JOIN library_genres lg ON lg.id = tg.genre_id WHERE tg.track_id = t.id),
+  (SELECT NULLIF(trim(both FROM string_agg(lg.label, '|||' ORDER BY ag.position ASC, lg.normalized ASC)), '')
+     FROM album_genres ag INNER JOIN library_genres lg ON lg.id = ag.genre_id WHERE ag.album_id = t.album_id)
+) AS disp_genres`
+
+const sqlDispImprintGenre = `COALESCE(
+  (SELECT NULLIF(trim(both FROM string_agg(lg.label, '; ' ORDER BY tg.position ASC, lg.normalized ASC)), '')
+     FROM track_genres tg INNER JOIN library_genres lg ON lg.id = tg.genre_id WHERE tg.track_id = t.id),
+  (SELECT NULLIF(trim(both FROM string_agg(lg.label, '; ' ORDER BY ag.position ASC, lg.normalized ASC)), '')
+     FROM album_genres ag INNER JOIN library_genres lg ON lg.id = ag.genre_id WHERE ag.album_id = t.album_id)
+) AS disp_genre`
+
+func splitDispGenresAgg(ns sql.NullString) []string {
+	if !ns.Valid || strings.TrimSpace(ns.String) == "" {
+		return nil
+	}
+	var gs []string
+	for _, x := range strings.Split(ns.String, "|||") {
+		if z := strings.TrimSpace(x); z != "" {
+			gs = append(gs, z)
+		}
+	}
+	return gs
+}
+
 // AlbumBelongsToArtistContext matches ListAlbums(artistId): album artist or a track on the album has this artist.
 func (d *DB) AlbumBelongsToArtistContext(ctx context.Context, albumID, artistID uuid.UUID) (bool, error) {
 	var ok bool
@@ -481,8 +509,7 @@ func (d *DB) albumHasUserMeta(ctx context.Context, albumID uuid.UUID) (bool, err
 				(meta_user_title IS NOT NULL AND BTRIM(COALESCE(meta_user_title, '')) <> '') OR
 				(meta_user_artist IS NOT NULL AND BTRIM(COALESCE(meta_user_artist, '')) <> '') OR
 				meta_user_year IS NOT NULL OR
-				(meta_user_genre IS NOT NULL AND BTRIM(COALESCE(meta_user_genre, '')) <> '') OR
-				meta_cover_locked
+				meta_cover_locked OR EXISTS (SELECT 1 FROM album_genres ag WHERE ag.album_id = albums.id)
 			)
 		)`, albumID).Scan(&ok)
 	return ok, err
@@ -496,30 +523,6 @@ func sqlNullTrim(s string) interface{} {
 	return s
 }
 
-// albumPinnedGenre is true when the user set meta_user_genre (non-empty trimmed).
-func (d *DB) albumPinnedGenre(ctx context.Context, albumID uuid.UUID) (pinned bool, value string, err error) {
-	var s sql.NullString
-	err = d.Pool.QueryRow(ctx, `SELECT meta_user_genre FROM albums WHERE id = $1`, albumID).Scan(&s)
-	if err != nil {
-		return false, "", err
-	}
-	if !s.Valid {
-		return false, "", nil
-	}
-	v := strings.TrimSpace(s.String)
-	if v == "" {
-		return false, "", nil
-	}
-	return true, v, nil
-}
-
-func (d *DB) effectiveTagGenre(ctx context.Context, albumID uuid.UUID, fromScan string) string {
-	if pin, v, err := d.albumPinnedGenre(ctx, albumID); err == nil && pin {
-		return v
-	}
-	return strings.TrimSpace(fromScan)
-}
-
 // UpsertTrack reads metadata from the scanner and inserts or updates a file row.
 func (d *DB) UpsertTrack(
 	ctx context.Context,
@@ -530,7 +533,7 @@ func (d *DB) UpsertTrack(
 	durationMS *int,
 	format *string,
 	bitrateKbps *int,
-	tagAlbumArtist, tagGenre, tagComposer, tagComment string,
+	tagAlbumArtist, tagGenreScan, tagComposer, tagComment string,
 ) (trackID, albumID uuid.UUID, isNewOrChanged bool, err error) {
 	artistID, err := d.FindOrCreateArtist(ctx, artistName)
 	if err != nil {
@@ -640,14 +643,15 @@ func (d *DB) UpsertTrack(
 				file_size = $2, file_mtime_ns = $3, duration_ms = $4, title = $5,
 				format = $6, bitrate_kbps = $7,
 				track_no = $8, disc_no = $9, year = $10, album_id = $11, artist_id = $12,
-				tag_album_artist = $13, tag_genre = $14, tag_composer = $15, tag_comment = $16
+				tag_album_artist = $13, tag_composer = $14, tag_comment = $15
 			WHERE id = $1
 		`, id, fileSize, mtimeNs, durationMS, finalTitle, format, bitrateKbps, finalTrackNo, finalDiscNo, finalYear, finalAlbumID, finalArtistID,
-			sqlNullTrim(tagAlbumArtist), sqlNullTrim(d.effectiveTagGenre(ctx, finalAlbumID, tagGenre)), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
+			sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 		if e != nil {
 			err = e
 			return
 		}
+		_ = d.mergeTrackGenresFromScan(ctx, id, finalAlbumID, tagGenreScan)
 		return trackID, finalAlbumID, true, nil
 	}
 	if err2 != pgx.ErrNoRows {
@@ -660,13 +664,14 @@ func (d *DB) UpsertTrack(
 		INSERT INTO tracks (
 			id, file_path, file_size, file_mtime_ns, duration_ms, title, format, bitrate_kbps,
 			track_no, disc_no, year, album_id, artist_id,
-			tag_album_artist, tag_genre, tag_composer, tag_comment
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			tag_album_artist, tag_composer, tag_comment
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID,
-		sqlNullTrim(tagAlbumArtist), sqlNullTrim(d.effectiveTagGenre(ctx, albumID, tagGenre)), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
+		sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 	if err != nil {
 		return
 	}
+	_ = d.mergeTrackGenresFromScan(ctx, trackID, albumID, tagGenreScan)
 	return
 }
 
@@ -737,8 +742,13 @@ func (d *DB) GetAlbum(ctx context.Context, id uuid.UUID) (Album, error) {
 			(a.meta_user_title IS NOT NULL AND BTRIM(COALESCE(a.meta_user_title, '')) <> '') AS pin_t,
 			(a.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(a.meta_user_artist, '')) <> '') AS pin_ar,
 			(a.meta_user_year IS NOT NULL) AS pin_y,
-			COALESCE(NULLIF(BTRIM(a.meta_user_genre), ''), NULLIF(BTRIM(a.genre), '')) AS disp_genre,
-			(a.meta_user_genre IS NOT NULL AND BTRIM(COALESCE(a.meta_user_genre, '')) <> '') AS pin_genre,
+			(
+				SELECT NULLIF(trim(both FROM string_agg(lg.label, '|||' ORDER BY ag.position ASC, lg.normalized ASC)), '')
+				FROM album_genres ag
+				JOIN library_genres lg ON lg.id = ag.genre_id
+				WHERE ag.album_id = a.id
+			) AS disp_genres,
+			EXISTS (SELECT 1 FROM album_genres ag2 WHERE ag2.album_id = a.id) AS pin_genres,
 			a.meta_cover_locked AS pin_cov
 		FROM albums a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
@@ -818,8 +828,13 @@ func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]A
 			(a.meta_user_title IS NOT NULL AND BTRIM(COALESCE(a.meta_user_title, '')) <> '') AS pin_t,
 			(a.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(a.meta_user_artist, '')) <> '') AS pin_ar,
 			(a.meta_user_year IS NOT NULL) AS pin_y,
-			COALESCE(NULLIF(BTRIM(a.meta_user_genre), ''), NULLIF(BTRIM(a.genre), '')) AS disp_genre,
-			(a.meta_user_genre IS NOT NULL AND BTRIM(COALESCE(a.meta_user_genre, '')) <> '') AS pin_genre,
+			(
+				SELECT NULLIF(trim(both FROM string_agg(lg.label, '|||' ORDER BY ag.position ASC, lg.normalized ASC)), '')
+				FROM album_genres ag
+				JOIN library_genres lg ON lg.id = ag.genre_id
+				WHERE ag.album_id = a.id
+			) AS disp_genres,
+			EXISTS (SELECT 1 FROM album_genres ag2 WHERE ag2.album_id = a.id) AS pin_genres,
 			a.meta_cover_locked AS pin_cov
 		FROM ranked a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
@@ -844,15 +859,18 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 		var aid sql.NullString
 		var dispAn sql.NullString
 		var mb, cp sql.NullString
-		var dispGenre sql.NullString
-		var pinT, pinAr, pinY, pinGenre, pinCov bool
-		if err := rows.Scan(&a.ID, &dispTitle, &dispY, &aid, &dispAn, &mb, &cp, &pinT, &pinAr, &pinY, &dispGenre, &pinGenre, &pinCov); err != nil {
+		var dispGenres sql.NullString
+		var pinT, pinAr, pinY, pinGenres, pinCov bool
+		if err := rows.Scan(&a.ID, &dispTitle, &dispY, &aid, &dispAn, &mb, &cp, &pinT, &pinAr, &pinY, &dispGenres, &pinGenres, &pinCov); err != nil {
 			return nil, err
 		}
 		a.Title = dispTitle
-		if dispGenre.Valid && strings.TrimSpace(dispGenre.String) != "" {
-			s := strings.TrimSpace(dispGenre.String)
-			a.Genre = &s
+		if dispGenres.Valid && strings.TrimSpace(dispGenres.String) != "" {
+			for _, x := range strings.Split(dispGenres.String, "|||") {
+				if t := strings.TrimSpace(x); t != "" {
+					a.Genres = append(a.Genres, t)
+				}
+			}
 		}
 		if dispY.Valid {
 			yy := int(dispY.Int64)
@@ -876,8 +894,8 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 			s := mb.String
 			a.MusicBrainzRelease = &s
 		}
-		if pinT || pinAr || pinY || pinGenre || pinCov {
-			a.Meta = &AlbumMetaPins{Title: pinT, Artist: pinAr, Year: pinY, Genre: pinGenre, Cover: pinCov}
+		if pinT || pinAr || pinY || pinGenres || pinCov {
+			a.Meta = &AlbumMetaPins{Title: pinT, Artist: pinAr, Year: pinY, Genre: pinGenres, Cover: pinCov}
 		}
 		out = append(out, a)
 	}
@@ -901,6 +919,8 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID *uu
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
+			`+sqlDispTrackGenres+`,
+			t.genres_manual AS pin_genres,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -967,12 +987,7 @@ func (d *DB) GetAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID) ([
 				NULLIF(BTRIM(t.tag_album_artist), ''),
 				BTRIM(COALESCE(aal.name, ''))
 			) AS disp_aa,
-			COALESCE(
-				NULLIF(BTRIM(CASE WHEN al.meta_user_genre IS NOT NULL AND BTRIM(COALESCE(al.meta_user_genre, '')) <> ''
-					THEN al.meta_user_genre ELSE NULL END), ''),
-				NULLIF(BTRIM(t.tag_genre), ''),
-				NULLIF(BTRIM(al.genre), '')
-			) AS disp_genre,
+			` + sqlDispImprintGenre + `,
 			BTRIM(COALESCE(t.tag_composer, '')) AS disp_composer,
 			BTRIM(COALESCE(t.tag_comment, '')) AS disp_comment,
 			CASE WHEN t.meta_user_year IS NOT NULL THEN t.meta_user_year
@@ -1062,11 +1077,15 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
 		var artPath sql.NullString
-		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc bool
+		var dispGenres sql.NullString
+		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc, pinGenres bool
 		if err := rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &artPath,
+			&dispGenres,
+			&pinGenres,
 			&pinTitle, &pinArtist, &pinAlbum, &pinYear, &pinTn, &pinDisc); err != nil {
 			return nil, err
 		}
+		t.Genres = splitDispGenresAgg(dispGenres)
 		if title.Valid {
 			s := title.String
 			t.Title = &s
@@ -1120,10 +1139,11 @@ func scanTrackRows(rows pgx.Rows) ([]Track, error) {
 			s := "/api/tracks/" + t.ID.String() + "/cover"
 			t.CoverURL = &s
 		}
-		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || artHas {
+		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || pinGenres || artHas {
 			t.Meta = &TrackMetaPins{
 				Title: pinTitle, Artist: pinArtist, Album: pinAlbum,
-				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc, Art: artHas,
+				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc,
+				Genres: pinGenres, Art: artHas,
 			}
 		}
 		out = append(out, t)
@@ -1376,6 +1396,15 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 			return e
 		}
 	}
+	if u.Genres != nil {
+		if err := d.ReplaceTrackGenres(ctx, trackID, *u.Genres, true); err != nil {
+			return err
+		}
+	} else if u.ClearGenres {
+		if err := d.inheritTrackGenresFromAlbum(ctx, trackID); err != nil {
+			return err
+		}
+	}
 	_ = d.CleanupOrphanAlbums(ctx)
 	return nil
 }
@@ -1384,15 +1413,15 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 func (d *DB) UpdateAlbumMeta(ctx context.Context, albumID uuid.UUID, u AlbumMetaUpdate) error {
 	var curTitle string
 	var curArtID sql.NullString
-	var muT, muAr, muG sql.NullString
+	var muT, muAr sql.NullString
 	var muY sql.NullInt32
 
 	err := d.Pool.QueryRow(ctx, `
 		SELECT a.title, a.artist_id::text,
-			a.meta_user_title, a.meta_user_artist, a.meta_user_year, a.meta_user_genre
+			a.meta_user_title, a.meta_user_artist, a.meta_user_year
 		FROM albums a WHERE a.id = $1`,
 		albumID,
-	).Scan(&curTitle, &curArtID, &muT, &muAr, &muY, &muG)
+	).Scan(&curTitle, &curArtID, &muT, &muAr, &muY)
 	if err != nil {
 		return err
 	}
@@ -1405,9 +1434,6 @@ func (d *DB) UpdateAlbumMeta(ctx context.Context, albumID uuid.UUID, u AlbumMeta
 	}
 	if u.ClearYear {
 		muY = sql.NullInt32{}
-	}
-	if u.ClearGenre {
-		muG = sql.NullString{}
 	}
 
 	if u.Title != nil {
@@ -1428,14 +1454,6 @@ func (d *DB) UpdateAlbumMeta(ctx context.Context, albumID uuid.UUID, u AlbumMeta
 	}
 	if u.Year != nil {
 		muY = sql.NullInt32{Int32: int32(*u.Year), Valid: true}
-	}
-	if u.Genre != nil {
-		s := strings.TrimSpace(*u.Genre)
-		if s == "" {
-			muG = sql.NullString{}
-		} else {
-			muG = sql.NullString{String: s, Valid: true}
-		}
 	}
 
 	var artArg interface{}
@@ -1469,25 +1487,29 @@ func (d *DB) UpdateAlbumMeta(ctx context.Context, albumID uuid.UUID, u AlbumMeta
 			artist_id = $5,
 			title_search = $6,
 			cover_path = CASE WHEN $7 THEN NULL ELSE cover_path END,
-			meta_cover_locked = CASE WHEN $7 THEN false ELSE meta_cover_locked END,
-			meta_user_genre = $8
+			meta_cover_locked = CASE WHEN $7 THEN false ELSE meta_cover_locked END
 		WHERE id = $1
-	`, albumID, muT, muAr, muY, artArg, ts, u.ClearCover, muG)
+	`, albumID, muT, muAr, muY, artArg, ts, u.ClearCover)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
-	if u.ClearGenre || u.Genre != nil {
-		var e2 error
-		if !metaPinString(muG) {
-			_, e2 = d.Pool.Exec(ctx, `UPDATE tracks SET tag_genre = NULL WHERE album_id = $1`, albumID)
-		} else {
-			_, e2 = d.Pool.Exec(ctx, `UPDATE tracks SET tag_genre = $2 WHERE album_id = $1`, albumID, strings.TrimSpace(muG.String))
+
+	if u.Genres != nil {
+		if err := d.ReplaceAlbumGenres(ctx, albumID, *u.Genres); err != nil {
+			return err
 		}
-		if e2 != nil {
-			return e2
+		if err := d.RolloutAlbumGenresToTracks(ctx, albumID); err != nil {
+			return err
+		}
+	} else if u.ClearGenres {
+		if err := d.ReplaceAlbumGenres(ctx, albumID, nil); err != nil {
+			return err
+		}
+		if err := d.RolloutAlbumGenresToTracks(ctx, albumID); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1687,6 +1709,8 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
+			`+sqlDispTrackGenres+`,
+			t.genres_manual AS pin_genres,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -1716,12 +1740,16 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 		var aID, alID sql.NullString
 		var alT, arN sql.NullString
 		var artPath sql.NullString
-		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc bool
+		var dispGenres sql.NullString
+		var pinTitle, pinArtist, pinAlbum, pinYear, pinTn, pinDisc, pinGenres bool
 		var pos int
 		if err = rows.Scan(&t.ID, &title, &dms, &fmtS, &br, &tno, &dno, &yr, &aID, &alT, &alID, &arN, &artPath,
+			&dispGenres,
+			&pinGenres,
 			&pinTitle, &pinArtist, &pinAlbum, &pinYear, &pinTn, &pinDisc, &pos); err != nil {
 			return p, nil, err
 		}
+		t.Genres = splitDispGenresAgg(dispGenres)
 		if title.Valid {
 			s := title.String
 			t.Title = &s
@@ -1775,10 +1803,11 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 			s := "/api/tracks/" + t.ID.String() + "/cover"
 			t.CoverURL = &s
 		}
-		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || artHas {
+		if pinTitle || pinArtist || pinAlbum || pinYear || pinTn || pinDisc || pinGenres || artHas {
 			t.Meta = &TrackMetaPins{
 				Title: pinTitle, Artist: pinArtist, Album: pinAlbum,
-				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc, Art: artHas,
+				Year: pinYear, TrackNo: pinTn, DiscNo: pinDisc,
+				Genres: pinGenres, Art: artHas,
 			}
 		}
 		tr = append(tr, t)
@@ -2008,6 +2037,8 @@ func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
+			`+sqlDispTrackGenres+`,
+			t.genres_manual AS pin_genres,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
@@ -2052,6 +2083,8 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
+			`+sqlDispTrackGenres+`,
+			t.genres_manual AS pin_genres,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
 			(t.meta_user_album IS NOT NULL AND BTRIM(COALESCE(t.meta_user_album, '')) <> '') AS pin_album,
