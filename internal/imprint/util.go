@@ -11,7 +11,7 @@ import (
 
 func baseName(p string) string {
 	p = strings.ReplaceAll(p, "\\", "/")
-	return store.NormalizeAudioFileName(filepath.Base(p))
+	return store.SanitizeAudioFileBaseName(filepath.Base(p))
 }
 
 func hashBytes(b []byte) string {

@@ -15,10 +15,10 @@ import (
 	"musicsh/internal/store"
 )
 
-// normalizeAudioPathOnDisk renames "Title .mp3" -> "Title.mp3" when the target name is free, and updates DB paths.
+// normalizeAudioPathOnDisk renames bad basenames (trailing space before ext, HTML entities like &#39;) when the target is free, and updates DB paths.
 func normalizeAudioPathOnDisk(ctx context.Context, s *store.DB, path string) (string, error) {
 	base := filepath.Base(path)
-	clean := store.NormalizeAudioFileName(base)
+	clean := store.SanitizeAudioFileBaseName(base)
 	if clean == base {
 		return path, nil
 	}

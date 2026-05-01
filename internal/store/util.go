@@ -1,6 +1,7 @@
 package store
 
 import (
+	"html"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -61,4 +62,10 @@ func NormalizeAudioFileName(name string) string {
 	stem := name[:dot]
 	stem = strings.TrimRight(stem, " \t")
 	return stem + ext
+}
+
+// SanitizeAudioFileBaseName decodes HTML entities in the basename (e.g. &#39; -> ') and trims stray spaces before the extension.
+// Used when renaming library files on scan and for consistent imprint labels.
+func SanitizeAudioFileBaseName(name string) string {
+	return NormalizeAudioFileName(html.UnescapeString(name))
 }

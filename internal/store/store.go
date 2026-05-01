@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
@@ -174,6 +175,9 @@ func (d *DB) ApplyIdentifiedMeta(ctx context.Context, trackID uuid.UUID, title, 
 	artist = strings.TrimSpace(artist)
 	album = strings.TrimSpace(album)
 	title = strings.TrimSpace(title)
+	artist = html.UnescapeString(artist)
+	album = html.UnescapeString(album)
+	title = html.UnescapeString(title)
 
 	// read current + user pin columns
 	var curTitle sql.NullString
@@ -1102,6 +1106,13 @@ func (d *DB) queryAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID, 
 			s := cover.String
 			r.CoverRelPath = &s
 		}
+		r.Title = html.UnescapeString(r.Title)
+		r.ArtistName = html.UnescapeString(r.ArtistName)
+		r.AlbumTitle = html.UnescapeString(r.AlbumTitle)
+		r.AlbumArtist = html.UnescapeString(r.AlbumArtist)
+		r.Genre = html.UnescapeString(r.Genre)
+		r.Composer = html.UnescapeString(r.Composer)
+		r.Comment = html.UnescapeString(r.Comment)
 		out = append(out, r)
 	}
 	return out, rows.Err()
