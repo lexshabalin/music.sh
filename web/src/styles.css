@@ -1163,6 +1163,27 @@ select.lang-select {
 .player-progress-wrap .progress {
   flex: 1 1 auto;
 }
+
+/* Fixed slot so the progress bar doesn’t resize when remote-playback icon mounts/unmounts. */
+.player-remote-slot {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -2px;
+  margin-right: -4px;
+  box-sizing: border-box;
+}
+.player-remote-slot--mini {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .player-remote-indicator {
   width: 24px;
   height: 24px;
@@ -1172,15 +1193,11 @@ select.lang-select {
   justify-content: center;
   color: var(--muted);
   opacity: 0.95;
-  margin-left: -2px;
-  margin-right: -4px;
 }
 
 .player-remote-indicator--mini {
   width: 18px;
   height: 18px;
-  margin-left: 0;
-  margin-right: 0;
   opacity: 0.9;
 }
 .player-remote-indicator--mini svg {

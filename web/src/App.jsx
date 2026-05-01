@@ -1210,11 +1210,13 @@ function Shell({ children }) {
             <IPlus />
           </button>
 
-          {remotePlaybackActive ? (
-            <span className="player-remote-indicator" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
-              <IRemoteDevice />
-            </span>
-          ) : null}
+          <div className="player-remote-slot" aria-hidden={!remotePlaybackActive}>
+            {remotePlaybackActive ? (
+              <span className="player-remote-indicator" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
+                <IRemoteDevice />
+              </span>
+            ) : null}
+          </div>
 
           <div className="muted" style={{ minWidth: 64, textAlign: "right" }}>
             {fmtTime(curT)}
@@ -1324,11 +1326,13 @@ function Shell({ children }) {
               </div>
             </div>
             <div className="player-mini-controls">
-              {remotePlaybackActive ? (
-                <span className="player-remote-indicator player-remote-indicator--mini" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
-                  <IRemoteDevice />
-                </span>
-              ) : null}
+              <div className="player-remote-slot player-remote-slot--mini" aria-hidden={!remotePlaybackActive}>
+                {remotePlaybackActive ? (
+                  <span className="player-remote-indicator player-remote-indicator--mini" title={t("player.playingOnAnotherDevice")} aria-label={t("player.playingOnAnotherDevice")}>
+                    <IRemoteDevice />
+                  </span>
+                ) : null}
+              </div>
               <button
                 className="player-skip"
                 type="button"
