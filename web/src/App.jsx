@@ -50,6 +50,29 @@ function fmtTime(sec) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+/** Wall-clock estimate of server `positionMs` while `isPlaying` (cross-device takeover). */
+function interpolatePlaybackPositionMsFromServer(st) {
+  if (!st) return null;
+  const base = Math.max(0, Number(st.positionMs) || 0);
+  if (!st.isPlaying) return Math.round(base);
+  const updatedAt = Date.parse(st.updatedAt || "") || Date.now();
+  return Math.round(base + Math.max(0, Date.now() - updatedAt));
+}
+
+function seekMediaWhenReady(mediaRef, sec) {
+  if (sec == null || !Number.isFinite(sec)) return;
+  const el = mediaRef?.current;
+  if (!el) return;
+  const s = Math.max(0, sec);
+  const run = () => {
+    try {
+      el.currentTime = s;
+    } catch (_) {}
+  };
+  if (el.readyState >= 1) run();
+  else el.addEventListener("loadedmetadata", run, { once: true });
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -279,24 +302,33 @@ function Shell({ children }) {
     if (!Array.isArray(q) || !q.length || idx < 0 || idx >= q.length) return;
     const el = p.ref.current;
     const cid = getPlaybackClientId();
+    let positionMs = Math.round(Math.max(0, (el?.currentTime || 0) * 1000));
+    try {
+      const st = await playback.get();
+      ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
+      const stCid = (st?.clientId && String(st.clientId)) || "";
+      if (st?.isPlaying && stCid && cid && stCid !== cid) {
+        const fromServer = interpolatePlaybackPositionMsFromServer(st);
+        if (fromServer != null && Number.isFinite(fromServer)) positionMs = Math.max(0, fromServer);
+      }
+    } catch (_) {}
     const body = {
       trackIds: q.map((x) => x.id),
       currentIndex: idx,
-      positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
+      positionMs,
       isPlaying: true,
       clientId: cid,
       ownerEpoch: ownerEpochRef.current,
     };
     try {
       const r = await playback.takeover(body);
-      ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : (ownerEpochRef.current + 1);
+      ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : ownerEpochRef.current + 1;
       takeoverRequestedRef.current = false;
+      seekMediaWhenReady(p.ref, positionMs / 1000);
     } catch (_) {}
   }, [p.queue, p.index, p.ref]);
 
-  const claimPlaybackSync = React.useCallback(() => {
-    releasePlaybackServerSync();
-  }, []);
+  const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
 
   const doLogout = React.useCallback(async () => {
     try {
@@ -366,7 +398,8 @@ function Shell({ children }) {
   }, [isMobile, showMobilePlayer]);
 
   React.useEffect(() => {
-    const onRelease = () => {
+    const onRelease = (ev) => {
+      const acknowledge = typeof ev.detail?.acknowledge === "function" ? ev.detail.acknowledge : null;
       suspendPlaybackPushRef.current = false;
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
@@ -377,11 +410,18 @@ function Shell({ children }) {
       remoteOwnerLockRef.current = null;
       lastRemotePlayingSeenAtRef.current = 0;
       remoteServerPlayingRef.current = false;
-      // Explicit takeover endpoint (atomic intent), then heartbeat.
-      try {
-        void pushTakeoverNow();
-        flushPlaybackRef.current({ forceNow: true, forceTakeover: true });
-      } catch (_) {}
+      void (async () => {
+        try {
+          await pushTakeoverNow();
+          // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
+          // would send isPlaying:false and mute server state the user is about to resume.
+        } catch (_) {
+        } finally {
+          try {
+            acknowledge?.();
+          } catch (_) {}
+        }
+      })();
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
@@ -939,7 +979,7 @@ function Shell({ children }) {
 
     try {
       ms.setActionHandler("play", async () => {
-        releasePlaybackServerSync();
+        await releasePlaybackServerSync();
         const el = p.ref.current;
         if (!el) return;
         const pr = el.play();
@@ -1129,11 +1169,11 @@ function Shell({ children }) {
           <button
             className="player-play"
             type="button"
-            onClick={() => {
+            onClick={async () => {
               const el = p.ref.current;
               if (!el) return;
               if (el.paused) {
-                claimPlaybackSync();
+                await claimPlaybackSync();
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch(() => {
@@ -1357,12 +1397,12 @@ function Shell({ children }) {
               <button
                 className="player-play"
                 type="button"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
                   const el = p.ref.current;
                   if (!el) return;
                   if (el.paused) {
-                    claimPlaybackSync();
+                    await claimPlaybackSync();
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") pr.catch(() => {});
                   } else {
@@ -1599,11 +1639,11 @@ function Shell({ children }) {
                       <button
                         className="player-play"
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const el = p.ref.current;
                           if (!el) return;
                           if (el.paused) {
-                            claimPlaybackSync();
+                            await claimPlaybackSync();
                             const pr = el.play();
                             if (pr && typeof pr.catch === "function") pr.catch(() => {});
                           } else {
