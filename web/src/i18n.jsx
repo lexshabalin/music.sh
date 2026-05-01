@@ -237,6 +237,8 @@ const dict = {
     "album.meta.uploadError": "Ошибка загрузки",
     "album.editButton": "Редактировать альбом",
 
+    "album.imprint.intro":
+      "Предпросмотр перед записью тегов в файлы. Для каждого трека всегда показаны исполнитель, название, альбом и год; остальные поля видны только если значение отличается от текущего в файле. По умолчанию отмечены только изменяющиеся поля. Расширенный режим показывает все поддерживаемые поля.",
     "album.imprint.advanced": "Расширенный режим",
     "album.imprint.advancedHint": "Показать и отредактировать все поддерживаемые поля тегов (даже если они не меняются).",
     "album.imprint.coverEditHint": "Обложка берётся из выбранного источника в библиотеке; хеш нельзя отредактировать вручную.",
@@ -438,6 +440,8 @@ const dict = {
     "album.meta.uploadError": "Upload failed",
     "album.editButton": "Edit album",
 
+    "album.imprint.intro":
+      "Preview before writing tags to files. Artist, title, album, and year appear for every track; other fields only show when the value differs from what is in the file. By default only fields that change are checked. Advanced mode reveals all supported fields.",
     "album.imprint.advanced": "Advanced mode",
     "album.imprint.advancedHint": "Show and edit all supported tag fields (even if unchanged).",
     "album.imprint.coverEditHint": "Cover is taken from the library-selected source; the hash cannot be edited manually.",

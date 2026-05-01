@@ -212,6 +212,9 @@ function imprintFieldLabel(t, field) {
   return lbl !== key ? lbl : field;
 }
 
+// Always listed per track without advanced mode (plus any field that differs from tags).
+const IMPRINT_BASIC_FIELDS = new Set(["artist", "title", "album", "year"]);
+
 function ImprintModal({ albumId, onClose }) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -256,7 +259,7 @@ function ImprintModal({ albumId, onClose }) {
   const visibleDiffs = (tr) => {
     const list = Array.isArray(tr?.diff) ? tr.diff : [];
     if (advanced) return list;
-    return list.filter((d) => !!d?.changed);
+    return list.filter((d) => (d && IMPRINT_BASIC_FIELDS.has(d.field)) || !!d?.changed);
   };
 
   const defaultSelectionForTrack = (tr, adv) => {
@@ -441,7 +444,7 @@ function ImprintModal({ albumId, onClose }) {
       >
         <h3 style={{ marginTop: 0 }}>Imprint metadata</h3>
         <p className="muted" style={{ marginTop: "-0.5rem" }}>
-          Предпросмотр изменений перед записью тегов в файлы. По умолчанию выбраны только поля, которые реально меняются; включите расширенный режим, чтобы увидеть и отредактировать остальные поддерживаемые поля.
+          {t("album.imprint.intro")}
         </p>
         {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
         {!loading ? (
