@@ -1818,6 +1818,7 @@ function Shell({ children }) {
           anchorRef={isMobile && showMobilePlayer ? mobileQueueBtnRef : queueBtnRef}
           items={Array.isArray(p.queue) ? p.queue : []}
           currentIndex={typeof p.index === "number" ? p.index : -1}
+          historyUX={!isMobile}
           onJump={(i) => p.jumpTo(i)}
           onClose={() => setShowQueue(false)}
         />
@@ -2184,9 +2185,10 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
   );
 }
 
-function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
+function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, historyUX = false }) {
   const { t } = useI18n();
   const popRef = React.useRef(null);
+  const activeRowRef = React.useRef(null);
   const [box, setBox] = React.useState(null);
 
   React.useLayoutEffect(() => {
@@ -2227,7 +2229,17 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
     };
   }, [onClose, anchorRef]);
 
+  React.useLayoutEffect(() => {
+    if (!historyUX || !box) return;
+    if (currentIndex < 0 || currentIndex >= items.length) return;
+    const el = activeRowRef.current;
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    el.scrollIntoView({ block: "center", behavior: "auto", inline: "nearest" });
+  }, [historyUX, box, currentIndex, items.length]);
+
   if (!box) return null;
+
+  const playedDim = 0.8; // 20% more muted vs upcoming rows
 
   const panel = (
     <div
@@ -2253,13 +2265,19 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
       {items.length ? (
         items.map((it, i) => {
           const active = i === currentIndex;
+          const isPast = historyUX && currentIndex >= 0 && i < currentIndex;
+          const titleOpacity = active ? 1 : isPast ? 0.95 * playedDim : 0.95;
+          const subExtraDim = isPast ? playedDim : 1;
           const title = it.title || it.label || t("common.track");
           const sub = [it.artist, it.album].filter(Boolean).join(" • ");
           return (
             <button
+              ref={historyUX && active ? activeRowRef : undefined}
               key={it.id + ":" + i}
               type="button"
-              className="queue-item"
+              className={"queue-item" + (isPast ? " queue-item--played" : "")}
+              data-queue-index={i}
+              aria-current={active ? "true" : undefined}
               onClick={() => {
                 onJump(i);
                 onClose();
@@ -2277,8 +2295,12 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose }) {
                 color: "var(--text)",
               }}
             >
-              <div style={{ fontWeight: 700, opacity: active ? 1 : 0.95 }}>{title}</div>
-              {sub ? <div className="muted" style={{ fontSize: 12 }}>{sub}</div> : null}
+              <div style={{ fontWeight: 700, opacity: titleOpacity }}>{title}</div>
+              {sub ? (
+                <div className="muted" style={{ fontSize: 12, opacity: subExtraDim }}>
+                  {sub}
+                </div>
+              ) : null}
             </button>
           );
         })
