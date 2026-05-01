@@ -189,6 +189,13 @@ const dict = {
     "plmodal.createAdd": "Создать и добавить",
 
     "trackmeta.coverHint": "JPEG, PNG или WebP. Не заменяет обложку альбома для других треков. Сканирование библиотеки не удаляет свою обложку.",
+    "trackmeta.coverUrlHint":
+      "Можно вставить ссылку (https): сервер загрузит картинку и сохранит как JPEG.",
+    "trackmeta.coverUrlPlaceholder": "https://…",
+    "trackmeta.coverFromUrl": "Загрузить по ссылке",
+    "trackmeta.coverUrlInvalid": "Некорректная или недоступная ссылка на обложку.",
+    "trackmeta.coverUrlNotImage": "По ссылке не удалось получить поддерживаемое изображение.",
+    "trackmeta.coverUrlFetchFailed": "Не удалось скачать обложку по ссылке (сеть или удалённый сервер).",
     "trackmeta.uploadError": "Ошибка загрузки",
     "trackmeta.title": "Метаданные трека",
     "trackmeta.help": "Сначала укажите исполнителя — подгрузятся альбомы из библиотеки для этого исполнителя. Можно выбрать готовый альбом (трек унаследует его название, год и обложку) или ввести альбом вручную. Текстовые поля и своя обложка не перезаписываются при повторном сканировании.",
@@ -398,6 +405,13 @@ const dict = {
     "plmodal.createAdd": "Create & add",
 
     "trackmeta.coverHint": "JPEG, PNG, or WebP. Does not replace the album cover for other tracks. Library rescan will not remove your custom cover.",
+    "trackmeta.coverUrlHint":
+      "Paste an https URL: the server downloads the image and saves it as JPEG.",
+    "trackmeta.coverUrlPlaceholder": "https://…",
+    "trackmeta.coverFromUrl": "Load from URL",
+    "trackmeta.coverUrlInvalid": "Invalid or disallowed cover URL.",
+    "trackmeta.coverUrlNotImage": "The URL did not yield a supported image.",
+    "trackmeta.coverUrlFetchFailed": "Could not download the cover from the URL (network or remote server error).",
     "trackmeta.uploadError": "Upload failed",
     "trackmeta.title": "Track metadata",
     "trackmeta.help": "Start by setting the artist — albums from your library will load for this artist. You can pick an existing album (the track will inherit its title, year, and cover) or enter album info manually. Text fields and your custom cover are not overwritten on rescan.",

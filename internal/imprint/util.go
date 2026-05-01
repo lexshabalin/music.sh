@@ -20,8 +20,8 @@ func hashBytes(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// absUnderData joins DATA_DIR with a slash-style relative cover path stored in Postgres.
-func absUnderData(dataDir, rel string) string {
+// AbsDataPath joins DATA_DIR with a slash-style relative path stored in Postgres (covers, etc.).
+func AbsDataPath(dataDir, rel string) string {
 	rel = strings.TrimSpace(rel)
 	if rel == "" {
 		return ""
@@ -32,6 +32,32 @@ func absUnderData(dataDir, rel string) string {
 		return ""
 	}
 	return filepath.Join(dataDir, filepath.FromSlash(rel))
+}
+
+func absUnderData(dataDir, rel string) string { return AbsDataPath(dataDir, rel) }
+
+// NormalizeEmbedPictureMIME returns a safe image/* type for ID3/FLAC (APIC) embedding.
+func NormalizeEmbedPictureMIME(m string) string {
+	m = strings.TrimSpace(m)
+	if i := strings.IndexByte(m, ';'); i >= 0 {
+		m = strings.TrimSpace(m[:i])
+	}
+	m = strings.ToLower(m)
+	switch m {
+	case "image/jpg", "image/jpeg", "image/pjpeg":
+		return "image/jpeg"
+	case "image/png", "image/x-png":
+		return "image/png"
+	case "image/webp":
+		return "image/webp"
+	case "image/gif":
+		return "image/gif"
+	default:
+		if strings.HasPrefix(m, "image/") {
+			return m
+		}
+		return ""
+	}
 }
 
 // coverMIME returns image/* from filename; falls back to magic sniff for unknown extensions (e.g. .bin).

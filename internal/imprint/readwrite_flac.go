@@ -224,8 +224,9 @@ func writeFLACTags(path string, desired TrackTarget, writeFields map[Field]bool,
 			}
 		}
 		f.Meta = kept
-		if len(coverBytes) > 0 && strings.HasPrefix(coverMime, "image/") {
-			pic, err := flacpicture.NewFromImageData(flacpicture.PictureTypeFrontCover, "Front cover", coverBytes, coverMime)
+		mime := NormalizeEmbedPictureMIME(coverMime)
+		if len(coverBytes) > 0 && mime != "" {
+			pic, err := flacpicture.NewFromImageData(flacpicture.PictureTypeFrontCover, "Front cover", coverBytes, mime)
 			if err != nil {
 				return warn, err
 			}

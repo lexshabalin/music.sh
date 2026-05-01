@@ -156,10 +156,11 @@ func writeMP3Tags(path string, desired TrackTarget, writeFields map[Field]bool, 
 	}
 	if writeFields[FieldCover] {
 		tag.DeleteFrames(tag.CommonID("Attached picture"))
-		if len(coverBytes) > 0 && strings.HasPrefix(coverMime, "image/") {
+		mime := NormalizeEmbedPictureMIME(coverMime)
+		if len(coverBytes) > 0 && mime != "" {
 			p := id3v2.PictureFrame{
 				Encoding:    tag.DefaultEncoding(),
-				MimeType:    coverMime,
+				MimeType:    mime,
 				PictureType: id3v2.PTFrontCover,
 				Description: "Front cover",
 				Picture:     coverBytes,

@@ -16,6 +16,13 @@ function fmtDur(ms) {
   return `${mm}:${ss}`;
 }
 
+/** Bust browser cache after uploading a new cover (URL unchanged). */
+function trackCoverImgSrc(trackId, cacheBust) {
+  const u = lib.trackCoverUrl(trackId);
+  if (!cacheBust) return u;
+  return u + (u.includes("?") ? "&" : "?") + "_=" + cacheBust;
+}
+
 const durationCache = new Map();
 
 function useLazyDurationMs(trackId, knownDurationMs) {
@@ -495,6 +502,8 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
   const [libraryAlbumId, setLibraryAlbumId] = useState("");
   const [genreStr, setGenreStr] = useState("");
   const [genreOpts, setGenreOpts] = useState([]);
+  const [coverUrlInput, setCoverUrlInput] = useState("");
+  const [artVersion, setArtVersion] = useState(0);
 
   const applyAlbumStateFromTrack = (t, albs) => {
     const list = Array.isArray(albs) ? albs : [];
@@ -561,6 +570,8 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
       try {
         const t = await lib.track(trackId);
         if (cancelled || !t) return;
+        setCoverUrlInput("");
+        setArtVersion(0);
         setGenreStr(genresToInputValue(t.genres));
         setFull(t);
         setTitle(t.title || "");
@@ -834,7 +845,7 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
                 {full?.coverUrl || m?.art ? (
                   <img
-                    src={lib.trackCoverUrl(trackId)}
+                    src={trackCoverImgSrc(trackId, artVersion)}
                     alt=""
                     style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }}
                   />
@@ -853,8 +864,9 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                     setErr("");
                     try {
                       await lib.uploadTrackCover(trackId, file);
-                      const t = await lib.track(trackId);
-                      setFull(t);
+                      const tr = await lib.track(trackId);
+                      setFull(tr);
+                      setArtVersion((v) => v + 1);
                       onSaved();
                     } catch (err2) {
                       setErr(err2.message || t("trackmeta.uploadError"));
@@ -862,6 +874,52 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                     setBusy(false);
                   }}
                 />
+              </div>
+              <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 6 }}>
+                {t("trackmeta.coverUrlHint")}
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 6,
+                }}
+              >
+                <input
+                  type="url"
+                  value={coverUrlInput}
+                  onChange={(e) => setCoverUrlInput(e.target.value)}
+                  placeholder={t("trackmeta.coverUrlPlaceholder")}
+                  disabled={busy}
+                  style={{ minWidth: 200, flex: "1 1 180px", maxWidth: "100%" }}
+                />
+                <button
+                  type="button"
+                  disabled={busy || !coverUrlInput.trim()}
+                  onClick={async () => {
+                    setBusy(true);
+                    setErr("");
+                    try {
+                      await lib.uploadTrackCoverFromUrl(trackId, coverUrlInput);
+                      setCoverUrlInput("");
+                      const tr = await lib.track(trackId);
+                      setFull(tr);
+                      setArtVersion((v) => v + 1);
+                      onSaved();
+                    } catch (ex) {
+                      let msg = ex.message || t("trackmeta.uploadError");
+                      if (ex.httpStatus === 502) msg = t("trackmeta.coverUrlFetchFailed");
+                      if (msg === "bad url" || msg === "json") msg = t("trackmeta.coverUrlInvalid");
+                      if (msg === "image") msg = t("trackmeta.coverUrlNotImage");
+                      setErr(msg);
+                    }
+                    setBusy(false);
+                  }}
+                >
+                  {t("trackmeta.coverFromUrl")}
+                </button>
               </div>
               <span className="muted" style={{ fontSize: "0.85rem", display: "block", marginTop: 6 }}>
                 {t("trackmeta.coverHint")}

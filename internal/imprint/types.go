@@ -57,8 +57,9 @@ type TrackDryRun struct {
 }
 
 type AlbumDryRun struct {
-	AlbumID          uuid.UUID      `json:"albumId"`
-	AvailableFields  []Field        `json:"availableFields"`
-	Tracks           []TrackDryRun  `json:"tracks"`
+	AlbumID              uuid.UUID     `json:"albumId"`
+	AlbumHasStoredCover bool          `json:"albumHasStoredCover,omitempty"`
+	AvailableFields      []Field       `json:"availableFields"`
+	Tracks               []TrackDryRun `json:"tracks"`
 }
 

@@ -296,11 +296,14 @@ function ImprintModal({ albumId, onClose }) {
     return list.filter((d) => (d && IMPRINT_BASIC_FIELDS.has(d.field)) || !!d?.changed);
   };
 
-  const defaultSelectionForTrack = (tr, adv) => {
+  const defaultSelectionForTrack = (tr, adv, albumHasStoredCover) => {
     const m = {};
     for (const it of Array.isArray(tr?.diff) ? tr.diff : []) {
       if (!it?.supported) continue;
-      if (adv || it.changed) m[it.field] = true;
+      const imprintCoverDefault = !adv && albumHasStoredCover && it.field === "cover";
+      if (adv || it.changed || imprintCoverDefault) {
+        m[it.field] = true;
+      }
     }
     return m;
   };
@@ -315,12 +318,12 @@ function ImprintModal({ albumId, onClose }) {
         const d = await lib.albumImprintDryRun(albumId);
         if (cancelled) return;
         setDry(d);
+        const ah = !!d.albumHasStoredCover;
         const nextSel = {};
         const nextOv = {};
         for (const tr of Array.isArray(d?.tracks) ? d.tracks : []) {
-          // Initial selection should reflect "simple mode" (changed fields only),
-          // then the advanced toggle effect can expand selection if needed.
-          nextSel[tr.trackId] = defaultSelectionForTrack(tr, false);
+          // Include cover when the album image exists on disk (embed into files by default).
+          nextSel[tr.trackId] = defaultSelectionForTrack(tr, false, ah);
           const o = {};
           for (const it of Array.isArray(tr?.diff) ? tr.diff : []) {
             if (!it?.field) continue;
@@ -343,10 +346,11 @@ function ImprintModal({ albumId, onClose }) {
 
   useEffect(() => {
     if (!dry?.tracks) return;
+    const ah = !!dry.albumHasStoredCover;
     setSel((prev) => {
       const next = { ...prev };
       for (const tr of dry.tracks) {
-        next[tr.trackId] = defaultSelectionForTrack(tr, advanced);
+        next[tr.trackId] = defaultSelectionForTrack(tr, advanced, ah);
       }
       return next;
     });

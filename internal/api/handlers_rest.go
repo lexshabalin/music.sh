@@ -158,7 +158,9 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	if up.ClearCover {
 		if rel, err := a.DB.GetAlbumCoverPath(r.Context(), id); err == nil && strings.TrimSpace(rel) != "" {
-			_ = os.Remove(filepath.Join(a.DataDir, rel))
+			if abs := imprint.AbsDataPath(a.DataDir, rel); abs != "" {
+				_ = os.Remove(abs)
+			}
 		}
 	}
 	if err := a.DB.UpdateAlbumMeta(r.Context(), id, up); err != nil {
@@ -181,7 +183,7 @@ func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
 	JSON(w, 200, ao)
 }
 
-type albumCoverFromURLJSON struct {
+type coverURLRequest struct {
 	CoverURL string `json:"coverUrl"`
 }
 
@@ -193,11 +195,18 @@ func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []by
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if rel, err := a.DB.GetAlbumCoverPath(ctx, id); err == nil && strings.TrimSpace(rel) != "" {
-		_ = os.Remove(filepath.Join(a.DataDir, rel))
+	storeRel := "covers/" + id.String() + ".jpg"
+	if cur, err := a.DB.GetAlbumCoverPath(ctx, id); err == nil && strings.TrimSpace(cur) != "" {
+		if filepath.ToSlash(strings.TrimSpace(cur)) != storeRel {
+			if oldAbs := imprint.AbsDataPath(a.DataDir, cur); oldAbs != "" {
+				_ = os.Remove(oldAbs)
+			}
+		}
 	}
-	rel := filepath.Join("covers", id.String()+".jpg")
-	abs := filepath.Join(a.DataDir, rel)
+	abs := imprint.AbsDataPath(a.DataDir, storeRel)
+	if abs == "" {
+		return errors.New("bad cover path")
+	}
 	tmp := abs + ".tmp"
 	if err := os.WriteFile(tmp, jpeg, 0o644); err != nil {
 		return err
@@ -206,7 +215,58 @@ func (a *App) persistAlbumCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []by
 		_ = os.Remove(tmp)
 		return err
 	}
-	return a.DB.SetAlbumCoverUser(ctx, id, rel)
+	return a.DB.SetAlbumCoverUser(ctx, id, storeRel)
+}
+
+func (a *App) persistTrackCoverJPEG(ctx context.Context, id uuid.UUID, jpeg []byte) error {
+	if len(jpeg) == 0 {
+		return errors.New("empty jpeg")
+	}
+	dir := filepath.Join(a.DataDir, "covers", "tracks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	storeRel := "covers/tracks/" + id.String() + ".jpg"
+	if oldRel, ok := a.DB.TrackArtRelPath(ctx, id); ok && strings.TrimSpace(oldRel) != "" {
+		if filepath.ToSlash(strings.TrimSpace(oldRel)) != storeRel {
+			if oldAbs := imprint.AbsDataPath(a.DataDir, oldRel); oldAbs != "" {
+				_ = os.Remove(oldAbs)
+			}
+		}
+	}
+	abs := imprint.AbsDataPath(a.DataDir, storeRel)
+	if abs == "" {
+		return errors.New("bad cover path")
+	}
+	tmp := abs + ".tmp"
+	if err := os.WriteFile(tmp, jpeg, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, abs); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return a.DB.SetTrackArtPath(ctx, id, storeRel)
+}
+
+func (a *App) inheritAlbumCoverOntoTrack(ctx context.Context, trackID, albumID uuid.UUID) {
+	relAl, err := a.DB.GetAlbumCoverPath(ctx, albumID)
+	if err != nil || strings.TrimSpace(relAl) == "" {
+		return
+	}
+	absAl := imprint.AbsDataPath(a.DataDir, relAl)
+	if absAl == "" {
+		return
+	}
+	raw, err := os.ReadFile(absAl)
+	if err != nil || len(raw) == 0 {
+		return
+	}
+	jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+	if err != nil {
+		return
+	}
+	_ = a.persistTrackCoverJPEG(ctx, trackID, jpeg)
 }
 
 func (a *App) uploadAlbumCover(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +283,7 @@ func (a *App) uploadAlbumCover(w http.ResponseWriter, r *http.Request) {
 
 	ctype := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 	if strings.HasPrefix(ctype, "application/json") {
-		var body albumCoverFromURLJSON
+		var body coverURLRequest
 		dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&body); err != nil {
@@ -308,7 +368,9 @@ func (a *App) deleteAlbumCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rel, err := a.DB.GetAlbumCoverPath(r.Context(), id); err == nil && strings.TrimSpace(rel) != "" {
-		_ = os.Remove(filepath.Join(a.DataDir, rel))
+		if abs := imprint.AbsDataPath(a.DataDir, rel); abs != "" {
+			_ = os.Remove(abs)
+		}
 	}
 	if err := a.DB.ClearAlbumCover(r.Context(), id); err != nil {
 		JSONError(w, 500, "db")
@@ -464,7 +526,9 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	if up.ClearArt {
 		if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
-			_ = os.Remove(filepath.Join(a.DataDir, rel))
+			if abs := imprint.AbsDataPath(a.DataDir, rel); abs != "" {
+				_ = os.Remove(abs)
+			}
 		}
 	}
 	if err := a.DB.UpdateTrackMeta(r.Context(), id, up); err != nil {
@@ -478,6 +542,9 @@ func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
 		}
 		JSONError(w, 500, "db")
 		return
+	}
+	if up.AlbumID != nil && !up.ClearArt {
+		a.inheritAlbumCoverOntoTrack(r.Context(), id, *up.AlbumID)
 	}
 	t, err := a.DB.GetTrackByID(r.Context(), id)
 	if err != nil {
@@ -551,7 +618,11 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "no cover")
 		return
 	}
-	abs := filepath.Join(a.DataDir, rel)
+	abs := imprint.AbsDataPath(a.DataDir, rel)
+	if abs == "" {
+		JSONError(w, 404, "file")
+		return
+	}
 	if r.Method == http.MethodHead {
 		fi, err := os.Stat(abs)
 		if err != nil {
@@ -602,7 +673,11 @@ func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "no cover")
 		return
 	}
-	abs := filepath.Join(a.DataDir, rel)
+	abs := imprint.AbsDataPath(a.DataDir, rel)
+	if abs == "" {
+		JSONError(w, 404, "file")
+		return
+	}
 	fi, err := os.Stat(abs)
 	if err != nil {
 		JSONError(w, 404, "file")
@@ -635,6 +710,39 @@ func (a *App) uploadTrackCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "not found")
 		return
 	}
+	ctx := r.Context()
+	ctype := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(ctype, "application/json") {
+		var body coverURLRequest
+		dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
+			JSONError(w, 400, "json")
+			return
+		}
+		raw, err := coverproc.FetchImageURL(ctx, body.CoverURL)
+		if err != nil {
+			switch {
+			case errors.Is(err, coverproc.ErrCoverURL), errors.Is(err, coverproc.ErrCoverHost):
+				JSONError(w, 400, "bad url")
+			default:
+				JSONError(w, 502, "fetch")
+			}
+			return
+		}
+		jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+		if err != nil {
+			JSONError(w, 400, "image")
+			return
+		}
+		if err := a.persistTrackCoverJPEG(ctx, id, jpeg); err != nil {
+			JSONError(w, 500, "write")
+			return
+		}
+		a.jsonTrackOut(w, ctx, id)
+		return
+	}
+
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		JSONError(w, 400, "bad multipart")
 		return
@@ -648,75 +756,25 @@ func (a *App) uploadTrackCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-
-	buf := make([]byte, 512)
-	n, readErr := f.Read(buf)
-	if readErr != nil && readErr != io.EOF {
-		JSONError(w, 400, "read")
-		return
-	}
-	if n == 0 {
+	raw, err := io.ReadAll(io.LimitReader(f, 22<<20))
+	if err != nil || len(raw) == 0 {
 		JSONError(w, 400, "empty file")
 		return
 	}
-	ct := http.DetectContentType(buf[:n])
-	if !strings.HasPrefix(ct, "image/") {
+	jpeg, err := coverproc.NormalizeAlbumCoverFromBytes(raw)
+	if err != nil {
 		JSONError(w, 400, "invalid image")
 		return
 	}
-	var ext string
-	switch ct {
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/png":
-		ext = ".png"
-	case "image/webp":
-		ext = ".webp"
-	default:
-		JSONError(w, 400, "unsupported image type")
+	if err := a.persistTrackCoverJPEG(ctx, id, jpeg); err != nil {
+		JSONError(w, 500, "write")
 		return
 	}
+	a.jsonTrackOut(w, ctx, id)
+}
 
-	dir := filepath.Join(a.DataDir, "covers", "tracks")
-	_ = os.MkdirAll(dir, 0o755)
-	if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
-		_ = os.Remove(filepath.Join(a.DataDir, rel))
-	}
-	rel := filepath.Join("covers", "tracks", id.String()+ext)
-	abs := filepath.Join(a.DataDir, rel)
-	tmp := abs + ".tmp"
-	out, err := os.Create(tmp)
-	if err != nil {
-		JSONError(w, 500, "write")
-		return
-	}
-	if _, err = out.Write(buf[:n]); err != nil {
-		_ = out.Close()
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if _, err = io.Copy(out, f); err != nil {
-		_ = out.Close()
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err = out.Close(); err != nil {
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err = os.Rename(tmp, abs); err != nil {
-		_ = os.Remove(tmp)
-		JSONError(w, 500, "write")
-		return
-	}
-	if err := a.DB.SetTrackArtPath(r.Context(), id, rel); err != nil {
-		JSONError(w, 500, "db")
-		return
-	}
-	t, err := a.DB.GetTrackByID(r.Context(), id)
+func (a *App) jsonTrackOut(w http.ResponseWriter, ctx context.Context, trackID uuid.UUID) {
+	t, err := a.DB.GetTrackByID(ctx, trackID)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
@@ -731,7 +789,9 @@ func (a *App) deleteTrackCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rel, ok := a.DB.TrackArtRelPath(r.Context(), id); ok {
-		_ = os.Remove(filepath.Join(a.DataDir, rel))
+		if abs := imprint.AbsDataPath(a.DataDir, rel); abs != "" {
+			_ = os.Remove(abs)
+		}
 	}
 	if err := a.DB.ClearTrackArtPath(r.Context(), id); err != nil {
 		JSONError(w, 500, "db")
@@ -798,6 +858,13 @@ func (a *App) albumImprintDryRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dr.AlbumID = albumID
+	if rel, err := a.DB.GetAlbumCoverPath(r.Context(), albumID); err == nil && strings.TrimSpace(rel) != "" {
+		if abs := imprint.AbsDataPath(a.DataDir, rel); abs != "" {
+			if st, err := os.Stat(abs); err == nil && st.Size() > 0 {
+				dr.AlbumHasStoredCover = true
+			}
+		}
+	}
 	JSON(w, 200, dr)
 }
 

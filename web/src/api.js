@@ -143,6 +143,12 @@ export const lib = {
     fd.append("art", file);
     return req("/api/tracks/" + id + "/cover", { method: "POST", body: fd });
   },
+  /** Download image from HTTPS URL, normalize to JPEG on server, save as track cover. */
+  uploadTrackCoverFromUrl: (id, coverUrl) =>
+    req("/api/tracks/" + id + "/cover", {
+      method: "POST",
+      body: JSON.stringify({ coverUrl: coverUrl?.trim() || "" }),
+    }),
   deleteTrackCover: (id) => req("/api/tracks/" + id + "/cover", { method: "DELETE" }),
   trackCoverUrl: (id) => {
     const t = getToken();

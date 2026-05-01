@@ -59,7 +59,7 @@ func DryRunAlbum(targets []TrackTarget, dataDir string) (AlbumDryRun, error) {
 			} else if len(b) > 0 {
 				coverBytes = b
 				desiredCoverHash = hashBytes(b)
-				coverMime = coverMIME(abs, b)
+				coverMime = NormalizeEmbedPictureMIME(coverMIME(abs, b))
 			}
 		}
 

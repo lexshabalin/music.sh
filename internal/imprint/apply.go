@@ -42,8 +42,8 @@ func ApplySelection(targets []TrackTarget, dataDir string, selection map[string]
 						res.Warnings = append(res.Warnings, "read cover: "+err.Error())
 					} else {
 						coverBytes = b
-						coverMime = coverMIME(abs, b)
-						if coverMime == "" || !strings.HasPrefix(coverMime, "image/") {
+						coverMime = NormalizeEmbedPictureMIME(coverMIME(abs, b))
+						if coverMime == "" {
 							res.Warnings = append(res.Warnings, "cover mime unknown; skipping cover")
 							sel[FieldCover] = false
 						}

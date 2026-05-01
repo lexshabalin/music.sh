@@ -246,8 +246,10 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 
 	args := []string{"-y", "-nostdin", "-loglevel", "error", "-i", path}
 	coverPath := ""
-	if writeFields[FieldCover] && len(coverBytes) > 0 && strings.HasPrefix(coverMime, "image/") {
-		cf, err := os.CreateTemp(dir, ".musicsh-cover-in-*"+extForCoverTemp(coverMime))
+	hasCoverIn := false
+	embedMime := NormalizeEmbedPictureMIME(coverMime)
+	if writeFields[FieldCover] && len(coverBytes) > 0 && embedMime != "" {
+		cf, err := os.CreateTemp(dir, ".musicsh-cover-in-*"+extForCoverTemp(embedMime))
 		if err != nil {
 			return warn, err
 		}
@@ -264,6 +266,7 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 		defer os.Remove(coverPath)
 
 		args = append(args, "-i", coverPath)
+		hasCoverIn = true
 	}
 	args = append(args, "-map_metadata", "0")
 
@@ -271,7 +274,7 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 	switch {
 	case writeFields[FieldCover] && len(coverBytes) == 0:
 		args = append(args, "-map", "0:a", "-codec", "copy")
-	case writeFields[FieldCover] && len(coverBytes) > 0:
+	case writeFields[FieldCover] && hasCoverIn:
 		args = append(args,
 			"-map", "0:a",
 			"-map", "1",
