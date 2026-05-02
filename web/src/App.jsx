@@ -903,26 +903,11 @@ function Shell({ children }) {
     };
   }, [p.current?.id]);
 
-  // iOS Safari in background is more reliable when we keep one audio element
-  // and explicitly resume playback after source switch.
-  React.useEffect(() => {
-    const el = p.ref.current;
-    if (!el || !p.current?.id) return;
-    if (skipAutoplayOnceRef.current) {
-      skipAutoplayOnceRef.current = false;
-      return;
-    }
-    const pr = el.play?.();
-    if (pr && typeof pr.catch === "function") {
-      pr.catch(() => {
-        // Ignore: browser can block autoplay until user interaction.
-      });
-    }
-  }, [p.current?.id]);
-
   // After each track (or queue index) change: start at 0 unless we have a valid reload/cross-device restore pending.
   // Also gates late metadata/takeover seeks via playbackSwitchEpochRef.
-  React.useEffect(() => {
+  // useLayoutEffect so currentTime is set before the useEffect below calls play(); otherwise the new track can
+  // start at the previous track's position (same <audio> element retains currentTime until seek runs).
+  React.useLayoutEffect(() => {
     const el = p.ref.current;
     const id = p.current?.id;
     if (!el || !id) return;
@@ -956,6 +941,23 @@ function Shell({ children }) {
     else el.addEventListener("loadedmetadata", apply, { once: true });
     return () => el.removeEventListener("loadedmetadata", apply);
   }, [p.current?.id, p.index]);
+
+  // iOS Safari in background is more reliable when we keep one audio element
+  // and explicitly resume playback after source switch.
+  React.useEffect(() => {
+    const el = p.ref.current;
+    if (!el || !p.current?.id) return;
+    if (skipAutoplayOnceRef.current) {
+      skipAutoplayOnceRef.current = false;
+      return;
+    }
+    const pr = el.play?.();
+    if (pr && typeof pr.catch === "function") {
+      pr.catch(() => {
+        // Ignore: browser can block autoplay until user interaction.
+      });
+    }
+  }, [p.current?.id]);
 
   React.useEffect(() => {
     const authed = !!getToken();
