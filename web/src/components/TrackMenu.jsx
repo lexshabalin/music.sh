@@ -124,6 +124,8 @@ export function TrackRow({
   isLiked,
   onToggleLike,
   label,
+  /** Plain title without track number prefix; used on album desktop layout when `#` lives in its own column. */
+  titleText,
   isNowPlaying,
   isPlaying,
   columns = "full",
@@ -238,6 +240,13 @@ export function TrackRow({
         onTouchCancel={onLiTouchCancel}
       >
         <div className={`track-grid${columns === "album" ? " track-grid--album" : ""}`}>
+          {columns === "album" ? (
+            <div className="track-col track-num-col muted" aria-hidden="true">
+              {typeof track?.trackNo === "number" && Number.isFinite(track.trackNo)
+                ? String(track.trackNo)
+                : "—"}
+            </div>
+          ) : null}
           <button
             type="button"
             className="track-title track-title-btn"
@@ -250,7 +259,14 @@ export function TrackRow({
             }}
             aria-label={`${t("tracks.playAria")} ${label}`}
           >
-            <span className="track-title-text">{label}</span>
+            {columns === "album" && titleText != null ? (
+              <>
+                <span className="track-title-text track-title-text--album-desktop">{titleText}</span>
+                <span className="track-title-text track-title-text--album-mobile">{label}</span>
+              </>
+            ) : (
+              <span className="track-title-text">{label}</span>
+            )}
             <span className="track-mobile-sub muted">
               {artistName || t("common.unknownArtist")}
               {albumTitle ? ` • ${albumTitle}` : ""}
@@ -390,6 +406,9 @@ export function TrackHeader({
   return (
     <li className="track-header" aria-hidden="true">
       <div className={`track-grid track-grid--header${columns === "album" ? " track-grid--album" : ""}`}>
+        {columns === "album" ? (
+          <div className="track-col track-num-h">{head("trackNo", t("tracks.trackNo"), "")}</div>
+        ) : null}
         <div className="track-col track-title-h">{head("title", t("tracks.title"), "track-title-h")}</div>
         <div className="track-col track-artist-h">{head("artist", t("tracks.artist"), "track-artist-h")}</div>
         {columns === "full" ? (

@@ -930,11 +930,24 @@ select.lang-select {
 }
 .track-grid--album {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(10.5rem, 22%) 4.25rem;
+  grid-template-columns: minmax(2.75rem, max-content) minmax(0, 1fr) minmax(10.5rem, 22%) 4.25rem;
   column-gap: 20px;
   row-gap: 0;
   align-items: center;
   min-width: 0;
+}
+.track-num-col,
+.track-num-h {
+  justify-self: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-right: 2px;
+}
+.track-num-h .track-head-btn {
+  justify-content: flex-end;
+}
+.track-title-text--album-mobile {
+  display: none;
 }
 .track-col {
   min-width: 0;
@@ -1644,6 +1657,15 @@ select.lang-select {
     column-gap: 8px;
     row-gap: 4px;
     align-items: center;
+  }
+  .track-num-col {
+    display: none;
+  }
+  .track-title-text--album-desktop {
+    display: none !important;
+  }
+  .track-title-text--album-mobile {
+    display: block !important;
   }
   .track-artist,
   .track-album {

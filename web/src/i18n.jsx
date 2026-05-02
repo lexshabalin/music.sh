@@ -147,6 +147,7 @@ const dict = {
 
     "tracks.title": "Название",
     "tracks.artist": "Исполнитель",
+    "tracks.trackNo": "№",
     "tracks.album": "Альбом",
     "tracks.time": "Длительность",
     "tracks.like": "Нравится",
@@ -373,6 +374,7 @@ const dict = {
 
     "tracks.title": "Title",
     "tracks.artist": "Artist",
+    "tracks.trackNo": "#",
     "tracks.album": "Album",
     "tracks.time": "Time",
     "tracks.like": "Like",

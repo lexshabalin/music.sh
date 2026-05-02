@@ -681,13 +681,40 @@ function sortTracks(list, key, dir) {
     if (key === "artist") return (t?.artist?.name || "").toString();
     return "";
   };
+  const discVal = (t) => {
+    const n = t?.discNo;
+    return typeof n === "number" && Number.isFinite(n) ? n : 1;
+  };
+  const hasTrackNo = (t) => {
+    const n = t?.trackNo;
+    return typeof n === "number" && Number.isFinite(n);
+  };
+  const trackVal = (t) => {
+    const n = t?.trackNo;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  };
   return a
     .map((t, i) => ({ t, i }))
     .sort((x, y) => {
+      if (key === "trackNo") {
+        const dx = discVal(x.t) - discVal(y.t);
+        if (dx !== 0) return mult * dx;
+        const hx = hasTrackNo(x.t);
+        const hy = hasTrackNo(y.t);
+        if (hx !== hy) return mult * (hx ? -1 : 1);
+        const tx = trackVal(x.t);
+        const ty = trackVal(y.t);
+        if (tx != null && ty != null && tx !== ty) return mult * (tx - ty);
+        if (tx != null && ty == null) return mult * -1;
+        if (tx == null && ty != null) return mult * 1;
+        const s = coll.compare((x.t?.title || "").toString(), (y.t?.title || "").toString());
+        if (s !== 0) return mult * s;
+        return x.i - y.i;
+      }
       const ax = get(x.t);
       const ay = get(y.t);
       const r = coll.compare(ax, ay);
-      return r !== 0 ? r * mult : (x.i - y.i);
+      return r !== 0 ? r * mult : x.i - y.i;
     })
     .map((x) => x.t);
 }
@@ -700,7 +727,7 @@ export function Album() {
   const [editAlbum, setEditAlbum] = useState(false);
   const [imprintOpen, setImprintOpen] = useState(false);
   const [liked, setLiked] = useState(new Set());
-  const [sortKey, setSortKey] = useState("title");
+  const [sortKey, setSortKey] = useState("trackNo");
   const [sortDir, setSortDir] = useState("asc");
   const p = usePlayer();
   const load = () => {
@@ -873,7 +900,10 @@ export function Album() {
             onPlayNext={(trk) => playNext(trk)}
             isLiked={liked.has(t.id)}
             onToggleLike={(id2) => toggleLike(id2)}
-            label={`${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || t("common.untitled")}`}
+            label={
+              `${t.trackNo != null ? t.trackNo + ". " : ""}${t.title || t("common.untitled")}`
+            }
+            titleText={t.title || t("common.untitled")}
             isNowPlaying={p.current?.id === t.id}
             isPlaying={p.isPlaying}
             columns="album"
