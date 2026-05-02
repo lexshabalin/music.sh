@@ -13,18 +13,17 @@ Self‑hosted веб‑приложение для прослушивания м
 
 ## Запуск Docker Compose
 
-1. Создайте папку с музыкой, например `./music`, и укажите путь:
-   `export MUSIC_HOST_DIR=/путь/к/музыке` *(или в `docker-compose.yml` заменьте `source: ./music`)*.
+1. Скопируйте `cp .env.example .env`, задайте **`JWT_SECRET`**, **`MUSIC_HOST_DIR`** (абсолютный путь к каталогу с музыкой на хосте, доступный демону Docker). По желанию смените **`POSTGRES_PASSWORD`**.
 
-2. Запуск:
+2. Запуск (поднимается Postgres 16 и приложение; лимиты `cpus` / `mem_limit` смягчают нагрузку на маленькие VM/hypervisor):
    ```bash
-   docker compose up --build
+   docker compose up --build -d
    ```
 
-3. Веб-интерфейс: [http://localhost:8180](http://localhost:8180)  
-4. Создайте учётку через **Register**, затем **Scan library** на главной.
+3. Веб-интерфейс: [http://localhost:8180](http://localhost:8180)
+4. Создайте учётку через **Register**, затем **Scan library** на главной (автоскан при старте **не** включён в compose по умолчанию — см. **`SCAN_ON_START`**).
 
-`JWT_SECRET` в `docker-compose.yml` **обязательно смените** для публичного сервера.
+Если нужен только образ без compose: см. **`Dockerfile`**. Для публичного сервера **`JWT_SECRET`**, **`POSTGRES_PASSWORD`** и пути к томам нужно усилить.
 
 ## Разработка (без Docker для Go/Node)
 
@@ -51,8 +50,12 @@ Vite проксирует `/api` на `http://127.0.0.1:8080` (см. `web/vite.c
 | `MUSIC_DIR` | Папка с музыкой (только чтение в prod) |
 | `DATA_DIR` | Кэш (обложки) |
 | `CORS_ORIGIN` | Список origin через запятую, по умолчанию `*` в конфиге |
-| `SCAN_ON_START` | `1` = поставить job сканирования при старте |
+| `SCAN_ON_START` | `1` = полный скан библиотеки при каждом старте процесса (осторожно при частых деплоях и больших коллекциях) |
+| `WORKER_CONCURRENCY` | Параллельных обработчиков фоновых джобов (1–8, по умолчанию без env: **3**) |
+| `LIBRARY_SCAN_YIELD_EVERY`, `LIBRARY_SCAN_YIELD_MS` | Умеренное «дыхание» при скане: пауза `…_MS` мс каждые `…_EVERY` аудиофайлов (0 по умолчанию; в **`docker-compose.yml`** заданы мягкие значения) |
 | `HTTP_ADDR` | Адрес прослушивания (по умолчанию `0.0.0.0:8080`) |
+
+Дополнительно при использовании репозиторного **`docker-compose.yml`**: `MUSIC_HOST_DIR`, `POSTGRES_PASSWORD`, опционально `MUSICSH_PORT`.
 
 ## API (кратко)
 

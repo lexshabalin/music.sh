@@ -1,47 +1,58 @@
+# Proxmox / single-node friendly defaults: capped CPU/RAM for the stack, no scan-on-start,
+# paced library scan + fewer concurrent worker jobs (see WORKER_CONCURRENCY).
+#
+# Requires a .env (copy from .env.example) at least:
+#   JWT_SECRET=...
+#   MUSIC_HOST_DIR=/absolute/path/to/music   # readable by Docker
+#
+# Optional: POSTGRES_PASSWORD, MUSICSH_PORT, WORKER_CONCURRENCY, LIBRARY_SCAN_YIELD_*,
+#           ACOUSTID_KEY, SCAN_ON_START=1 via override file — avoid SCAN_ON_START on every redeploy.
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: musicsh
-      POSTGRES_PASSWORD: musicsh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-musicsh}
       POSTGRES_DB: musicsh
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U musicsh -d musicsh"]
-      interval: 3s
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 6
+      start_period: 15s
+    cpus: '1'
+    mem_limit: 512m
 
-  app:
+  musicsh:
     build: .
     restart: unless-stopped
-    # Память: при превышении — OOM-килл контейнера, затем перезапуск (unless-stopped).
-    # CPU: только ограничение доли процессора (throttling), без убийства процесса.
-    # Подберите значения под хост (см. free -h, nproc); для слабого VPS можно 512m и "1.0".
-    cpus: "2.0"
-    mem_limit: 2g
-    ports:
-      - "8180:8080"
-    environment:
-      DATABASE_URL: postgres://musicsh:musicsh@db:5432/musicsh?sslmode=disable
-      JWT_SECRET: change-me-in-production-please-32ch
-      MUSIC_DIR: /music
-      DATA_DIR: /data
-      SCAN_ON_START: "1"
-      # For "Shazam-like" background identification (Chromaprint+AcoustID).
-      # Get a free key: https://acoustid.org/
-      ACOUSTID_KEY: ${ACOUSTID_KEY:-}
-      # Optional: set explicit allowed origins (comma-separated) instead of "*"
-      # CORS_ORIGIN: "https://your-domain.example"
-    volumes:
-      - type: bind
-        source: /share/music
-       #source: ./music 
-        target: /music
-        read_only: true
-      - ./appdata:/data
     depends_on:
       db:
         condition: service_healthy
+    ports:
+      - "${MUSICSH_PORT:-8180}:8080"
+    environment:
+      DATABASE_URL: postgres://musicsh:${POSTGRES_PASSWORD:-musicsh}@db:5432/musicsh?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in project .env}
+      MUSIC_DIR: /music
+      DATA_DIR: /data
+      HTTP_ADDR: "0.0.0.0:8080"
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      LIBRARY_SCAN_YIELD_EVERY: ${LIBRARY_SCAN_YIELD_EVERY:-150}
+      LIBRARY_SCAN_YIELD_MS: ${LIBRARY_SCAN_YIELD_MS:-3}
+      ACOUSTID_KEY: ${ACOUSTID_KEY:-}
+    cpus: '2'
+    mem_limit: 2g
+    volumes:
+      # Writable mount required if you use imprint (writing tags); remove :ro in an override compose file.
+      - ${MUSIC_HOST_DIR:?Set MUSIC_HOST_DIR to the host dir with audio files}:/music:ro
+      - musicsh_data:/data
+
+volumes:
+  pgdata:
+  musicsh_data:

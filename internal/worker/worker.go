@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,9 +37,25 @@ type Worker struct {
 	Cfg Config
 }
 
+func workerConcurrency() int {
+	const def, maxN = 3, 8
+	v := strings.TrimSpace(os.Getenv("WORKER_CONCURRENCY"))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return def
+	}
+	if n > maxN {
+		return maxN
+	}
+	return n
+}
+
 func (h *Worker) Run(ctx context.Context) {
-	// Run up to 3 jobs concurrently (requested parallelism limit).
-	for i := 0; i < 3; i++ {
+	n := workerConcurrency()
+	for i := 0; i < n; i++ {
 		go func() {
 			tick := time.NewTicker(2 * time.Second)
 			defer tick.Stop()
