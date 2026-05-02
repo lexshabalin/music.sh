@@ -1779,6 +1779,24 @@ select.lang-select {
   min-width: 160px;
 }
 
+/* Seek bar: drop extra track/thumb rings (browser defaults + 1px thumb border). */
+.range.mono.progress::-webkit-slider-runnable-track {
+  border: none;
+  box-shadow: none;
+}
+.range.mono.progress::-moz-range-track {
+  border: none;
+  box-shadow: none;
+}
+.range.mono.progress::-webkit-slider-thumb {
+  border: none;
+  box-shadow: none;
+}
+.range.mono.progress::-moz-range-thumb {
+  border: none;
+  box-shadow: none;
+}
+
 .player-skip {
   background: transparent;
   border: none;
