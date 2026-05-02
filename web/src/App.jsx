@@ -241,6 +241,12 @@ function Shell({ children }) {
     jumpToRef.current = p.jumpTo;
   }, [p.queue, p.index, p.jumpTo]);
 
+  /** Latest `p.current.id` for async callbacks (e.g. `pushTakeoverNow`) — closure `p` can be stale after `await`. */
+  const playerCurrentIdRef = React.useRef(p.current?.id ?? null);
+  React.useEffect(() => {
+    playerCurrentIdRef.current = p.current?.id ?? null;
+  }, [p.current?.id]);
+
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
   const takeoverGuardUntilRef = React.useRef(0);
@@ -320,6 +326,7 @@ function Shell({ children }) {
     const q = p.queue;
     const idx = p.index;
     if (!Array.isArray(q) || !q.length || idx < 0 || idx >= q.length) return;
+    const trackIdAtStart = q[idx]?.id;
     const el = p.ref.current;
     const cid = getPlaybackClientId();
     let positionMs = Math.round(Math.max(0, (el?.currentTime || 0) * 1000));
@@ -332,6 +339,11 @@ function Shell({ children }) {
         if (fromServer != null && Number.isFinite(fromServer)) positionMs = Math.max(0, fromServer);
       }
     } catch (_) {}
+    // User may have changed track while awaiting (e.g. next/prev after `claimPlaybackServerSync`). Do not POST stale
+    // state or seek the new track to the previous track's position.
+    if (String(trackIdAtStart ?? "") !== String(playerCurrentIdRef.current ?? "")) {
+      return;
+    }
     const body = {
       trackIds: q.map((x) => x.id),
       currentIndex: idx,
@@ -344,6 +356,9 @@ function Shell({ children }) {
       const r = await playback.takeover(body);
       ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : ownerEpochRef.current + 1;
       takeoverRequestedRef.current = false;
+      if (String(trackIdAtStart ?? "") !== String(playerCurrentIdRef.current ?? "")) {
+        return;
+      }
       const epochAtSeek = playbackSwitchEpochRef.current;
       seekMediaWhenReady(p.ref, positionMs / 1000, () => playbackSwitchEpochRef.current === epochAtSeek);
     } catch (_) {}
@@ -445,7 +460,7 @@ function Shell({ children }) {
         // After refresh/reload we restore queue + position but DO NOT auto-play.
         // iOS Safari + UX: user should explicitly resume.
         skipAutoplayOnceRef.current = true;
-        pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? null;
+        pendingSeekTrackIdRef.current = origId ?? tracks[newIdx]?.id ?? null;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
       } catch (_) {
@@ -918,7 +933,9 @@ function Shell({ children }) {
     let targetSec = 0;
     let clearPendingAfter = false;
     if (pendingSec != null && Number.isFinite(pendingSec)) {
-      if (pendingId == null || pendingId === id) {
+      const want = pendingId != null ? String(pendingId) : "";
+      const got = id != null ? String(id) : "";
+      if (want !== "" && want === got) {
         targetSec = Math.max(0, pendingSec);
         clearPendingAfter = true;
       } else {
