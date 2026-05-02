@@ -57,7 +57,8 @@ services:
     pids_limit: 128
     volumes:
       # Writable mount required if you use imprint — use a compose override and drop :ro.
-      - ${MUSIC_HOST_DIR}:/music:ro
+      - /share/music:/music:ro
+      #- ${MUSIC_HOST_DIR}:/music:ro
       - musicsh_data:/data
 
 volumes:
