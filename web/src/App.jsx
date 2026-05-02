@@ -932,11 +932,26 @@ function Shell({ children }) {
       setPlayErr("");
       p.next();
     };
+    const onSeeked = () => {
+      if (remotePlaybackActiveRef.current) return;
+      try {
+        const ms = navigator.mediaSession;
+        if (!ms?.setPositionState) return;
+        const d =
+          Number.isFinite(el.duration) && el.duration > 0 && el.duration !== Infinity ? el.duration : 0;
+        if (!d) return;
+        const pos = Math.max(0, Math.min(d, el.currentTime || 0));
+        const rate =
+          typeof el.playbackRate === "number" && el.playbackRate > 0 ? el.playbackRate : 1;
+        ms.setPositionState({ duration: d, playbackRate: rate, position: pos });
+      } catch (_) {}
+    };
 
     el.addEventListener("pause", onPause);
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("loadedmetadata", onMeta);
     el.addEventListener("durationchange", onMeta);
+    el.addEventListener("seeked", onSeeked);
     el.addEventListener("ended", onEnded);
     el.addEventListener("error", onError);
 
@@ -950,6 +965,7 @@ function Shell({ children }) {
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("loadedmetadata", onMeta);
       el.removeEventListener("durationchange", onMeta);
+      el.removeEventListener("seeked", onSeeked);
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
     };
@@ -1140,12 +1156,45 @@ function Shell({ children }) {
     } catch (_) {}
     try {
       ms.setActionHandler("seekto", (details) => {
-        releasePlaybackServerSync();
         const el = p.ref.current;
         if (!el) return;
-        if (details?.seekTime != null && Number.isFinite(details.seekTime)) {
-          el.currentTime = Math.max(0, details.seekTime);
+        const raw = details?.seekTime;
+        if (raw == null || !Number.isFinite(raw)) return;
+        let d = Number.isFinite(el.duration) && el.duration > 0 && el.duration !== Infinity ? el.duration : 0;
+        if (!d && Number.isFinite(dur) && dur > 0) d = dur;
+        if (!d || d <= 0) return;
+        const nextSec = Math.max(0, Math.min(raw, d));
+        try {
+          if (details.fastSeek && typeof el.fastSeek === "function") {
+            el.fastSeek(nextSec);
+          } else {
+            el.currentTime = nextSec;
+          }
+        } catch (_) {
+          try {
+            el.currentTime = nextSec;
+          } catch (_) {}
         }
+        if (!remotePlaybackActiveRef.current) {
+          setCurT(nextSec);
+        }
+        // iOS lock screen / Control Center: must refresh position state immediately after a seek or scrub is ignored.
+        const rate =
+          typeof el.playbackRate === "number" && el.playbackRate > 0 ? el.playbackRate : 1;
+        const pushPos = () => {
+          try {
+            if (!ms.setPositionState) return;
+            const pos = Math.max(0, Math.min(d, el.currentTime || nextSec));
+            ms.setPositionState({
+              duration: d,
+              playbackRate: rate,
+              position: pos,
+            });
+          } catch (_) {}
+        };
+        pushPos();
+        queueMicrotask(pushPos);
+        releasePlaybackServerSync();
       });
     } catch (_) {}
 
