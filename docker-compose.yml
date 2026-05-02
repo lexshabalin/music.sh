@@ -17,6 +17,11 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # Память: при превышении — OOM-килл контейнера, затем перезапуск (unless-stopped).
+    # CPU: только ограничение доли процессора (throttling), без убийства процесса.
+    # Подберите значения под хост (см. free -h, nproc); для слабого VPS можно 512m и "1.0".
+    cpus: "2.0"
+    mem_limit: 2g
     ports:
       - "8180:8080"
     environment:
