@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -551,6 +552,31 @@ func sqlNullTrim(s string) interface{} {
 	return s
 }
 
+// TrackUnchangedFingerprint reports whether the DB already has this path with the same
+// size and mtime (typical unchanged file). The scanner skips tag reads and ffprobe in that case.
+func (d *DB) TrackUnchangedFingerprint(ctx context.Context, filePath string, fileSize, mtimeNs int64) (albumID uuid.UUID, unchanged bool, err error) {
+	var aid sql.NullString
+	e := d.Pool.QueryRow(ctx, `
+		SELECT album_id::text FROM tracks
+		WHERE file_path = $1 AND file_size = $2 AND file_mtime_ns = $3
+		LIMIT 1
+	`, filePath, fileSize, mtimeNs).Scan(&aid)
+	if e == pgx.ErrNoRows {
+		return uuid.Nil, false, nil
+	}
+	if e != nil {
+		return uuid.Nil, false, e
+	}
+	if !aid.Valid || aid.String == "" {
+		return uuid.Nil, false, nil
+	}
+	albumID, e = uuid.Parse(aid.String)
+	if e != nil {
+		return uuid.Nil, false, nil
+	}
+	return albumID, true, nil
+}
+
 // UpsertTrack reads metadata from the scanner and inserts or updates a file row.
 func (d *DB) UpsertTrack(
 	ctx context.Context,
@@ -585,17 +611,17 @@ func (d *DB) UpsertTrack(
 	}
 
 	var id uuid.UUID
-	var oldMtime int64
+	var oldMtime, oldSize int64
 	var curAlbumID, curArtistID sql.NullString
 	var curTitle sql.NullString
 	var muTitle, muArtist, muAlbum sql.NullString
 	var muYear, muTrackNo, muDiscNo sql.NullInt32
 	err2 := d.Pool.QueryRow(ctx, `
-		SELECT id, file_mtime_ns, album_id::text, artist_id::text, title,
+		SELECT id, file_mtime_ns, file_size, album_id::text, artist_id::text, title,
 			meta_user_title, meta_user_artist, meta_user_album,
 			meta_user_year, meta_user_track_no, meta_user_disc_no
 		FROM tracks WHERE file_path = $1`, filePath).
-		Scan(&id, &oldMtime, &curAlbumID, &curArtistID, &curTitle,
+		Scan(&id, &oldMtime, &oldSize, &curAlbumID, &curArtistID, &curTitle,
 			&muTitle, &muArtist, &muAlbum, &muYear, &muTrackNo, &muDiscNo)
 	if err2 == nil {
 		trackID = id
@@ -618,7 +644,7 @@ func (d *DB) UpsertTrack(
 		}
 		sameAlbum := curAlbumID.Valid && curAlbumID.String != "" && curAlbumID.String == effectiveTagAlbID.String()
 		sameArtist := curArtistID.Valid && curArtistID.String != "" && curArtistID.String == artistID.String()
-		if oldMtime == mtimeNs {
+		if oldMtime == mtimeNs && oldSize == fileSize {
 			effSameAlbum := sameAlbum || pinAlbum
 			effSameArtist := sameArtist || pinArtist
 			if effSameAlbum && effSameArtist {
@@ -2227,6 +2253,115 @@ func (d *DB) CleanupOrphanAlbums(ctx context.Context) error {
 		DELETE FROM albums a
 		WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = a.id)
 	`)
+	return err
+}
+
+// filePathUnderLibraryRoot returns true if trackPath is inside musicRoot (handles Clean/Abs).
+func filePathUnderLibraryRoot(trackPath, musicRoot string) bool {
+	rootAbs, err := filepath.Abs(filepath.Clean(musicRoot))
+	if err != nil || rootAbs == "" || rootAbs == "." {
+		rootAbs = filepath.Clean(musicRoot)
+	}
+	pathAbs, err := filepath.Abs(filepath.Clean(trackPath))
+	if err != nil {
+		pathAbs = filepath.Clean(trackPath)
+	}
+	rel, err := filepath.Rel(rootAbs, pathAbs)
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
+// DeleteTracksUnderRootNotSeen removes rows for files under musicRoot that were not seen during
+// a full directory walk (removed or renamed off disk). seenPaths keys must be filepath.Clean paths.
+func (d *DB) DeleteTracksUnderRootNotSeen(ctx context.Context, musicRoot string, seenPaths map[string]struct{}) (int64, error) {
+	if musicRoot == "" || seenPaths == nil {
+		return 0, nil
+	}
+	rootAbs, err := filepath.Abs(filepath.Clean(musicRoot))
+	if err != nil {
+		rootAbs = filepath.Clean(musicRoot)
+	}
+	rows, err := d.Pool.Query(ctx, `SELECT id, file_path FROM tracks`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	const batch = 256
+	var ids []uuid.UUID
+	flush := func() (int64, error) {
+		if len(ids) == 0 {
+			return 0, nil
+		}
+		tag, e := d.Pool.Exec(ctx, `DELETE FROM tracks WHERE id = ANY($1::uuid[])`, ids)
+		if e != nil {
+			return 0, e
+		}
+		n := tag.RowsAffected()
+		ids = ids[:0]
+		return n, nil
+	}
+
+	var total int64
+	for rows.Next() {
+		var id uuid.UUID
+		var fp string
+		if err := rows.Scan(&id, &fp); err != nil {
+			return total, err
+		}
+		if !filePathUnderLibraryRoot(fp, rootAbs) {
+			continue
+		}
+		k := filepath.Clean(fp)
+		if _, ok := seenPaths[k]; ok {
+			continue
+		}
+		ids = append(ids, id)
+		if len(ids) >= batch {
+			n, e := flush()
+			total += n
+			if e != nil {
+				return total, e
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return total, err
+	}
+	n, err := flush()
+	total += n
+	return total, err
+}
+
+// PrunePlaybackQueuesRemovedTracks drops missing track UUIDs from saved playback queues.
+func (d *DB) PrunePlaybackQueuesRemovedTracks(ctx context.Context) error {
+	_, err := d.Pool.Exec(ctx, `
+UPDATE user_playback up
+SET
+  track_ids = sa.new_ids,
+  current_index = CASE
+    WHEN cardinality(sa.new_ids) = 0 THEN 0
+    WHEN up.current_index < 0 THEN 0
+    WHEN up.current_index >= cardinality(sa.new_ids) THEN cardinality(sa.new_ids) - 1
+    ELSE up.current_index
+  END,
+  updated_at = NOW()
+FROM (
+  SELECT u.user_id,
+    COALESCE((
+      SELECT array_agg(tt.elem ORDER BY tt.ord)
+      FROM unnest(u.track_ids) WITH ORDINALITY AS tt(elem, ord)
+      INNER JOIN tracks tr ON tr.id = tt.elem
+    ), '{}'::uuid[]) AS new_ids
+  FROM user_playback u
+) sa
+WHERE up.user_id = sa.user_id
+  AND sa.new_ids IS DISTINCT FROM up.track_ids`)
 	return err
 }
 

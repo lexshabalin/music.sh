@@ -7,13 +7,54 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dhowden/tag"
 	"github.com/google/uuid"
 
 	"musicsh/internal/store"
 )
+
+// Yield every N scanned audio files so HDDs can breathe (Linux page cache stays useful on large libraries).
+func scanThrottleMaybe(filesProcessed int) {
+	if filesProcessed <= 0 {
+		return
+	}
+	n := getenvIntPositive("LIBRARY_SCAN_YIELD_EVERY", 0)
+	if n <= 0 {
+		return
+	}
+	ms := getenvIntPositive("LIBRARY_SCAN_YIELD_MS", 0)
+	if ms <= 0 {
+		return
+	}
+	if filesProcessed%n != 0 {
+		return
+	}
+	time.Sleep(time.Duration(ms) * time.Millisecond)
+}
+
+func getenvIntPositive(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	x, err := strconv.Atoi(v)
+	if err != nil || x < 0 {
+		return def
+	}
+	return x
+}
+
+// rememberLibraryPath records a path confirmed on disk during a full walk (after normalize + Stat).
+func rememberLibraryPath(seen map[string]struct{}, path string) {
+	if seen == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	seen[filepath.Clean(path)] = struct{}{}
+}
 
 // normalizeAudioPathOnDisk renames bad basenames (trailing space before ext, HTML entities like &#39;) when the target is free, and updates DB paths.
 func normalizeAudioPathOnDisk(ctx context.Context, s *store.DB, path string) (string, error) {
@@ -42,6 +83,8 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	if musicDir == "" {
 		return 0, fmt.Errorf("MUSIC_DIR empty")
 	}
+	seen := make(map[string]struct{})
+	var audioCount int
 	err = filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -60,10 +103,18 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		if e != nil {
 			return e
 		}
+		rememberLibraryPath(seen, path)
 		st := info.Size()
 		mt := info.ModTime()
+		audioCount++
+		scanThrottleMaybe(audioCount)
+		ns := mt.UnixNano()
+		if alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+			_ = enqueueMetaJob(ctx, s, alb)
+			return nil
+		}
 		meta := readTrackMeta(path)
-		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, ns, meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
 			return e
 		}
@@ -78,10 +129,18 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		}
 		return nil
 	})
+	if err == nil {
+		var removed int64
+		removed, err = s.DeleteTracksUnderRootNotSeen(ctx, musicDir, seen)
+		if err == nil {
+			changed += int(removed)
+			err = s.PrunePlaybackQueuesRemovedTracks(ctx)
+		}
+	}
 	// If track rows moved to a different album (e.g. because of album-artist normalization),
 	// delete now-empty albums to avoid duplicate shells in the UI.
 	_ = s.CleanupOrphanAlbums(ctx)
-	return
+	return changed, err
 }
 
 // ScanWithProgress is used by the API to show progress.
@@ -91,6 +150,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if musicDir == "" {
 		return fmt.Errorf("MUSIC_DIR empty")
 	}
+	seen := make(map[string]struct{})
 	lastReport := 0
 	err := filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -110,12 +170,23 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		if e != nil {
 			return e
 		}
-		scanned++
-		found++
+		rememberLibraryPath(seen, path)
 		st := info.Size()
 		mt := info.ModTime()
+		ns := mt.UnixNano()
+		scanned++
+		found++
+		scanThrottleMaybe(scanned)
+		if alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+			_ = enqueueMetaJob(ctx, s, alb)
+			if progress != nil && (scanned-lastReport >= 10 || scanned == 1) {
+				lastReport = scanned
+				progress(scanned, found, changed)
+			}
+			return nil
+		}
 		meta := readTrackMeta(path)
-		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, mt.UnixNano(), meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
+		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, ns, meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
 			return e
 		}
@@ -134,6 +205,17 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	})
 	if err != nil {
 		return err
+	}
+	removed, delErr := s.DeleteTracksUnderRootNotSeen(ctx, musicDir, seen)
+	if delErr != nil {
+		return delErr
+	}
+	changed += int(removed)
+	if err := s.PrunePlaybackQueuesRemovedTracks(ctx); err != nil {
+		return err
+	}
+	if progress != nil {
+		progress(scanned, found, changed)
 	}
 	_ = s.CleanupOrphanAlbums(ctx)
 	return nil
