@@ -1985,8 +1985,8 @@ function Shell({ children }) {
         </>
       ) : null}
       {getToken() ? (
+        /* No `key` on <audio>: remounting each track breaks iOS Safari background playback / Now Playing continuity. */
         <audio
-          key={p.current ? `audio-${p.index}-${p.current.id}` : "audio-idle"}
           autoPlay={false}
           playsInline
           preload="auto"
