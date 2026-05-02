@@ -30,5 +30,23 @@ if [ -z "${MUSIC_HOST_DIR:-}" ]; then
   exit 1
 fi
 
-docker compose up -d --build
+export DOCKER_BUILDKIT=1
+
+# `docker compose up --build` pins CPU/RAM on the *host* (build ignores container cpus/mem_limit). Split build + up
+# and run the build at low IO/CPU priority so the hypervisor stays responsive (see Dockerfile GOMAXPROCS / npm jobs).
+run_compose_build() {
+  if command -v nice >/dev/null 2>&1; then
+    if command -v ionice >/dev/null 2>&1 && ionice -c2 -n7 true 2>/dev/null; then
+      ionice -c2 -n7 nice -n 15 docker compose build
+    else
+      nice -n 15 docker compose build
+    fi
+  elif command -v ionice >/dev/null 2>&1 && ionice -c2 -n7 true 2>/dev/null; then
+    ionice -c2 -n7 docker compose build
+  else
+    docker compose build
+  fi
+}
+run_compose_build
+docker compose up -d --no-build
 docker image prune -f >/dev/null 2>&1 || true

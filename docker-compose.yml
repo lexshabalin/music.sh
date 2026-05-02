@@ -1,16 +1,24 @@
-# Proxmox / single-node friendly defaults: capped CPU/RAM for the stack, no scan-on-start,
-# paced library scan + fewer concurrent worker jobs (see WORKER_CONCURRENCY).
+# Proxmox-friendly: runtime CPU/RAM caps, gentle scan pacing, worker concurrency 1 by default.
+# `docker compose build` still stresses the HOST (not capped by cpus/mem_limit); deploy script uses BuildKit parallelism + nice/ionice.
 #
-# Needs MUSIC_HOST_DIR (host path to library). JWT is auto-generated and stored in the data volume ($DATA_DIR/.jwt_secret).
-# Optional .env: POSTGRES_PASSWORD, MUSIC_HOST_DIR, …
-#
-# Optional: POSTGRES_PASSWORD, MUSICSH_PORT, WORKER_CONCURRENCY, LIBRARY_SCAN_YIELD_*,
-#           ACOUSTID_KEY, SCAN_ON_START=1 via override file — avoid SCAN_ON_START on every redeploy.
+# MUSIC_HOST_DIR in `.env`: host path to the library (avoid huge SMB/NFS + full scan + image build simultaneously on tiny VMs).
 
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=40
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - wal_buffers=4MB
     environment:
       POSTGRES_USER: musicsh
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-musicsh}
@@ -24,7 +32,7 @@ services:
       timeout: 5s
       retries: 6
       start_period: 15s
-    cpus: '1'
+    cpus: "0.75"
     mem_limit: 512m
 
   musicsh:
@@ -40,14 +48,15 @@ services:
       MUSIC_DIR: /music
       DATA_DIR: /data
       HTTP_ADDR: "0.0.0.0:8080"
-      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
-      LIBRARY_SCAN_YIELD_EVERY: ${LIBRARY_SCAN_YIELD_EVERY:-150}
-      LIBRARY_SCAN_YIELD_MS: ${LIBRARY_SCAN_YIELD_MS:-3}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      LIBRARY_SCAN_YIELD_EVERY: ${LIBRARY_SCAN_YIELD_EVERY:-75}
+      LIBRARY_SCAN_YIELD_MS: ${LIBRARY_SCAN_YIELD_MS:-10}
       ACOUSTID_KEY: ${ACOUSTID_KEY:-}
-    cpus: '2'
-    mem_limit: 2g
+    cpus: '1'
+    mem_limit: 1536m
+    pids_limit: 128
     volumes:
-      # Writable mount required if you use imprint (writing tags); remove :ro in an override compose file.
+      # Writable mount required if you use imprint — use a compose override and drop :ro.
       - ${MUSIC_HOST_DIR}:/music:ro
       - musicsh_data:/data
 

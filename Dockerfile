@@ -1,5 +1,8 @@
 # Frontend -> cmd/server/dist
 FROM node:20-alpine AS web
+# Cap Node heap and npm parallelism so multi-stage builds don’t overwhelm small VM/hypervisor hosts during `docker compose build`.
+ENV NODE_OPTIONS=--max-old-space-size=768
+ENV npm_config_jobs=2
 WORKDIR /app
 COPY web ./web
 WORKDIR /app/web
@@ -8,6 +11,7 @@ RUN npm run build
 
 # Go binary
 FROM golang:1.22-alpine AS gob
+ENV GOMAXPROCS=2
 RUN apk add --no-cache ca-certificates git
 WORKDIR /src
 COPY go.mod go.sum* ./
