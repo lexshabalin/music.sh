@@ -247,6 +247,23 @@ function Shell({ children }) {
     playerCurrentIdRef.current = p.current?.id ?? null;
   }, [p.current?.id]);
 
+  /** While dragging the progress slider, ignore `timeupdate` so controlled `value` does not fight the thumb. */
+  const progressScrubbingRef = React.useRef(false);
+  const applyLocalSeekFromSlider = React.useCallback(
+    (rawValue) => {
+      const el = p.ref.current;
+      if (!el) return;
+      const cap =
+        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : Math.max(1, dur || 0);
+      const v = Math.max(0, Math.min(cap, Number(rawValue)));
+      try {
+        el.currentTime = v;
+      } catch (_) {}
+      setCurT(v);
+    },
+    [p.ref, dur]
+  );
+
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
   const takeoverGuardUntilRef = React.useRef(0);
@@ -862,6 +879,7 @@ function Shell({ children }) {
       // When remote playback is active, we drive progress from server-updated base+updatedAt.
       // Prevent audio timeupdate events from fighting and causing UI "jitter".
       if (remotePlaybackActiveRef.current) return;
+      if (progressScrubbingRef.current) return;
       const t = el.currentTime || 0;
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
       if (now - localProgressUiLastRef.current < 220) return;
@@ -1381,13 +1399,21 @@ function Shell({ children }) {
               max={Math.max(1, dur || 0)}
               step="0.25"
               value={Math.min(curT, Math.max(1, dur || 0))}
+              onPointerDown={() => {
+                progressScrubbingRef.current = true;
+              }}
+              onPointerUp={() => {
+                progressScrubbingRef.current = false;
+              }}
+              onPointerCancel={() => {
+                progressScrubbingRef.current = false;
+              }}
+              onInput={(e) => {
+                applyLocalSeekFromSlider(e.target.value);
+              }}
               onChange={(e) => {
-                const el = p.ref.current;
-                if (!el) return;
+                applyLocalSeekFromSlider(e.target.value);
                 claimPlaybackSync();
-                const v = Number(e.target.value);
-                el.currentTime = v;
-                setCurT(v);
               }}
             />
           </div>
@@ -1711,13 +1737,21 @@ function Shell({ children }) {
                         max={Math.max(1, dur || 0)}
                         step="0.25"
                         value={Math.min(curT, Math.max(1, dur || 0))}
+                        onPointerDown={() => {
+                          progressScrubbingRef.current = true;
+                        }}
+                        onPointerUp={() => {
+                          progressScrubbingRef.current = false;
+                        }}
+                        onPointerCancel={() => {
+                          progressScrubbingRef.current = false;
+                        }}
+                        onInput={(e) => {
+                          applyLocalSeekFromSlider(e.target.value);
+                        }}
                         onChange={(e) => {
-                          const el = p.ref.current;
-                          if (!el) return;
+                          applyLocalSeekFromSlider(e.target.value);
                           claimPlaybackSync();
-                          const v = Number(e.target.value);
-                          el.currentTime = v;
-                          setCurT(v);
                         }}
                       />
                       <div className="mobile-player-times">
