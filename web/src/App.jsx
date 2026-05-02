@@ -932,11 +932,15 @@ function Shell({ children }) {
       try {
         el.currentTime = targetSec;
       } catch (_) {}
+      if (!remotePlaybackActiveRef.current) {
+        setCurT(targetSec);
+      }
       if (clearPendingAfter) {
         pendingSeekSecRef.current = null;
         pendingSeekTrackIdRef.current = null;
       }
     };
+    setDur(0);
     if (el.readyState >= 1) apply();
     else el.addEventListener("loadedmetadata", apply, { once: true });
     return () => el.removeEventListener("loadedmetadata", apply);
@@ -1882,6 +1886,7 @@ function Shell({ children }) {
       ) : null}
       {getToken() ? (
         <audio
+          key={p.current ? `audio-${p.index}-${p.current.id}` : "audio-idle"}
           autoPlay={false}
           playsInline
           preload="auto"
