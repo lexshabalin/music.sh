@@ -29,7 +29,7 @@ services:
       JWT_SECRET: change-me-in-production-please-32ch
       MUSIC_DIR: /music
       DATA_DIR: /data
-      SCAN_ON_START: "0"
+      SCAN_ON_START: "1"
       # For "Shazam-like" background identification (Chromaprint+AcoustID).
       # Get a free key: https://acoustid.org/
       ACOUSTID_KEY: ${ACOUSTID_KEY:-}
