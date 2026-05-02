@@ -38,7 +38,8 @@ services:
       - "${MUSICSH_PORT:-8180}:8080"
     environment:
       DATABASE_URL: postgres://musicsh:${POSTGRES_PASSWORD:-musicsh}@db:5432/musicsh?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in project .env}
+      # Set on the server in .env (not rsync'd) or export before `docker compose` / use DEPLOY_WRITE_ENV_FROM_CI in GitLab.
+      JWT_SECRET: ${JWT_SECRET}
       MUSIC_DIR: /music
       DATA_DIR: /data
       HTTP_ADDR: "0.0.0.0:8080"
@@ -50,7 +51,7 @@ services:
     mem_limit: 2g
     volumes:
       # Writable mount required if you use imprint (writing tags); remove :ro in an override compose file.
-      - ${MUSIC_HOST_DIR:?Set MUSIC_HOST_DIR to the host dir with audio files}:/music:ro
+      - ${MUSIC_HOST_DIR}:/music:ro
       - musicsh_data:/data
 
 volumes:

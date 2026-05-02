@@ -25,6 +25,12 @@ Self‑hosted веб‑приложение для прослушивания м
 
 Если нужен только образ без compose: см. **`Dockerfile`**. Для публичного сервера **`JWT_SECRET`**, **`POSTGRES_PASSWORD`** и пути к томам нужно усилить.
 
+## Деплой через GitLab CI (`deploy:prod`)
+
+Репозиторий **не заливает `.env`** (секреты). На сервере в каталоге `$DEPLOY_DIR` должен быть файл **`.env`** с **`JWT_SECRET`** и **`MUSIC_HOST_DIR`** (см. `.env.example`).
+
+Либо в GitLab задайте CI/CD переменные **`JWT_SECRET`** (masked) и **`MUSIC_HOST_DIR`**, и включите **`DEPLOY_WRITE_ENV_FROM_CI=1`**: пайплайн запишет на сервер `$DEPLOY_DIR/.env` этими двумя строками **на каждый деплой** (остальное — расширьте шаг в `.gitlab-ci.yml` или держите полный `.env` только на сервере без этой опции).
+
 ## Разработка (без Docker для Go/Node)
 
 Нужен Go 1.22+, Node 20+, PostgreSQL 16+.

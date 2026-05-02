@@ -15,9 +15,21 @@ fi
 
 echo "Deploying in: $APP_DIR"
 
-# Optional: if you keep production env overrides on the server, place them in:
-#   $APP_DIR/.env
-# Compose will auto-load it.
+# Load host secrets for validation and for any tools that read the shell env.
+# Compose also auto-loads $APP_DIR/.env for variable substitution.
+set -a
+if [ -f .env ]; then
+  # shellcheck disable=SC1091
+  . ./.env
+fi
+set +a
+
+if [ -z "${JWT_SECRET:-}" ] || [ -z "${MUSIC_HOST_DIR:-}" ]; then
+  echo "Missing JWT_SECRET or MUSIC_HOST_DIR." >&2
+  echo "On the deploy host, create $APP_DIR/.env (copy from .env.example) with at least those two." >&2
+  echo "Or from GitLab: set CI/CD variables JWT_SECRET and MUSIC_HOST_DIR, and variable DEPLOY_WRITE_ENV_FROM_CI=1 to write .env each deploy." >&2
+  exit 1
+fi
 
 docker compose up -d --build
 docker image prune -f >/dev/null 2>&1 || true
