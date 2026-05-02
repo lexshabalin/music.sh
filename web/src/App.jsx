@@ -229,6 +229,9 @@ function Shell({ children }) {
   const restoredPlaybackRef = React.useRef(false);
   /** After first `/api/me/playback` restore attempt finishes — blocks flush from wiping DB before hydrate. */
   const playbackHydratedRef = React.useRef(false);
+  /** When false, `flushPlayback` must not PUT an empty queue (avoids wiping server on transient restore errors). */
+  const playbackAllowEmptyPutRef = React.useRef(false);
+  const prevMeIdForRestoreRef = React.useRef(undefined);
   const pendingSeekSecRef = React.useRef(null);
   /** Position restore applies only to this track id; avoids seeking new track to old time if user switched before metadata. */
   const pendingSeekTrackIdRef = React.useRef(null);
@@ -307,6 +310,8 @@ function Shell({ children }) {
     const el = p.ref.current;
     const q = p.queue;
     const idx = p.index;
+    const wouldPutEmptyQueue = !q.length || idx < 0;
+    if (!forceNow && wouldPutEmptyQueue && !playbackAllowEmptyPutRef.current) return;
     const cid = getPlaybackClientId();
     const body =
       !q.length || idx < 0
@@ -445,6 +450,7 @@ function Shell({ children }) {
     } catch (_) {}
     restoredPlaybackRef.current = false;
     playbackHydratedRef.current = false;
+    playbackAllowEmptyPutRef.current = false;
     pendingSeekSecRef.current = null;
     pendingSeekTrackIdRef.current = null;
     suspendPlaybackPushRef.current = false;
@@ -462,9 +468,20 @@ function Shell({ children }) {
   }, [p]);
 
   React.useEffect(() => {
+    const id = me?.id;
+    if (prevMeIdForRestoreRef.current !== undefined && prevMeIdForRestoreRef.current !== id) {
+      restoredPlaybackRef.current = false;
+      playbackHydratedRef.current = false;
+      playbackAllowEmptyPutRef.current = false;
+    }
+    prevMeIdForRestoreRef.current = id;
+  }, [me?.id]);
+
+  React.useEffect(() => {
     if (!getToken()) {
       restoredPlaybackRef.current = false;
       playbackHydratedRef.current = false;
+      playbackAllowEmptyPutRef.current = false;
       takeoverRequestedRef.current = false;
       takeoverGuardUntilRef.current = 0;
       ownerEpochRef.current = 0;
@@ -473,13 +490,22 @@ function Shell({ children }) {
     if (restoredPlaybackRef.current) return;
     restoredPlaybackRef.current = true;
     void (async () => {
+      playbackAllowEmptyPutRef.current = false;
       try {
         const st = await playback.get();
         ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
         if (!getToken()) return;
-        if (!st?.trackIds?.length) return;
+        if (!st?.trackIds?.length) {
+          playbackAllowEmptyPutRef.current = true;
+          return;
+        }
         const tracks = await lib.tracksByIds(st.trackIds);
-        if (!getToken() || !tracks.length) return;
+        if (!getToken()) return;
+        if (!tracks.length) {
+          // Server still lists tracks but library no longer returns them — safe to sync empty state.
+          playbackAllowEmptyPutRef.current = true;
+          return;
+        }
         const origId = st.trackIds[st.currentIndex];
         let newIdx = tracks.findIndex((t) => t.id === origId);
         if (newIdx < 0) newIdx = 0;
@@ -491,7 +517,9 @@ function Shell({ children }) {
         pendingSeekTrackIdRef.current = origId ?? tracks[newIdx]?.id ?? null;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
+        playbackAllowEmptyPutRef.current = true;
       } catch (_) {
+        /* Transient failures: stay off empty PUT until a later successful restore builds a queue. */
       } finally {
         playbackHydratedRef.current = true;
       }
