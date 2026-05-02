@@ -1455,12 +1455,19 @@ select.lang-select {
   margin-top: 6px;
   /* Above `.mobile-player-drag-zone` (z-index: 2) so the seek bar receives touches */
   position: relative;
-  z-index: 3;
+  z-index: 5;
+  isolation: isolate;
+  touch-action: pan-x;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Extra vertical space so the thumb is easier to grab (iOS) */
+  padding: 8px 0;
 }
 .mobile-player-progress .range.progress {
   touch-action: pan-x;
   /* +4px vs default .range (16px) for a slightly taller hit area */
   height: 20px;
+  width: 100%;
 }
 .mobile-player-progress .range.mono::-webkit-slider-runnable-track {
   height: 8px; /* base track 4px + 4px */

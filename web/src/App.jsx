@@ -255,6 +255,11 @@ function Shell({ children }) {
 
   /** While dragging the progress slider, ignore `timeupdate` so controlled `value` does not fight the thumb. */
   const progressScrubbingRef = React.useRef(false);
+  /** Fullscreen mobile seek: local slider value while touching — iOS often skips pointer events; avoids controlled-value fighting `curT`. */
+  const [mobileExpandedSeekOverride, setMobileExpandedSeekOverride] = React.useState(null);
+  React.useEffect(() => {
+    setMobileExpandedSeekOverride(null);
+  }, [p.current?.id]);
   const applyLocalSeekFromSlider = React.useCallback(
     (rawValue) => {
       const el = p.ref.current;
@@ -877,7 +882,9 @@ function Shell({ children }) {
       // Allow scrolling inside the queue list if user is on that page.
       const t = e.target;
       const inQueueScroll = t && typeof t.closest === "function" && t.closest(".mobile-queue-page-list");
-      const inSeekBar = t && typeof t.closest === "function" && t.closest(".mobile-player-progress");
+      const inSeekBar =
+        (t && typeof t.closest === "function" && t.closest(".mobile-player-progress")) ||
+        (t && typeof t.closest === "function" && t.closest("input.mobile-fs-seek"));
       if (inQueueScroll || inSeekBar) return;
       if (e.cancelable) e.preventDefault();
     };
@@ -1854,36 +1861,66 @@ function Shell({ children }) {
                     </div>
                     <div className="mobile-player-progress">
                       <input
-                        className="range mono progress"
+                        className="range mono progress mobile-fs-seek"
                         aria-label={t("player.seek")}
                         type="range"
                         min="0"
                         max={Math.max(1, dur || 0)}
                         step="0.25"
-                        value={Math.min(curT, Math.max(1, dur || 0))}
+                        value={(() => {
+                          const cap = Math.max(1, dur || 0);
+                          const base =
+                            mobileExpandedSeekOverride != null ? mobileExpandedSeekOverride : curT;
+                          return Math.min(base, cap);
+                        })()}
                         onPointerDown={(e) => {
                           progressScrubbingRef.current = true;
+                          const cap = Math.max(1, dur || 0);
+                          setMobileExpandedSeekOverride(Math.min(curT, cap));
                           e.currentTarget.closest(".mobile-player-progress")?.classList.add(
                             "mobile-player-progress--thumb-active"
                           );
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch (_) {}
+                        }}
+                        onTouchStart={(e) => {
+                          progressScrubbingRef.current = true;
+                          const cap = Math.max(1, dur || 0);
+                          setMobileExpandedSeekOverride(Math.min(curT, cap));
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.add(
+                            "mobile-player-progress--thumb-active"
+                          );
                         }}
                         onPointerUp={(e) => {
                           progressScrubbingRef.current = false;
                           e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
                             "mobile-player-progress--thumb-active"
                           );
+                          window.requestAnimationFrame(() => setMobileExpandedSeekOverride(null));
                         }}
                         onPointerCancel={(e) => {
                           progressScrubbingRef.current = false;
                           e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
                             "mobile-player-progress--thumb-active"
                           );
+                          window.requestAnimationFrame(() => setMobileExpandedSeekOverride(null));
+                        }}
+                        onTouchEnd={(e) => {
+                          progressScrubbingRef.current = false;
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
+                            "mobile-player-progress--thumb-active"
+                          );
+                          window.requestAnimationFrame(() => setMobileExpandedSeekOverride(null));
+                        }}
+                        onTouchCancel={(e) => {
+                          progressScrubbingRef.current = false;
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
+                            "mobile-player-progress--thumb-active"
+                          );
+                          window.requestAnimationFrame(() => setMobileExpandedSeekOverride(null));
                         }}
                         onInput={(e) => {
-                          applyLocalSeekFromSlider(e.target.value);
+                          const n = Number(e.target.value);
+                          setMobileExpandedSeekOverride(n);
+                          applyLocalSeekFromSlider(n);
                         }}
                         onChange={(e) => {
                           applyLocalSeekFromSlider(e.target.value);
