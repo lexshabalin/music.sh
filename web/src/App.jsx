@@ -491,6 +491,7 @@ function Shell({ children }) {
     restoredPlaybackRef.current = false;
     playbackHydratedRef.current = false;
     playbackAllowEmptyPutRef.current = false;
+    prevMeIdForRestoreRef.current = undefined;
     pendingSeekSecRef.current = null;
     pendingSeekTrackIdRef.current = null;
     suspendPlaybackPushRef.current = false;
@@ -509,12 +510,17 @@ function Shell({ children }) {
 
   React.useEffect(() => {
     const id = me?.id;
-    if (prevMeIdForRestoreRef.current !== undefined && prevMeIdForRestoreRef.current !== id) {
+    if (
+      prevMeIdForRestoreRef.current !== undefined &&
+      id !== undefined &&
+      prevMeIdForRestoreRef.current !== id
+    ) {
       restoredPlaybackRef.current = false;
       playbackHydratedRef.current = false;
       playbackAllowEmptyPutRef.current = false;
     }
-    prevMeIdForRestoreRef.current = id;
+    if (id !== undefined) prevMeIdForRestoreRef.current = id;
+    /* Omit transient `me === null`: don’t wipe hydrate flags mid-session during profile refetches. */
   }, [me?.id]);
 
   React.useEffect(() => {
@@ -522,6 +528,7 @@ function Shell({ children }) {
       restoredPlaybackRef.current = false;
       playbackHydratedRef.current = false;
       playbackAllowEmptyPutRef.current = false;
+      prevMeIdForRestoreRef.current = undefined;
       takeoverRequestedRef.current = false;
       takeoverGuardUntilRef.current = 0;
       ownerEpochRef.current = 0;
@@ -847,11 +854,17 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const mq = window.matchMedia("(max-width: 900px)");
-    const onChange = (e) => setIsMobile(!!e.matches);
-    setIsMobile(!!mq.matches);
+    let resizeT = 0;
+    const apply = () => setIsMobile(!!mq.matches);
+    apply();
+    const onChange = () => {
+      window.clearTimeout(resizeT);
+      resizeT = window.setTimeout(apply, 120);
+    };
     if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
     else mq.addListener(onChange);
     return () => {
+      window.clearTimeout(resizeT);
       if (typeof mq.removeEventListener === "function") mq.removeEventListener("change", onChange);
       else mq.removeListener(onChange);
     };
@@ -1111,9 +1124,10 @@ function Shell({ children }) {
         setGhostPlaybackBusy(false);
         setGhostPlaybackDlg(true);
         setPlayErr("");
-        if (typeof p.removeTrackFromQueueById === "function") {
-          p.removeTrackFromQueueById(tidAtErr);
-        }
+        try {
+          el.pause();
+        } catch (_) {}
+        /* Do not dequeue here — flaky probes/CDN sometimes look like 404; removal hid the footer. */
         return;
       }
     };

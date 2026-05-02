@@ -50,8 +50,16 @@ export function PlayerProvider({ children }) {
 
   const playQueue = useCallback((items, startIndex) => {
     releasePlaybackServerSync();
-    setQueue(items || []);
-    setIdx(typeof startIndex === "number" ? startIndex : 0);
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      setQueue([]);
+      setIdx(-1);
+      return;
+    }
+    const si = typeof startIndex === "number" ? startIndex : 0;
+    const clamped = Math.max(0, Math.min(list.length - 1, si));
+    setQueue(list);
+    setIdx(clamped);
   }, []);
 
   const playOne = useCallback(
