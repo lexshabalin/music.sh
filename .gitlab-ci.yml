@@ -79,12 +79,11 @@ deploy:prod:
       --exclude 'appdata/'
       --exclude 'music/'
       ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
-    # .env is not rsync'd (secrets). Either keep .env manually on $DEPLOY_DIR, or inject from CI:
+    # .env is not rsync'd. Optionally inject MUSIC_HOST_DIR from CI when DEPLOY_WRITE_ENV_FROM_CI=1:
     - |
       if [ -n "${DEPLOY_WRITE_ENV_FROM_CI:-}" ]; then
-        : "${JWT_SECRET:?Set masked CI/CD variable JWT_SECRET when using DEPLOY_WRITE_ENV_FROM_CI}"
         : "${MUSIC_HOST_DIR:?Set CI/CD variable MUSIC_HOST_DIR when using DEPLOY_WRITE_ENV_FROM_CI}"
-        printf '%s\n' "JWT_SECRET=$JWT_SECRET" "MUSIC_HOST_DIR=$MUSIC_HOST_DIR" > .env.musicsh.ci
+        printf '%s\n' "MUSIC_HOST_DIR=$MUSIC_HOST_DIR" > .env.musicsh.ci
         rsync -az .env.musicsh.ci "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/.env"
         rm -f .env.musicsh.ci
       fi

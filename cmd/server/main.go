@@ -32,6 +32,9 @@ func main() {
 		log.Fatal(err)
 	}
 	_ = os.MkdirAll(cfg.DataDir, 0o755)
+	if err := config.ResolveJWTSecret(cfg); err != nil {
+		log.Fatal("jwt secret: ", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

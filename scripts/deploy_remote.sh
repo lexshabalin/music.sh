@@ -24,10 +24,9 @@ if [ -f .env ]; then
 fi
 set +a
 
-if [ -z "${JWT_SECRET:-}" ] || [ -z "${MUSIC_HOST_DIR:-}" ]; then
-  echo "Missing JWT_SECRET or MUSIC_HOST_DIR." >&2
-  echo "On the deploy host, create $APP_DIR/.env (copy from .env.example) with at least those two." >&2
-  echo "Or from GitLab: set CI/CD variables JWT_SECRET and MUSIC_HOST_DIR, and variable DEPLOY_WRITE_ENV_FROM_CI=1 to write .env each deploy." >&2
+if [ -z "${MUSIC_HOST_DIR:-}" ]; then
+  echo "Missing MUSIC_HOST_DIR (path to your audio library on the Docker host)." >&2
+  echo "Set it in $APP_DIR/.env or export before deploy. GitLab: DEPLOY_WRITE_ENV_FROM_CI=1 and CI variable MUSIC_HOST_DIR." >&2
   exit 1
 fi
 

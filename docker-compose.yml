@@ -1,9 +1,8 @@
 # Proxmox / single-node friendly defaults: capped CPU/RAM for the stack, no scan-on-start,
 # paced library scan + fewer concurrent worker jobs (see WORKER_CONCURRENCY).
 #
-# Requires a .env (copy from .env.example) at least:
-#   JWT_SECRET=...
-#   MUSIC_HOST_DIR=/absolute/path/to/music   # readable by Docker
+# Needs MUSIC_HOST_DIR (host path to library). JWT is auto-generated and stored in the data volume ($DATA_DIR/.jwt_secret).
+# Optional .env: POSTGRES_PASSWORD, MUSIC_HOST_DIR, …
 #
 # Optional: POSTGRES_PASSWORD, MUSICSH_PORT, WORKER_CONCURRENCY, LIBRARY_SCAN_YIELD_*,
 #           ACOUSTID_KEY, SCAN_ON_START=1 via override file — avoid SCAN_ON_START on every redeploy.
@@ -38,8 +37,6 @@ services:
       - "${MUSICSH_PORT:-8180}:8080"
     environment:
       DATABASE_URL: postgres://musicsh:${POSTGRES_PASSWORD:-musicsh}@db:5432/musicsh?sslmode=disable
-      # Set on the server in .env (not rsync'd) or export before `docker compose` / use DEPLOY_WRITE_ENV_FROM_CI in GitLab.
-      JWT_SECRET: ${JWT_SECRET}
       MUSIC_DIR: /music
       DATA_DIR: /data
       HTTP_ADDR: "0.0.0.0:8080"
