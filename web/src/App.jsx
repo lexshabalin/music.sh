@@ -30,6 +30,8 @@ const Genre = React.lazy(() => import("./pages/Genre").then((m) => ({ default: m
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { MissingLibraryItemDialog } from "./components/MissingLibraryItemDialog";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { DebugLogPanel } from "./components/DebugLogPanel";
+import { appendDebugFeed } from "./debugFeed";
 import {
   IFastForward,
   IHeart,
@@ -161,7 +163,6 @@ function Shell({ children }) {
   React.useEffect(() => {
     durMediaMsRef.current = dur;
   }, [dur]);
-  const [playErr, setPlayErr] = React.useState("");
   const ghostPlaybackActiveRef = React.useRef(false);
   const ghostPlaybackBusyRef = React.useRef(false);
   const ghostPlaybackTrackIdRef = React.useRef("");
@@ -177,7 +178,6 @@ function Shell({ children }) {
     ghostPlaybackBusyRef.current = false;
     setGhostPlaybackBusy(false);
     setGhostPlaybackDlg(false);
-    setPlayErr("");
   }, [p]);
   const confirmPlaybackGhostDelete = React.useCallback(async () => {
     const sid = ghostPlaybackTrackIdRef.current;
@@ -198,7 +198,6 @@ function Shell({ children }) {
       ghostPlaybackBusyRef.current = false;
       setGhostPlaybackBusy(false);
       setGhostPlaybackDlg(false);
-      setPlayErr("");
     }
   }, [p]);
   const [liked, setLiked] = React.useState(false);
@@ -1119,7 +1118,13 @@ function Shell({ children }) {
       try {
         if (!el.paused) return;
       } catch (_) {}
-      setPlayErr(["Playback error (stream failed).", mediaErr, http].filter(Boolean).join(" "));
+      const msg = ["Playback error (stream failed).", mediaErr, http].filter(Boolean).join(" ");
+      appendDebugFeed({
+        level: "warn",
+        tag: "playback",
+        message: msg,
+        detail: urlAtErr ? `trackId=${tidAtErr}\nurl=${urlAtErr}` : `trackId=${tidAtErr}`,
+      });
       const tok = getToken();
       if (http === "http=404" && tok && tidAtErr != null && String(tidAtErr).length) {
         const sid = String(tidAtErr);
@@ -1131,7 +1136,6 @@ function Shell({ children }) {
         ghostPlaybackTrackIdRef.current = sid;
         setGhostPlaybackBusy(false);
         setGhostPlaybackDlg(true);
-        setPlayErr("");
         try {
           el.pause();
         } catch (_) {}
@@ -1155,7 +1159,6 @@ function Shell({ children }) {
         void onError();
         return;
       }
-      setPlayErr("");
       p.next();
     };
     const onSeeked = () => {
@@ -1174,7 +1177,6 @@ function Shell({ children }) {
     };
 
     const onPlaying = () => {
-      setPlayErr("");
       bindLockScreenMediaHandlers();
     };
     el.addEventListener("playing", onPlaying);
@@ -1190,7 +1192,6 @@ function Shell({ children }) {
     // initial
     onMeta();
     onTime();
-    setPlayErr("");
     if (!el.paused && getToken()) bindLockScreenMediaHandlers();
 
     return () => {
@@ -1545,7 +1546,11 @@ function Shell({ children }) {
                     try {
                       el.pause();
                     } catch (_) {}
-                    setPlayErr("Playback blocked or failed.");
+                    appendDebugFeed({
+                      level: "warn",
+                      tag: "playback",
+                      message: "Playback blocked or failed.",
+                    });
                   });
                 }
               }
@@ -1682,12 +1687,6 @@ function Shell({ children }) {
           <div className="muted" style={{ minWidth: 64 }}>
             {fmtTime(dur)}
           </div>
-
-          {playErr ? (
-            <div className="muted" style={{ color: "tomato", fontSize: 12, marginLeft: 8, maxWidth: 220 }}>
-              {playErr}
-            </div>
-          ) : null}
 
         </div>
       ) : null}
@@ -2315,6 +2314,7 @@ function Shell({ children }) {
             document.body,
           )
         : null}
+      <DebugLogPanel abovePlayer={!!(getToken() && p.current)} />
     </>
   );
 }
