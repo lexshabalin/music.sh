@@ -854,7 +854,8 @@ function Shell({ children }) {
       // Allow scrolling inside the queue list if user is on that page.
       const t = e.target;
       const inQueueScroll = t && typeof t.closest === "function" && t.closest(".mobile-queue-page-list");
-      if (inQueueScroll) return;
+      const inSeekBar = t && typeof t.closest === "function" && t.closest(".mobile-player-progress");
+      if (inQueueScroll || inSeekBar) return;
       if (e.cancelable) e.preventDefault();
     };
     window.addEventListener("touchmove", onTouchMove, { passive: false });

@@ -1446,6 +1446,12 @@ select.lang-select {
 }
 .mobile-player-progress {
   margin-top: 6px;
+  /* Above `.mobile-player-drag-zone` (z-index: 2) so the seek bar receives touches */
+  position: relative;
+  z-index: 3;
+}
+.mobile-player-progress .range.progress {
+  touch-action: pan-x;
 }
 .mobile-player-times {
   display: flex;
