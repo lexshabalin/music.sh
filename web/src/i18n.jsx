@@ -129,6 +129,8 @@ const dict = {
     "missingFile.no": "Нет",
     "missingFile.banner": "На диске нет некоторых файлов из этого альбома.",
     "missingFile.bannerArtist": "У этого исполнителя есть записи без файлов на диске.",
+    "missingFile.bannerArtistNoTracks":
+      "У этого исполнителя нет треков в библиотеке — возможно, это устаревшая запись в базе после удаления файлов или сбоя скана.",
     "missingFile.stripAlbumTracks": "Удалить недоступные треки из БД",
     "missingFile.deleteAlbumDb": "Удалить альбом из БД",
     "missingFile.deleteArtistDb": "Удалить исполнителя из БД",
@@ -373,6 +375,8 @@ const dict = {
     "missingFile.no": "No",
     "missingFile.banner": "Some audio files referenced by this album are missing on disk.",
     "missingFile.bannerArtist": "This artist still has tracks with missing audio files.",
+    "missingFile.bannerArtistNoTracks":
+      "This artist has no tracks in the library — the database row may be stale after removed files or a scan issue.",
     "missingFile.stripAlbumTracks": "Remove missing-track records",
     "missingFile.deleteAlbumDb": "Remove album from database",
     "missingFile.deleteArtistDb": "Remove artist from database",

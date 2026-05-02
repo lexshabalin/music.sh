@@ -33,6 +33,8 @@ export function Artist() {
   const [missingRefresh, setMissingRefresh] = useState(0);
   const [missingDlg, setMissingDlg] = useState("");
   const [missingDlgBusy, setMissingDlgBusy] = useState(false);
+  /** Artist row exists in DB but has no tracks (orphan after cleanup or bad data). */
+  const [artistOrphanInDb, setArtistOrphanInDb] = useState(false);
   const player = usePlayer();
 
   useEffect(() => {
@@ -52,22 +54,33 @@ export function Artist() {
     let cancelled = false;
     if (!id || !getToken()) {
       setMissingIds([]);
+      setArtistOrphanInDb(false);
       return undefined;
     }
+    setArtistOrphanInDb(false);
     (async () => {
       try {
         const tr = await lib.tracks("", { artistId: id });
         const arr = Array.isArray(tr) ? tr : [];
         const ids = arr.map((x) => x?.id).filter(Boolean);
         if (!ids.length) {
-          if (!cancelled) setMissingIds([]);
+          if (!cancelled) {
+            setMissingIds([]);
+            setArtistOrphanInDb(true);
+          }
           return;
+        }
+        if (!cancelled) {
+          setArtistOrphanInDb(false);
         }
         const r = await lib.tracksFileCheck(ids);
         const m = Array.isArray(r?.missingIds) ? r.missingIds.map(String) : [];
         if (!cancelled) setMissingIds(m);
       } catch {
-        if (!cancelled) setMissingIds([]);
+        if (!cancelled) {
+          setMissingIds([]);
+          setArtistOrphanInDb(false);
+        }
       }
     })();
     return () => {
@@ -98,6 +111,18 @@ export function Artist() {
             <button type="button" className="ghost" onClick={() => setMissingDlg("strip")}>
               {t("missingFile.stripAlbumTracks")}
             </button>
+            <button type="button" className="ghost" onClick={() => setMissingDlg("artist")}>
+              {t("missingFile.deleteArtistDb")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {getToken() && artistOrphanInDb && missingIds.length === 0 ? (
+        <div className="card" style={{ marginBottom: "1rem", padding: "12px 14px", lineHeight: 1.45 }}>
+          <p style={{ margin: "0 0 10px 0" }} className="muted">
+            {t("missingFile.bannerArtistNoTracks")}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" className="ghost" onClick={() => setMissingDlg("artist")}>
               {t("missingFile.deleteArtistDb")}
             </button>
