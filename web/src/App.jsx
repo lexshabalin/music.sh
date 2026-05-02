@@ -59,14 +59,17 @@ function interpolatePlaybackPositionMsFromServer(st) {
   return Math.round(base + Math.max(0, Date.now() - updatedAt));
 }
 
-function seekMediaWhenReady(mediaRef, sec) {
+function seekMediaWhenReady(mediaRef, sec, shouldApply) {
   if (sec == null || !Number.isFinite(sec)) return;
   const el = mediaRef?.current;
   if (!el) return;
   const s = Math.max(0, sec);
   const run = () => {
+    if (typeof shouldApply === "function" && !shouldApply()) return;
+    const live = mediaRef?.current;
+    if (!live) return;
     try {
-      el.currentTime = s;
+      live.currentTime = s;
     } catch (_) {}
   };
   if (el.readyState >= 1) run();
@@ -223,6 +226,8 @@ function Shell({ children }) {
   const pendingSeekSecRef = React.useRef(null);
   /** Position restore applies only to this track id; avoids seeking new track to old time if user switched before metadata. */
   const pendingSeekTrackIdRef = React.useRef(null);
+  /** Bumps on each queue advance so late `loadedmetadata` seeks (takeover / browser) cannot apply to the wrong track. */
+  const playbackSwitchEpochRef = React.useRef(0);
   const playQueueRef = React.useRef(p.playQueue);
   React.useEffect(() => {
     playQueueRef.current = p.playQueue;
@@ -339,7 +344,8 @@ function Shell({ children }) {
       const r = await playback.takeover(body);
       ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : ownerEpochRef.current + 1;
       takeoverRequestedRef.current = false;
-      seekMediaWhenReady(p.ref, positionMs / 1000);
+      const epochAtSeek = playbackSwitchEpochRef.current;
+      seekMediaWhenReady(p.ref, positionMs / 1000, () => playbackSwitchEpochRef.current === epochAtSeek);
     } catch (_) {}
   }, [p.queue, p.index, p.ref]);
 
@@ -914,29 +920,42 @@ function Shell({ children }) {
     }
   }, [p.current?.id]);
 
-  // Resume position from cross-device / reload sync after metadata loads.
+  // After each track (or queue index) change: start at 0 unless we have a valid reload/cross-device restore pending.
+  // Also gates late metadata/takeover seeks via playbackSwitchEpochRef.
   React.useEffect(() => {
     const el = p.ref.current;
-    if (!el || !p.current?.id) return;
-    const sec = pendingSeekSecRef.current;
-    if (sec == null || !Number.isFinite(sec)) return;
-    const seekForId = pendingSeekTrackIdRef.current;
-    if (seekForId != null && seekForId !== p.current.id) {
-      pendingSeekSecRef.current = null;
-      pendingSeekTrackIdRef.current = null;
-      return;
+    const id = p.current?.id;
+    if (!el || !id) return;
+    const myEpoch = ++playbackSwitchEpochRef.current;
+
+    const pendingSec = pendingSeekSecRef.current;
+    const pendingId = pendingSeekTrackIdRef.current;
+    let targetSec = 0;
+    let clearPendingAfter = false;
+    if (pendingSec != null && Number.isFinite(pendingSec)) {
+      if (pendingId == null || pendingId === id) {
+        targetSec = Math.max(0, pendingSec);
+        clearPendingAfter = true;
+      } else {
+        pendingSeekSecRef.current = null;
+        pendingSeekTrackIdRef.current = null;
+      }
     }
+
     const apply = () => {
+      if (myEpoch !== playbackSwitchEpochRef.current) return;
       try {
-        el.currentTime = Math.max(0, sec);
+        el.currentTime = targetSec;
       } catch (_) {}
-      pendingSeekSecRef.current = null;
-      pendingSeekTrackIdRef.current = null;
+      if (clearPendingAfter) {
+        pendingSeekSecRef.current = null;
+        pendingSeekTrackIdRef.current = null;
+      }
     };
     if (el.readyState >= 1) apply();
     else el.addEventListener("loadedmetadata", apply, { once: true });
     return () => el.removeEventListener("loadedmetadata", apply);
-  }, [p.current?.id]);
+  }, [p.current?.id, p.index]);
 
   React.useEffect(() => {
     const authed = !!getToken();
