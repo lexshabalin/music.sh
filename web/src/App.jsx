@@ -155,6 +155,11 @@ function Shell({ children }) {
   const { t, lang, setLang } = useI18n();
   const [curT, setCurT] = React.useState(0);
   const [dur, setDur] = React.useState(0);
+  /** Latest duration for Media Session seek clamp — avoids stale closures vs `<audio>` metadata loads */
+  const durMediaMsRef = React.useRef(0);
+  React.useEffect(() => {
+    durMediaMsRef.current = dur;
+  }, [dur]);
   const [playErr, setPlayErr] = React.useState("");
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
@@ -889,6 +894,102 @@ function Shell({ children }) {
     if (!el) return;
     localProgressUiLastRef.current = 0;
 
+    /** Lock Screen / Control Center / headset: iOS WebKit ignores handlers registered before playback; re-bound on each `playing` + when duration arrives while playing. */
+    const bindLockScreenMediaHandlers = () => {
+      if (!getToken()) return;
+      const ms = navigator.mediaSession;
+      if (!ms?.setActionHandler) return;
+      try {
+        ms.setActionHandler("play", async () => {
+          releasePlaybackServerSync();
+          try {
+            ms.playbackState = "playing";
+          } catch (_) {}
+          const a = p.ref.current;
+          if (!a) return;
+          const pr = a.play();
+          if (pr && typeof pr.catch === "function") pr.catch(() => {});
+        });
+      } catch (_) {}
+      try {
+        ms.setActionHandler("pause", () => {
+          const a = p.ref.current;
+          if (a && typeof a.pause === "function") a.pause();
+          try {
+            ms.playbackState = "paused";
+          } catch (_) {}
+        });
+      } catch (_) {}
+      try {
+        ms.setActionHandler("nexttrack", () => {
+          releasePlaybackServerSync();
+          p.next();
+        });
+      } catch (_) {}
+      try {
+        ms.setActionHandler("previoustrack", () => {
+          releasePlaybackServerSync();
+          p.prev();
+        });
+      } catch (_) {}
+      try {
+        ms.setActionHandler("seekto", (details) => {
+          const a = p.ref.current;
+          if (!a) return;
+          const seekAny = details?.seekTime;
+          const raw =
+            typeof seekAny === "number" && Number.isFinite(seekAny)
+              ? seekAny
+              : typeof seekAny === "string"
+                ? Number(seekAny)
+                : NaN;
+          if (!Number.isFinite(raw)) return;
+
+          let dLen =
+            Number.isFinite(a.duration) && a.duration > 0 && a.duration !== Infinity ? a.duration : 0;
+          if (!dLen) {
+            const fb = durMediaMsRef.current;
+            if (Number.isFinite(fb) && fb > 0) dLen = fb;
+          }
+          if (!dLen || dLen <= 0) return;
+
+          const nextSec = Math.max(0, Math.min(raw, dLen));
+          try {
+            if (details?.fastSeek && typeof a.fastSeek === "function") {
+              a.fastSeek(nextSec);
+            } else {
+              a.currentTime = nextSec;
+            }
+          } catch (_) {
+            try {
+              a.currentTime = nextSec;
+            } catch (_) {}
+          }
+
+          if (!remotePlaybackActiveRef.current) {
+            setCurT(nextSec);
+          }
+
+          const rate =
+            typeof a.playbackRate === "number" && a.playbackRate > 0 ? a.playbackRate : 1;
+          const pushPos = () => {
+            try {
+              if (!ms.setPositionState) return;
+              const pos = Math.max(0, Math.min(dLen, a.currentTime || nextSec));
+              ms.setPositionState({
+                duration: dLen,
+                playbackRate: rate,
+                position: pos,
+              });
+            } catch (_) {}
+          };
+          pushPos();
+          queueMicrotask(pushPos);
+          requestAnimationFrame(pushPos);
+        });
+      } catch (_) {}
+    };
+
     const onPause = () => {
       try {
         flushPlaybackRef.current();
@@ -905,7 +1006,10 @@ function Shell({ children }) {
       localProgressUiLastRef.current = now;
       setCurT(t);
     };
-    const onMeta = () => setDur(el.duration || 0);
+    const onMeta = () => {
+      setDur(el.duration || 0);
+      if (!el.paused && getToken()) bindLockScreenMediaHandlers();
+    };
     const onError = async () => {
       // Don't auto-skip: browsers can mark the media as ended after a failed load.
       const mediaErr = el.error?.code ? `mediaErr=${el.error.code}` : "";
@@ -947,6 +1051,8 @@ function Shell({ children }) {
       } catch (_) {}
     };
 
+    el.addEventListener("playing", bindLockScreenMediaHandlers);
+
     el.addEventListener("pause", onPause);
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("loadedmetadata", onMeta);
@@ -959,8 +1065,31 @@ function Shell({ children }) {
     onMeta();
     onTime();
     setPlayErr("");
+    if (!el.paused && getToken()) bindLockScreenMediaHandlers();
 
     return () => {
+      el.removeEventListener("playing", bindLockScreenMediaHandlers);
+      try {
+        const ms = navigator.mediaSession;
+        if (ms?.setActionHandler) {
+          try {
+            ms.setActionHandler("play", null);
+          } catch (_) {}
+          try {
+            ms.setActionHandler("pause", null);
+          } catch (_) {}
+          try {
+            ms.setActionHandler("nexttrack", null);
+          } catch (_) {}
+          try {
+            ms.setActionHandler("previoustrack", null);
+          } catch (_) {}
+          try {
+            ms.setActionHandler("seekto", null);
+          } catch (_) {}
+        }
+      } catch (_) {}
+
       el.removeEventListener("pause", onPause);
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("loadedmetadata", onMeta);
@@ -1104,7 +1233,7 @@ function Shell({ children }) {
     };
   }, [p.current?.id]);
 
-  // Enable multimedia keys (next/prev) via Media Session API.
+  // Metadata + playbackState only. Action handlers (`seekto`, transport) register on `<audio>` `playing` for iOS Safari.
   React.useEffect(() => {
     if (!getToken()) return;
     if (typeof navigator === "undefined") return;
@@ -1123,95 +1252,21 @@ function Shell({ children }) {
       : [];
 
     try {
-      // Some browsers require being served from a secure context; guard errors.
       ms.metadata = new window.MediaMetadata({ title, artist, album, artwork });
     } catch (_) {}
 
     try {
-      ms.setActionHandler("play", async () => {
-        releasePlaybackServerSync();
-        const el = p.ref.current;
-        if (!el) return;
-        const pr = el.play();
-        if (pr && typeof pr.catch === "function") pr.catch(() => {});
-      });
-    } catch (_) {}
-    try {
-      ms.setActionHandler("pause", () => {
-        const el = p.ref.current;
-        if (el && typeof el.pause === "function") el.pause();
-      });
-    } catch (_) {}
-    try {
-      ms.setActionHandler("nexttrack", () => {
-        releasePlaybackServerSync();
-        p.next();
-      });
-    } catch (_) {}
-    try {
-      ms.setActionHandler("previoustrack", () => {
-        releasePlaybackServerSync();
-        p.prev();
-      });
-    } catch (_) {}
-    try {
-      ms.setActionHandler("seekto", (details) => {
-        const el = p.ref.current;
-        if (!el) return;
-        const raw = details?.seekTime;
-        if (raw == null || !Number.isFinite(raw)) return;
-        let d = Number.isFinite(el.duration) && el.duration > 0 && el.duration !== Infinity ? el.duration : 0;
-        if (!d && Number.isFinite(dur) && dur > 0) d = dur;
-        if (!d || d <= 0) return;
-        const nextSec = Math.max(0, Math.min(raw, d));
-        try {
-          if (details.fastSeek && typeof el.fastSeek === "function") {
-            el.fastSeek(nextSec);
-          } else {
-            el.currentTime = nextSec;
-          }
-        } catch (_) {
-          try {
-            el.currentTime = nextSec;
-          } catch (_) {}
-        }
-        if (!remotePlaybackActiveRef.current) {
-          setCurT(nextSec);
-        }
-        // iOS lock screen / Control Center: must refresh position state immediately after a seek or scrub is ignored.
-        const rate =
-          typeof el.playbackRate === "number" && el.playbackRate > 0 ? el.playbackRate : 1;
-        const pushPos = () => {
-          try {
-            if (!ms.setPositionState) return;
-            const pos = Math.max(0, Math.min(d, el.currentTime || nextSec));
-            ms.setPositionState({
-              duration: d,
-              playbackRate: rate,
-              position: pos,
-            });
-          } catch (_) {}
-        };
-        pushPos();
-        queueMicrotask(pushPos);
-        releasePlaybackServerSync();
-      });
-    } catch (_) {}
-
-    // Playback state hint helps some devices decide which buttons to show.
-    try {
       ms.playbackState = p.isPlaying ? "playing" : "paused";
     } catch (_) {}
-
-    return () => {
-      // Avoid keeping stale handlers when logging out / switching tracks.
-      try { ms.setActionHandler("play", null); } catch (_) {}
-      try { ms.setActionHandler("pause", null); } catch (_) {}
-      try { ms.setActionHandler("nexttrack", null); } catch (_) {}
-      try { ms.setActionHandler("previoustrack", null); } catch (_) {}
-      try { ms.setActionHandler("seekto", null); } catch (_) {}
-    };
-  }, [p.current?.id, p.current?.coverUrl, p.current?.title, p.current?.label, p.current?.artist, p.current?.album, p.isPlaying, dur]);
+  }, [
+    p.current?.id,
+    p.current?.coverUrl,
+    p.current?.title,
+    p.current?.label,
+    p.current?.artist,
+    p.current?.album,
+    p.isPlaying,
+  ]);
 
   // Lock-screen position: low frequency so we don’t couple Media Session updates to every progress tick.
   React.useEffect(() => {
@@ -1249,7 +1304,8 @@ function Shell({ children }) {
       return undefined;
     }
     push();
-    const id = window.setInterval(push, 3000);
+    // Tighter interval helps iOS lock-screen scrubber stay in sync with `<audio>`.
+    const id = window.setInterval(push, 1000);
     return () => clearInterval(id);
   }, [p.current?.id, p.isPlaying, dur, p.ref]);
 
