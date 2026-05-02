@@ -221,6 +221,8 @@ function Shell({ children }) {
   /** After first `/api/me/playback` restore attempt finishes — blocks flush from wiping DB before hydrate. */
   const playbackHydratedRef = React.useRef(false);
   const pendingSeekSecRef = React.useRef(null);
+  /** Position restore applies only to this track id; avoids seeking new track to old time if user switched before metadata. */
+  const pendingSeekTrackIdRef = React.useRef(null);
   const playQueueRef = React.useRef(p.playQueue);
   React.useEffect(() => {
     playQueueRef.current = p.playQueue;
@@ -394,6 +396,8 @@ function Shell({ children }) {
     } catch (_) {}
     restoredPlaybackRef.current = false;
     playbackHydratedRef.current = false;
+    pendingSeekSecRef.current = null;
+    pendingSeekTrackIdRef.current = null;
     suspendPlaybackPushRef.current = false;
     takeoverRequestedRef.current = false;
     takeoverGuardUntilRef.current = 0;
@@ -435,6 +439,7 @@ function Shell({ children }) {
         // After refresh/reload we restore queue + position but DO NOT auto-play.
         // iOS Safari + UX: user should explicitly resume.
         skipAutoplayOnceRef.current = true;
+        pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? null;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
       } catch (_) {
@@ -915,11 +920,18 @@ function Shell({ children }) {
     if (!el || !p.current?.id) return;
     const sec = pendingSeekSecRef.current;
     if (sec == null || !Number.isFinite(sec)) return;
+    const seekForId = pendingSeekTrackIdRef.current;
+    if (seekForId != null && seekForId !== p.current.id) {
+      pendingSeekSecRef.current = null;
+      pendingSeekTrackIdRef.current = null;
+      return;
+    }
     const apply = () => {
       try {
         el.currentTime = Math.max(0, sec);
       } catch (_) {}
       pendingSeekSecRef.current = null;
+      pendingSeekTrackIdRef.current = null;
     };
     if (el.readyState >= 1) apply();
     else el.addEventListener("loadedmetadata", apply, { once: true });
