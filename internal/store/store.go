@@ -324,7 +324,7 @@ func (d *DB) UserAuthByUsername(ctx context.Context, username string) (id uuid.U
 
 func (d *DB) CreateUser(ctx context.Context, id uuid.UUID, username *string, email, hash string, name *string) error {
 	_, err := d.Pool.Exec(ctx,
-		`INSERT INTO users (id, username, email, password_hash, display_name, ui_lang) VALUES ($1, $2, $3, $4, $5, 'ru')`,
+		`INSERT INTO users (id, username, email, password_hash, display_name, ui_lang) VALUES ($1, $2, $3, $4, $5, 'en')`,
 		id, username, strings.ToLower(strings.TrimSpace(email)), hash, name,
 	)
 	return err
@@ -369,7 +369,7 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	if uiLang.Valid && strings.TrimSpace(uiLang.String) != "" {
 		u.UILang = strings.TrimSpace(uiLang.String)
 	} else {
-		u.UILang = "ru"
+		u.UILang = "en"
 	}
 	// BackgroundURL is set by API layer (needs absolute route).
 	return u, nil
@@ -380,7 +380,7 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 func (d *DB) SetUserUILang(ctx context.Context, userID uuid.UUID, lang string) error {
 	lang = strings.ToLower(strings.TrimSpace(lang))
 	if lang != "ru" && lang != "en" {
-		lang = "ru"
+		lang = "en"
 	}
 	_, err := d.Pool.Exec(ctx, `UPDATE users SET ui_lang = $2 WHERE id = $1`, userID, lang)
 	return err
@@ -2359,4 +2359,200 @@ func (d *DB) UpsertUserPlayback(ctx context.Context, userID uuid.UUID, trackIDs 
 func (d *DB) ClearUserPlayback(ctx context.Context, userID uuid.UUID) error {
 	_, err := d.Pool.Exec(ctx, `DELETE FROM user_playback WHERE user_id = $1`, userID)
 	return err
+}
+
+const maxListenAccumulateMs = int(10 * time.Minute / time.Millisecond)
+
+// AccumulateListeningFromPlayback attributes wall-clock time to the track that was actively
+// playing according to the previous snapshot. Call after a successful playback upsert; `now`
+// should be the instant after the write (or immediate wall clock).
+func (d *DB) AccumulateListeningFromPlayback(ctx context.Context, userID uuid.UUID, prev PlaybackState, now time.Time) error {
+	if !prev.IsPlaying {
+		return nil
+	}
+	wall := int(now.Sub(prev.UpdatedAt) / time.Millisecond)
+	if wall < 350 {
+		return nil
+	}
+	if wall > maxListenAccumulateMs {
+		wall = maxListenAccumulateMs
+	}
+	if len(prev.TrackIDs) == 0 || prev.CurrentIndex < 0 || prev.CurrentIndex >= len(prev.TrackIDs) {
+		return nil
+	}
+	trackID := prev.TrackIDs[prev.CurrentIndex]
+	albumID, genreIDs, err := d.trackAlbumAndGenreIDs(ctx, trackID)
+	if err != nil {
+		return err
+	}
+
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO user_listen_stats (user_id, total_listen_ms)
+		VALUES ($1, $2::bigint)
+		ON CONFLICT (user_id) DO UPDATE SET
+			total_listen_ms = user_listen_stats.total_listen_ms + EXCLUDED.total_listen_ms
+	`, userID, wall); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO user_listen_album (user_id, album_id, last_listened_at, listen_ms)
+		VALUES ($1, $2, now(), $3::bigint)
+		ON CONFLICT (user_id, album_id) DO UPDATE SET
+			last_listened_at = now(),
+			listen_ms = user_listen_album.listen_ms + EXCLUDED.listen_ms
+	`, userID, albumID, wall); err != nil {
+		return err
+	}
+
+	if len(genreIDs) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		return nil
+	}
+	each := wall / len(genreIDs)
+	rem := wall - each*len(genreIDs)
+	for i, gid := range genreIDs {
+		ms := each
+		if i == 0 {
+			ms += rem
+		}
+		if ms <= 0 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO user_listen_genre (user_id, genre_id, listen_ms)
+			VALUES ($1, $2, $3::bigint)
+			ON CONFLICT (user_id, genre_id) DO UPDATE SET
+				listen_ms = user_listen_genre.listen_ms + EXCLUDED.listen_ms
+		`, userID, gid, ms); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (d *DB) trackAlbumAndGenreIDs(ctx context.Context, trackID uuid.UUID) (uuid.UUID, []uuid.UUID, error) {
+	var albumID uuid.UUID
+	err := d.Pool.QueryRow(ctx, `SELECT album_id FROM tracks WHERE id = $1`, trackID).Scan(&albumID)
+	if err != nil {
+		return uuid.Nil, nil, err
+	}
+	var gids []uuid.UUID
+	rows, err := d.Pool.Query(ctx, `SELECT genre_id FROM track_genres WHERE track_id = $1 ORDER BY position`, trackID)
+	if err != nil {
+		return uuid.Nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var g uuid.UUID
+		if err := rows.Scan(&g); err != nil {
+			return uuid.Nil, nil, err
+		}
+		gids = append(gids, g)
+	}
+	if err := rows.Err(); err != nil {
+		return uuid.Nil, nil, err
+	}
+	if len(gids) == 0 {
+		ar, err := d.Pool.Query(ctx, `SELECT genre_id FROM album_genres WHERE album_id = $1 ORDER BY position`, albumID)
+		if err != nil {
+			return uuid.Nil, nil, err
+		}
+		defer ar.Close()
+		for ar.Next() {
+			var g uuid.UUID
+			if err := ar.Scan(&g); err != nil {
+				return uuid.Nil, nil, err
+			}
+			gids = append(gids, g)
+		}
+		if err := ar.Err(); err != nil {
+			return uuid.Nil, nil, err
+		}
+	}
+	return albumID, gids, nil
+}
+
+type HomeGenreListen struct {
+	Label    string `json:"label"`
+	ListenMs int64  `json:"listenMs"`
+}
+
+// GetHomeListeningStats returns aggregates for the dashboard.
+func (d *DB) GetHomeListeningStats(ctx context.Context, userID uuid.UUID) (totalListenMs int64, genres []HomeGenreListen, recentAlbumIDs []uuid.UUID, err error) {
+	err = d.Pool.QueryRow(ctx, `SELECT total_listen_ms FROM user_listen_stats WHERE user_id = $1`, userID).Scan(&totalListenMs)
+	if err == pgx.ErrNoRows {
+		totalListenMs = 0
+		err = nil
+	}
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	rows, err := d.Pool.Query(ctx, `
+		SELECT lg.label, g.listen_ms::bigint
+		FROM user_listen_genre g
+		JOIN library_genres lg ON lg.id = g.genre_id
+		WHERE g.user_id = $1 AND g.listen_ms > 0
+		ORDER BY g.listen_ms DESC
+		LIMIT 24
+	`, userID)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h HomeGenreListen
+		if err := rows.Scan(&h.Label, &h.ListenMs); err != nil {
+			return 0, nil, nil, err
+		}
+		genres = append(genres, h)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, nil, nil, err
+	}
+
+	r2, err := d.Pool.Query(ctx, `
+		SELECT album_id FROM user_listen_album WHERE user_id = $1 ORDER BY last_listened_at DESC LIMIT 10
+	`, userID)
+	if err != nil {
+		return 0, genres, nil, err
+	}
+	defer r2.Close()
+	for r2.Next() {
+		var aid uuid.UUID
+		if err := r2.Scan(&aid); err != nil {
+			return 0, genres, nil, err
+		}
+		recentAlbumIDs = append(recentAlbumIDs, aid)
+	}
+	if err := r2.Err(); err != nil {
+		return 0, genres, nil, err
+	}
+	return totalListenMs, genres, recentAlbumIDs, nil
+}
+
+// LibraryTotals returns coarse inventory counts seen on the home dashboard.
+func (d *DB) LibraryTotals(ctx context.Context) (albums, artists, tracks int64, err error) {
+	err = d.Pool.QueryRow(ctx, `SELECT COUNT(*)::bigint FROM albums`).Scan(&albums)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	err = d.Pool.QueryRow(ctx, `SELECT COUNT(*)::bigint FROM tracks`).Scan(&tracks)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	err = d.Pool.QueryRow(ctx, `SELECT COUNT(DISTINCT artist_id)::bigint FROM tracks WHERE artist_id IS NOT NULL`).Scan(&artists)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return albums, artists, tracks, nil
 }

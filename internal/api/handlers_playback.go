@@ -175,6 +175,7 @@ func (a *App) putPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 409, "stale playback owner epoch")
 		return
 	}
+	_ = a.DB.AccumulateListeningFromPlayback(r.Context(), uid, cur, time.Now().UTC())
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -254,6 +255,7 @@ func (a *App) takeoverPlayback(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 409, "stale playback owner epoch")
 		return
 	}
+	_ = a.DB.AccumulateListeningFromPlayback(r.Context(), uid, cur, time.Now().UTC())
 	JSON(w, 200, playbackTakeoverOut{OwnerEpoch: newEpoch})
 }
 

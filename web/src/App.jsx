@@ -17,6 +17,7 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 
 const Library = React.lazy(() => import("./pages/Library").then((m) => ({ default: m.Library })));
+const Home = React.lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
 const Album = React.lazy(() => import("./pages/Album").then((m) => ({ default: m.Album })));
 const Playlists = React.lazy(() => import("./pages/Playlists").then((m) => ({ default: m.Playlists })));
 const Likes = React.lazy(() => import("./pages/Likes").then((m) => ({ default: m.Likes })));
@@ -793,15 +794,17 @@ function Shell({ children }) {
     };
   }, [!!getToken()]);
 
-  // Sync UI language from server profile (one-way) after auth.
+  // Sync UI language from server profile only after /api/me (avoid overwriting boot locale with a fake default).
   React.useEffect(() => {
-    const serverLang = normalizeLang(me?.uiLang);
-    if (!getToken() || !serverLang) return;
+    if (!getToken() || !me) return;
+    const raw = me.uiLang;
+    if (typeof raw !== "string" || !raw.trim()) return;
+    const serverLang = normalizeLang(raw);
     if (serverLang !== normalizeLang(lang)) {
       setLang(serverLang);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.uiLang, !!getToken()]);
+  }, [me?.uiLang, !!getToken(), me?.id]);
 
   React.useEffect(() => {
     // Close mobile sidebar on route changes.
@@ -2823,7 +2826,7 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
 
 function HomeRedirect() {
   if (!getToken()) return <Navigate to="/login" replace />;
-  return <Library />;
+  return <Home />;
 }
 
 export function App() {

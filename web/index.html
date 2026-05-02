@@ -17,9 +17,9 @@
           try {
             var nav = (navigator.languages && navigator.languages[0]) || navigator.language || "";
             nav = String(nav || "").toLowerCase();
-            lang = nav.indexOf("en") === 0 ? "en" : "ru";
+            lang = nav.indexOf("ru") === 0 ? "ru" : "en";
           } catch (e) {
-            lang = "ru";
+            lang = "en";
           }
         }
         try {

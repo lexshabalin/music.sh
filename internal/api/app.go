@@ -113,6 +113,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/me/background/settings", a.setBackgroundSettings)
 		g.Post("/api/me/background/upload", a.uploadBackground)
 		g.Post("/api/me/password", a.changePassword)
+		g.Get("/api/me/home", a.homeDashboard)
 		g.Get("/api/me/playback", a.getPlayback)
 		g.Put("/api/me/playback", a.putPlayback)
 		g.Post("/api/me/playback/takeover", a.takeoverPlayback)

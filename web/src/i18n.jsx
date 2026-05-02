@@ -9,7 +9,9 @@ export const LANGS = [
 
 export function normalizeLang(x) {
   const s = String(x || "").toLowerCase().trim();
-  return s === "en" ? "en" : "ru";
+  if (s === "en") return "en";
+  if (s === "ru") return "ru";
+  return "en";
 }
 
 export function getStoredLang() {
@@ -17,7 +19,7 @@ export function getStoredLang() {
     const v = localStorage.getItem(LS_LANG);
     return normalizeLang(v);
   } catch (_) {
-    return "ru";
+    return "en";
   }
 }
 
@@ -41,13 +43,13 @@ export function getBootLang() {
     if (n) return n;
   } catch (_) {}
 
-  // 3) browser locale
+  // 3) browser locale — default English; Russian only when locale clearly starts with ru
   try {
     const nav = (navigator?.languages && navigator.languages[0]) || navigator?.language || "";
     const s = String(nav || "").toLowerCase();
-    return s.startsWith("en") ? "en" : "ru";
+    return s.startsWith("ru") ? "ru" : "en";
   } catch (_) {
-    return "ru";
+    return "en";
   }
 }
 
@@ -87,6 +89,17 @@ const dict = {
     "nav.genres": "Жанры",
     "nav.playlists": "Плейлисты",
     "nav.likes": "Любимое",
+
+    "home.greetingLead": "Привет,",
+    "home.statsTitle": "Статистика",
+    "home.statListen": "Прослушано",
+    "home.statAlbums": "Альбомов в библиотеке",
+    "home.statArtists": "Исполнителей",
+    "home.statTracks": "Треков",
+    "home.genresTitle": "Жанры по времени прослушивания",
+    "home.genresEmpty": "Пока нет данных — включите музыку на пару минут, затем обновите страницу.",
+    "home.recentTitle": "Вы недавно слушали",
+    "home.recentEmpty": "Здесь появятся последние альбомы, которые вы слушали.",
 
     "menu.profile": "Профиль",
     "menu.profileSettings": "Настройки профиля",
@@ -342,6 +355,17 @@ const dict = {
     "nav.playlists": "Playlists",
     "nav.likes": "Likes",
 
+    "home.greetingLead": "Hello,",
+    "home.statsTitle": "Statistics",
+    "home.statListen": "Time listened",
+    "home.statAlbums": "Albums in library",
+    "home.statArtists": "Artists",
+    "home.statTracks": "Tracks",
+    "home.genresTitle": "Listening by genre",
+    "home.genresEmpty": "No data yet — play some music for a bit, then refresh.",
+    "home.recentTitle": "Previously listened",
+    "home.recentEmpty": "Albums you listened to recently will show up here.",
+
     "menu.profile": "Profile",
     "menu.profileSettings": "Profile settings",
     "menu.logout": "Log out",
@@ -564,7 +588,7 @@ const dict = {
 };
 
 export const I18nContext = React.createContext({
-  lang: "ru",
+  lang: "en",
   setLang: () => {},
   t: (k) => k,
 });

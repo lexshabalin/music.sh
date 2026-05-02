@@ -53,6 +53,8 @@ export const auth = {
     }),
   login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
+  /** Aggregated home dashboard: listen time, library counts, genre breakdown, recent albums. */
+  home: () => req("/api/me/home"),
   setUILang: (lang) => req("/api/me/ui/lang", { method: "POST", body: JSON.stringify({ lang }) }),
   changePassword: (currentPassword, newPassword) =>
     req("/api/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),

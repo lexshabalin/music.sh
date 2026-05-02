@@ -5,7 +5,7 @@ import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { IPlay } from "../components/icons";
 
-function AlbumTile({ a, onPlay, playTitle }) {
+export function AlbumTile({ a, onPlay, playTitle }) {
   return (
     <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
       <div className="card album-tile">
@@ -33,7 +33,7 @@ function AlbumTile({ a, onPlay, playTitle }) {
   );
 }
 
-export function Library({ section = "home", titleKey = "nav.home" }) {
+export function Library({ pageTitleKey }) {
   const { t } = useI18n();
   // Global search + rescan live in the app shell now.
   // Home page only shows the album grid.
@@ -49,6 +49,11 @@ export function Library({ section = "home", titleKey = "nav.home" }) {
   }, []);
   return (
     <div>
+      {pageTitleKey ? (
+        <h2 className="home-page-title" style={{ marginTop: 0 }}>
+          {t(pageTitleKey)}
+        </h2>
+      ) : null}
       {msg ? <p className="muted">{msg}</p> : null}
       <div className="grid">
         {albums.map((a) => (
