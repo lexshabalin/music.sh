@@ -97,7 +97,7 @@ const dict = {
     "err.openConsole": "Открой DevTools Console, чтобы увидеть ошибку.",
     "err.tryAgain": "Попробовать снова",
 
-    "player.queue": "Очередь",
+    "player.queue": "Далее",
     "player.upNext": "Далее",
     "player.emptyQueue": "Очередь пуста",
     "player.playingRemote": "Музыка воспроизводится на другом устройстве",
@@ -323,7 +323,7 @@ const dict = {
     "err.openConsole": "Open DevTools Console to see the error.",
     "err.tryAgain": "Try again",
 
-    "player.queue": "Queue",
+    "player.queue": "Up next",
     "player.upNext": "Up next",
     "player.emptyQueue": "Empty queue",
     "player.playingRemote": "Music is playing on another device",

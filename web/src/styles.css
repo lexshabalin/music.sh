@@ -1414,6 +1414,13 @@ select.lang-select {
   font-size: 12px;
   margin-top: 2px;
 }
+.mobile-queue-item--played {
+  transition: opacity 0.12s ease;
+}
+.mobile-queue-item--played .mobile-queue-item-title,
+.mobile-queue-item--played .mobile-queue-item-sub {
+  transition: opacity 0.12s ease;
+}
 .mobile-player-top {
   display: grid;
   grid-template-columns: auto 1fr auto;

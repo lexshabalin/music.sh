@@ -196,6 +196,7 @@ function Shell({ children }) {
     suppressClick: false,
   });
   const mobileQueueTapRef = React.useRef({ x: 0, y: 0, moved: false });
+  const mobileQueueListRef = React.useRef(null);
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
@@ -490,6 +491,23 @@ function Shell({ children }) {
   React.useEffect(() => {
     if (isMobile && !showMobilePlayer) setShowQueue(false);
   }, [isMobile, showMobilePlayer]);
+
+  React.useLayoutEffect(() => {
+    if (!showMobilePlayer || mobilePlayerPage !== 1) return;
+    const q = p.queue;
+    const idx = typeof p.index === "number" ? p.index : -1;
+    if (!Array.isArray(q) || idx < 0 || idx >= q.length) return;
+    const scroller = mobileQueueListRef.current;
+    if (!scroller) return;
+    const run = () => {
+      const row = scroller.querySelector(`button[data-queue-index="${idx}"]`);
+      if (!row || !scroller.contains(row)) return;
+      scrollPopoverListToCenterRow(scroller, row);
+    };
+    queueMicrotask(run);
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
+  }, [showMobilePlayer, mobilePlayerPage, p.index, p.queue?.length]);
 
   React.useEffect(() => {
     const onRelease = () => {
@@ -1423,8 +1441,8 @@ function Shell({ children }) {
             ref={queueBtnRef}
             className="player-skip"
             type="button"
-            title={t("player.queue")}
-            aria-label={t("player.queue")}
+            title={t("player.upNext")}
+            aria-label={t("player.upNext")}
             onClick={() => setShowQueue((v) => !v)}
           >
             <IQueue />
@@ -1816,9 +1834,10 @@ function Shell({ children }) {
                     </div>
                   </section>
 
-                  <section className="mobile-player-page mobile-player-page--queue" aria-label="Queue">
+                  <section className="mobile-player-page mobile-player-page--queue" aria-label={t("player.upNext")}>
                     <div className="mobile-queue-page-head">{t("player.upNext")}</div>
                     <div
+                      ref={mobileQueueListRef}
                       className="mobile-queue-page-list"
                       onTouchStart={(e) => {
                         const t = e.touches?.[0];
@@ -1852,19 +1871,27 @@ function Shell({ children }) {
                     >
                       {(() => {
                         const q = Array.isArray(p.queue) ? p.queue : [];
-                        const start = typeof p.index === "number" && p.index >= 0 ? p.index : 0;
-                        const view = q.slice(start);
-                        if (!view.length) return <div className="muted" style={{ padding: 10 }}>{t("player.emptyQueue")}</div>;
-                        return view.map((it, i) => {
-                          const actualIdx = start + i;
-                          const active = actualIdx === p.index;
+                        const cur = typeof p.index === "number" ? p.index : -1;
+                        if (!q.length) return <div className="muted" style={{ padding: 10 }}>{t("player.emptyQueue")}</div>;
+                        const playedDim = 0.3;
+                        return q.map((it, i) => {
+                          const active = i === cur;
+                          const isPast = cur >= 0 && i < cur;
+                          const titleOpacity = active ? 1 : isPast ? 0.95 * playedDim : 0.95;
+                          const subExtraDim = isPast ? playedDim : 1;
                           const title = it.title || it.label || t("common.track");
                           const sub = [it.artist, it.album].filter(Boolean).join(" • ");
                           return (
                             <button
-                              key={it.id + ":" + actualIdx}
+                              key={it.id + ":" + i}
                               type="button"
-                              className="mobile-queue-item"
+                              data-queue-index={i}
+                              className={
+                                "mobile-queue-item" +
+                                (isPast ? " mobile-queue-item--played" : "") +
+                                (active ? " mobile-queue-item--active" : "")
+                              }
+                              aria-current={active ? "true" : undefined}
                               style={{ background: active ? "rgba(255,255,255,0.08)" : "transparent" }}
                               onTouchStart={(e) => {
                                 const t = e.touches?.[0];
@@ -1885,7 +1912,7 @@ function Shell({ children }) {
                                 if (e.cancelable) e.preventDefault();
                                 e.stopPropagation();
                                 claimPlaybackSync();
-                                p.jumpTo(actualIdx);
+                                p.jumpTo(i);
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
@@ -1898,7 +1925,7 @@ function Shell({ children }) {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 claimPlaybackSync();
-                                p.jumpTo(actualIdx);
+                                p.jumpTo(i);
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
@@ -1909,8 +1936,17 @@ function Shell({ children }) {
                                 } catch (_) {}
                               }}
                             >
-                              <div className="mobile-queue-item-title">{title}</div>
-                              {sub ? <div className="mobile-queue-item-sub muted">{sub}</div> : null}
+                              <div className="mobile-queue-item-title" style={{ opacity: titleOpacity }}>
+                                {title}
+                              </div>
+                              {sub ? (
+                                <div
+                                  className="mobile-queue-item-sub muted"
+                                  style={{ fontSize: 12, opacity: subExtraDim }}
+                                >
+                                  {sub}
+                                </div>
+                              ) : null}
                             </button>
                           );
                         });
@@ -1934,7 +1970,7 @@ function Shell({ children }) {
                   <button
                     type="button"
                     className={`mobile-player-tab-dot${mobilePlayerPage === 1 ? " is-active" : ""}`}
-                    aria-label="Queue"
+                    aria-label={t("player.upNext")}
                     role="tab"
                     aria-selected={mobilePlayerPage === 1}
                     onClick={(e) => {
@@ -1967,7 +2003,7 @@ function Shell({ children }) {
           anchorRef={isMobile && showMobilePlayer ? mobileQueueBtnRef : queueBtnRef}
           items={Array.isArray(p.queue) ? p.queue : []}
           currentIndex={typeof p.index === "number" ? p.index : -1}
-          historyUX={!isMobile}
+          historyUX
           onJump={(i) => p.jumpTo(i)}
           onClose={() => setShowQueue(false)}
         />
@@ -2456,9 +2492,9 @@ function QueuePopover({ anchorRef, items, currentIndex, onJump, onClose, history
         padding: 6,
       }}
       role="dialog"
-      aria-label={t("player.queue")}
+      aria-label={t("player.upNext")}
     >
-      <div style={{ padding: "6px 8px", fontWeight: 800 }}>{t("player.queue")}</div>
+      <div style={{ padding: "6px 8px", fontWeight: 800 }}>{t("player.upNext")}</div>
       {items.length ? (
         items.map((it, i) => {
           const active = i === currentIndex;
