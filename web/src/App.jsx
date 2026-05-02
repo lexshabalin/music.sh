@@ -1101,7 +1101,8 @@ function Shell({ children }) {
     const onError = async () => {
       const tidAtErr = p.current?.id ?? null;
       const urlAtErr = p.current?.url || el.currentSrc || "";
-      const mediaErr = el.error?.code ? `mediaErr=${el.error.code}` : "";
+      const errCodeSnap = el.error?.code ?? null;
+      const mediaErr = errCodeSnap ? `mediaErr=${errCodeSnap}` : "";
       let http = "";
       if (urlAtErr) {
         try {
@@ -1111,6 +1112,13 @@ function Shell({ children }) {
           http = "http=failed";
         }
       }
+      // Stale callbacks: `<audio>` can fire `error` when src is replaced (aborted decode / race).
+      // Async probe can finish after `playing`/next track — never override a visibly working stream.
+      if (String(playerCurrentIdRef.current ?? "") !== String(tidAtErr ?? "")) return;
+      if (p.ref.current !== el) return;
+      try {
+        if (!el.paused) return;
+      } catch (_) {}
       setPlayErr(["Playback error (stream failed).", mediaErr, http].filter(Boolean).join(" "));
       const tok = getToken();
       if (http === "http=404" && tok && tidAtErr != null && String(tidAtErr).length) {
@@ -1132,9 +1140,19 @@ function Shell({ children }) {
       }
     };
     const onEnded = () => {
-      // Guard: if media ended due to an error / empty response, don't auto-advance forever.
-      if (el.error || !Number.isFinite(el.duration) || el.duration <= 0.5 || (el.currentTime || 0) <= 0.1) {
-        onError();
+      // Guard: failed load / empty file — don't advance the queue blindly.
+      // Do NOT treat odd `duration` (NaN/Infinity) alone as failure: some engines lie at `ended`
+      // even after a normal listen, which falsely triggered `onError` + bogus mediaErr=4.
+      if (el.error) {
+        void onError();
+        return;
+      }
+      const d = el.duration;
+      const ct = el.currentTime || 0;
+      const progressed = ct > 0.2;
+      const badDuration = !Number.isFinite(d) || d <= 0.5;
+      if (badDuration && !progressed) {
+        void onError();
         return;
       }
       setPlayErr("");
@@ -1155,7 +1173,11 @@ function Shell({ children }) {
       } catch (_) {}
     };
 
-    el.addEventListener("playing", bindLockScreenMediaHandlers);
+    const onPlaying = () => {
+      setPlayErr("");
+      bindLockScreenMediaHandlers();
+    };
+    el.addEventListener("playing", onPlaying);
 
     el.addEventListener("pause", onPause);
     el.addEventListener("timeupdate", onTime);
@@ -1172,7 +1194,7 @@ function Shell({ children }) {
     if (!el.paused && getToken()) bindLockScreenMediaHandlers();
 
     return () => {
-      el.removeEventListener("playing", bindLockScreenMediaHandlers);
+      el.removeEventListener("playing", onPlaying);
       try {
         const ms = navigator.mediaSession;
         if (ms?.setActionHandler) {
