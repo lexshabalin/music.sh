@@ -121,7 +121,7 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	})
 	if err == nil {
 		var removed int64
-		removed, err = s.DeleteTracksWithMissingFiles(ctx)
+		removed, err = s.DeleteTracksWithMissingFiles(ctx, musicDir)
 		if err == nil {
 			changed += int(removed)
 			err = s.PrunePlaybackQueuesRemovedTracks(ctx)
@@ -194,7 +194,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if err != nil {
 		return err
 	}
-	removed, delErr := s.DeleteTracksWithMissingFiles(ctx)
+	removed, delErr := s.DeleteTracksWithMissingFiles(ctx, musicDir)
 	if delErr != nil {
 		return delErr
 	}

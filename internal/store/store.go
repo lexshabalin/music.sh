@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io/fs"
-	"os"
 	"strings"
 	"time"
 
@@ -2255,61 +2253,6 @@ func (d *DB) CleanupOrphanAlbums(ctx context.Context) error {
 		WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = a.id)
 	`)
 	return err
-}
-
-// DeleteTracksWithMissingFiles removes rows whose file_path no longer exists on disk.
-// Only Stat errors meaning "missing" trigger deletion; permission / transient I/O errors skip the row.
-func (d *DB) DeleteTracksWithMissingFiles(ctx context.Context) (int64, error) {
-	rows, err := d.Pool.Query(ctx, `SELECT id, file_path FROM tracks`)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	const batch = 256
-	var ids []uuid.UUID
-	flush := func() (int64, error) {
-		if len(ids) == 0 {
-			return 0, nil
-		}
-		tag, e := d.Pool.Exec(ctx, `DELETE FROM tracks WHERE id = ANY($1::uuid[])`, ids)
-		if e != nil {
-			return 0, e
-		}
-		n := tag.RowsAffected()
-		ids = ids[:0]
-		return n, nil
-	}
-
-	var total int64
-	for rows.Next() {
-		var id uuid.UUID
-		var fp string
-		if err := rows.Scan(&id, &fp); err != nil {
-			return total, err
-		}
-		fp = strings.TrimSpace(fp)
-		if fp == "" {
-			ids = append(ids, id)
-		} else if _, statErr := os.Stat(fp); statErr != nil {
-			if errors.Is(statErr, fs.ErrNotExist) || os.IsNotExist(statErr) {
-				ids = append(ids, id)
-			}
-		}
-		if len(ids) >= batch {
-			n, e := flush()
-			total += n
-			if e != nil {
-				return total, e
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return total, err
-	}
-	n, err := flush()
-	total += n
-	return total, err
 }
 
 // PrunePlaybackQueuesRemovedTracks drops missing track UUIDs from saved playback queues.
