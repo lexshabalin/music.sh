@@ -48,53 +48,121 @@ func isPathNotFoundErr(err error) bool {
 	return false
 }
 
-func trackPathProbeCandidates(musicRoot, fp string) []string {
-	fp = filepath.Clean(trimTrackFilePath(fp))
-	if fp == "" || fp == "." {
+// expandTrackProbePaths returns candidate locations for a stored file_path (bind mounts / relative paths / Abs).
+func expandTrackProbePaths(musicRoot, fp string) []string {
+	fp0 := trimTrackFilePath(fp)
+	if fp0 == "" {
 		return nil
 	}
 	seen := make(map[string]struct{})
 	var out []string
-	add := func(p string) {
-		p = filepath.Clean(strings.TrimSpace(p))
-		if p == "" || p == "." {
+	try := func(s string) {
+		s = filepath.Clean(strings.TrimSpace(strings.ReplaceAll(s, "\x00", "")))
+		if s == "" || s == "." {
 			return
 		}
-		if _, ok := seen[p]; ok {
+		if _, ok := seen[s]; ok {
 			return
 		}
-		seen[p] = struct{}{}
-		out = append(out, p)
+		seen[s] = struct{}{}
+		out = append(out, s)
 	}
-	add(fp)
-	mr := filepath.Clean(trimTrackFilePath(musicRoot))
-	if mr != "" && mr != "." && !filepath.IsAbs(fp) {
-		add(filepath.Join(mr, fp))
+	tryExtras := func(s string) {
+		try(s)
+		if abs, err := filepath.Abs(filepath.Clean(s)); err == nil && abs != "" {
+			try(abs)
+		}
+		if rl, err := filepath.EvalSymlinks(filepath.Clean(s)); err == nil && rl != "" {
+			try(rl)
+			if abs2, err2 := filepath.Abs(rl); err2 == nil && abs2 != "" {
+				try(abs2)
+			}
+		}
+	}
+	tryExtras(fp0)
+
+	mr := trimTrackFilePath(musicRoot)
+	mc := filepath.Clean(mr)
+	if mr != "" && mc != "" && mc != "." {
+		tryExtras(mc)
+		if ev, err := filepath.EvalSymlinks(mc); err == nil && ev != "" {
+			tryExtras(ev)
+		}
+		if !filepath.IsAbs(fp0) {
+			tryExtras(filepath.Join(mc, filepath.Clean(fp0)))
+			if ev, err := filepath.EvalSymlinks(mc); err == nil && ev != "" {
+				tryExtras(filepath.Join(filepath.Clean(ev), filepath.Clean(fp0)))
+			}
+		}
 	}
 	return out
 }
 
-// trackFileAbsentOnDisk tries the same logical locations that might have been recorded as file_path:
-// plain path plus, for relative paths, MUSIC_DIR-relative resolution.
+// trackFileAbsentOnDisk returns true if none of the candidate paths resolves to an existing regular file/audio file.
 func trackFileAbsentOnDisk(musicRoot, fp string) (absent bool, skipErr error) {
 	fp = trimTrackFilePath(fp)
 	if fp == "" {
 		return true, nil
 	}
-	for _, p := range trackPathProbeCandidates(musicRoot, fp) {
-		_, err := os.Stat(p)
-		if err == nil {
+	hasSkip := false
+	for _, p := range expandTrackProbePaths(musicRoot, fp) {
+		st, err := os.Stat(p)
+		if err == nil && !st.IsDir() {
 			return false, nil
 		}
-		if !isPathNotFoundErr(err) {
-			return false, err
+		if err != nil && !isPathNotFoundErr(err) {
+			hasSkip = true
+			skipErr = err
 		}
+	}
+	if hasSkip {
+		return false, skipErr
 	}
 	return true, nil
 }
 
+// ListTracksMissingFiles returns IDs from the subset `ids` whose file_path does not exist on disk.
+func (d *DB) ListTracksMissingFiles(ctx context.Context, musicRoot string, ids []uuid.UUID) ([]uuid.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	const capBatch = 400
+	var missing []uuid.UUID
+	for start := 0; start < len(ids); start += capBatch {
+		end := start + capBatch
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		rows, qerr := d.Pool.Query(ctx, `SELECT id, file_path FROM tracks WHERE id = ANY($1::uuid[])`, chunk)
+		if qerr != nil {
+			return missing, qerr
+		}
+		for rows.Next() {
+			var id uuid.UUID
+			var fp string
+			if scanErr := rows.Scan(&id, &fp); scanErr != nil {
+				rows.Close()
+				return missing, scanErr
+			}
+			absent, skip := trackFileAbsentOnDisk(musicRoot, fp)
+			if skip != nil {
+				continue
+			}
+			if absent {
+				missing = append(missing, id)
+			}
+		}
+		qerr = rows.Err()
+		rows.Close()
+		if qerr != nil {
+			return missing, qerr
+		}
+	}
+	return missing, nil
+}
+
 // DeleteTracksWithMissingFiles removes rows whose paths do not resolve to existing files on disk.
-// musicRoot matches configured MUSIC_DIR and is needed when file_path rows are stored as relative paths.
 func (d *DB) DeleteTracksWithMissingFiles(ctx context.Context, musicRoot string) (int64, error) {
 	rows, err := d.Pool.Query(ctx, `SELECT id, file_path FROM tracks`)
 	if err != nil {

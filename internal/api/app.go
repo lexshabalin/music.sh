@@ -146,6 +146,11 @@ func (a *App) Handlers() http.Handler {
 		g.Delete("/api/likes/{trackId}", a.removeLike)
 		g.Post("/api/library/scan", a.scan)
 		g.Get("/api/library/scan/status", a.scanStatus)
+		g.Post("/api/library/tracks/file-check", a.postTracksFileCheck)
+		g.Post("/api/library/reconcile-files", a.libraryReconcileFiles)
+		g.Delete("/api/library/tracks/{id}", a.deleteLibraryTrackRecord)
+		g.Delete("/api/library/albums/{id}", a.deleteLibraryAlbumRecord)
+		g.Delete("/api/library/artists/{id}", a.deleteLibraryArtistRecord)
 	})
 	return r
 }

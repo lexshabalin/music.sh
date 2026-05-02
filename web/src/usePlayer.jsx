@@ -98,6 +98,28 @@ export function PlayerProvider({ children }) {
     });
   }, []);
 
+  const removeTrackFromQueueById = useCallback((deadId) => {
+    const sid = String(deadId || "");
+    if (!sid) return;
+    const curQ = queueRef.current;
+    const curIdx = indexRef.current;
+    const removeIdx = curQ.findIndex((x) => String(x?.id ?? "") === sid);
+    if (removeIdx < 0) return;
+    const newQ = curQ.filter((_, j) => j !== removeIdx);
+    let ni = curIdx;
+    if (newQ.length === 0) {
+      ni = -1;
+    } else if (removeIdx < curIdx) {
+      ni = curIdx - 1;
+    } else if (removeIdx === curIdx) {
+      ni = Math.min(curIdx, newQ.length - 1);
+    } else {
+      ni = curIdx;
+    }
+    setQueue(newQ);
+    setIdx(ni);
+  }, []);
+
   const setVol = useCallback(
     (v) => {
       const vv = Math.max(0, Math.min(1, v));
@@ -154,6 +176,7 @@ export function PlayerProvider({ children }) {
       jumpTo,
       next,
       prev,
+      removeTrackFromQueueById,
       setVolume: setVol,
       toggleMute,
       setMute,
@@ -172,6 +195,7 @@ export function PlayerProvider({ children }) {
       jumpTo,
       next,
       prev,
+      removeTrackFromQueueById,
       setVol,
       toggleMute,
       setMute,
@@ -235,6 +259,7 @@ export function usePlayer() {
       setVolume: () => {},
       toggleMute: () => {},
       setMute: () => {},
+      removeTrackFromQueueById: () => {},
     }
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
@@ -8,6 +8,7 @@ import GenreSuggestInput, {
   genresToInputValue,
   parseGenreInput,
 } from "../components/GenreSuggestInput";
+import { MissingLibraryItemDialog } from "../components/MissingLibraryItemDialog";
 import { useI18n } from "../i18n";
 
 function ResetPinButton({ onClick, busy }) {
@@ -721,9 +722,13 @@ function sortTracks(list, key, dir) {
 
 export function Album() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { id } = useParams();
   const [tr, setTr] = useState([]);
   const [a, setA] = useState(null);
+  const [missingIds, setMissingIds] = useState([]);
+  const [missingDlg, setMissingDlg] = useState(""); // "" | "strip" | "album"
+  const [missingDlgBusy, setMissingDlgBusy] = useState(false);
   const [editAlbum, setEditAlbum] = useState(false);
   const [imprintOpen, setImprintOpen] = useState(false);
   const [liked, setLiked] = useState(new Set());
@@ -747,6 +752,27 @@ export function Album() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = (Array.isArray(tr) ? tr : []).map((x) => x?.id).filter(Boolean);
+    if (!getToken() || !ids.length) {
+      setMissingIds([]);
+      return undefined;
+    }
+    (async () => {
+      try {
+        const r = await lib.tracksFileCheck(ids);
+        const m = Array.isArray(r?.missingIds) ? r.missingIds.map(String) : [];
+        if (!cancelled) setMissingIds(m);
+      } catch {
+        if (!cancelled) setMissingIds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tr, id]);
 
   const sortedTracks = sortTracks(tr, sortKey, sortDir);
 
@@ -874,6 +900,77 @@ export function Album() {
         <AlbumMetaModal albumId={id} album={a} onClose={() => setEditAlbum(false)} onRefresh={load} />
       ) : null}
       {imprintOpen ? <ImprintModal albumId={id} onClose={() => setImprintOpen(false)} /> : null}
+      {getToken() && missingIds.length > 0 ? (
+        <div className="card" style={{ marginBottom: "1rem", padding: "12px 14px", lineHeight: 1.45 }}>
+          <p style={{ margin: "0 0 10px 0" }} className="muted">
+            {t("missingFile.banner")}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="ghost" onClick={() => setMissingDlg("strip")}>
+              {t("missingFile.stripAlbumTracks")}
+            </button>
+            <button type="button" className="ghost" onClick={() => setMissingDlg("album")}>
+              {t("missingFile.deleteAlbumDb")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {missingDlg === "strip"
+        ? createPortal(
+            <MissingLibraryItemDialog
+              variant="stripTracks"
+              stripCount={missingIds.length}
+              busy={missingDlgBusy}
+              t={t}
+              onNo={() => (!missingDlgBusy ? setMissingDlg("") : null)}
+              onYes={async () => {
+                if (missingDlgBusy) return;
+                setMissingDlgBusy(true);
+                try {
+                  for (const tid of missingIds) {
+                    try {
+                      await lib.deleteLibraryTrackRecord(tid);
+                    } catch (_) {}
+                  }
+                  for (const tid of missingIds) {
+                    if (typeof p.removeTrackFromQueueById === "function") p.removeTrackFromQueueById(tid);
+                  }
+                } finally {
+                  setMissingDlgBusy(false);
+                  setMissingDlg("");
+                  load();
+                }
+              }}
+            />,
+            document.body,
+          )
+        : null}
+      {missingDlg === "album"
+        ? createPortal(
+            <MissingLibraryItemDialog
+              variant="album"
+              busy={missingDlgBusy}
+              t={t}
+              onNo={() => (!missingDlgBusy ? setMissingDlg("") : null)}
+              onYes={async () => {
+                if (missingDlgBusy) return;
+                setMissingDlgBusy(true);
+                try {
+                  await lib.deleteLibraryAlbumRecord(id);
+                  for (const tid of missingIds) {
+                    if (typeof p.removeTrackFromQueueById === "function") p.removeTrackFromQueueById(tid);
+                  }
+                  navigate("/albums");
+                } catch (_) {
+                } finally {
+                  setMissingDlgBusy(false);
+                  setMissingDlg("");
+                }
+              }}
+            />,
+            document.body,
+          )
+        : null}
       <ul className="plain-list">
         <TrackHeader
           columns="album"

@@ -28,6 +28,7 @@ const Songs = React.lazy(() => import("./pages/Songs").then((m) => ({ default: m
 const Genres = React.lazy(() => import("./pages/Genres").then((m) => ({ default: m.Genres })));
 const Genre = React.lazy(() => import("./pages/Genre").then((m) => ({ default: m.Genre })));
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
+import { MissingLibraryItemDialog } from "./components/MissingLibraryItemDialog";
 import { GlobalSearch } from "./components/GlobalSearch";
 import {
   IFastForward,
@@ -161,6 +162,45 @@ function Shell({ children }) {
     durMediaMsRef.current = dur;
   }, [dur]);
   const [playErr, setPlayErr] = React.useState("");
+  const ghostPlaybackActiveRef = React.useRef(false);
+  const ghostPlaybackBusyRef = React.useRef(false);
+  const ghostPlaybackTrackIdRef = React.useRef("");
+  const [ghostPlaybackDlg, setGhostPlaybackDlg] = React.useState(false);
+  const [ghostPlaybackBusy, setGhostPlaybackBusy] = React.useState(false);
+  const dismissPlaybackGhost = React.useCallback(() => {
+    const sid = ghostPlaybackTrackIdRef.current;
+    if (sid && typeof p.removeTrackFromQueueById === "function") {
+      p.removeTrackFromQueueById(sid);
+    }
+    ghostPlaybackTrackIdRef.current = "";
+    ghostPlaybackActiveRef.current = false;
+    ghostPlaybackBusyRef.current = false;
+    setGhostPlaybackBusy(false);
+    setGhostPlaybackDlg(false);
+    setPlayErr("");
+  }, [p]);
+  const confirmPlaybackGhostDelete = React.useCallback(async () => {
+    const sid = ghostPlaybackTrackIdRef.current;
+    ghostPlaybackBusyRef.current = true;
+    setGhostPlaybackBusy(true);
+    try {
+      if (sid && getToken()) {
+        try {
+          await lib.deleteLibraryTrackRecord(sid);
+        } catch (_) {}
+      }
+      if (sid && typeof p.removeTrackFromQueueById === "function") {
+        p.removeTrackFromQueueById(sid);
+      }
+    } finally {
+      ghostPlaybackTrackIdRef.current = "";
+      ghostPlaybackActiveRef.current = false;
+      ghostPlaybackBusyRef.current = false;
+      setGhostPlaybackBusy(false);
+      setGhostPlaybackDlg(false);
+      setPlayErr("");
+    }
+  }, [p]);
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
   const [showQueue, setShowQueue] = React.useState(false);
@@ -1046,21 +1086,36 @@ function Shell({ children }) {
       if (!el.paused && getToken()) bindLockScreenMediaHandlers();
     };
     const onError = async () => {
-      // Don't auto-skip: browsers can mark the media as ended after a failed load.
+      const tidAtErr = p.current?.id ?? null;
+      const urlAtErr = p.current?.url || el.currentSrc || "";
       const mediaErr = el.error?.code ? `mediaErr=${el.error.code}` : "";
-      const src = p.current?.url || el.currentSrc || "";
       let http = "";
-      if (src) {
+      if (urlAtErr) {
         try {
-          // Probe the URL to surface the real HTTP status (401/404/416/500).
-          const r = await fetch(src, { headers: { Range: "bytes=0-0" } });
+          const r = await fetch(urlAtErr, { headers: { Range: "bytes=0-0" } });
           http = `http=${r.status}`;
         } catch (_) {
           http = "http=failed";
         }
       }
       setPlayErr(["Playback error (stream failed).", mediaErr, http].filter(Boolean).join(" "));
-      // keep queue position; user can retry or skip manually
+      const tok = getToken();
+      if (http === "http=404" && tok && tidAtErr != null && String(tidAtErr).length) {
+        const sid = String(tidAtErr);
+        if (ghostPlaybackActiveRef.current && ghostPlaybackTrackIdRef.current === sid) {
+          return;
+        }
+        ghostPlaybackActiveRef.current = true;
+        ghostPlaybackBusyRef.current = false;
+        ghostPlaybackTrackIdRef.current = sid;
+        setGhostPlaybackBusy(false);
+        setGhostPlaybackDlg(true);
+        setPlayErr("");
+        if (typeof p.removeTrackFromQueueById === "function") {
+          p.removeTrackFromQueueById(tidAtErr);
+        }
+        return;
+      }
     };
     const onEnded = () => {
       // Guard: if media ended due to an error / empty response, don't auto-advance forever.
@@ -2212,6 +2267,18 @@ function Shell({ children }) {
           }}
         />
       ) : null}
+      {ghostPlaybackDlg && getToken()
+        ? createPortal(
+            <MissingLibraryItemDialog
+              variant="track"
+              onYes={confirmPlaybackGhostDelete}
+              onNo={dismissPlaybackGhost}
+              busy={ghostPlaybackBusy}
+              t={t}
+            />,
+            document.body,
+          )
+        : null}
     </>
   );
 }

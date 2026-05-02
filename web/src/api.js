@@ -172,6 +172,15 @@ export const lib = {
   },
   scan: () => req("/api/library/scan", { method: "POST", body: "{}" }),
   scanStatus: () => req("/api/library/scan/status"),
+  tracksFileCheck: (ids) =>
+    req("/api/library/tracks/file-check", {
+      method: "POST",
+      body: JSON.stringify({ ids: Array.isArray(ids) ? ids : [] }),
+    }),
+  reconcileLibraryStaleFiles: () => req("/api/library/reconcile-files", { method: "POST", body: "{}" }),
+  deleteLibraryTrackRecord: (id) => req("/api/library/tracks/" + id, { method: "DELETE" }),
+  deleteLibraryAlbumRecord: (id) => req("/api/library/albums/" + id, { method: "DELETE" }),
+  deleteLibraryArtistRecord: (id) => req("/api/library/artists/" + id, { method: "DELETE" }),
   streamUrl: (id) => {
     // Audio tag requests cannot send Authorization headers; pass token via query param.
     const t = getToken();

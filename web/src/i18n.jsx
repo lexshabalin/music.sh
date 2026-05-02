@@ -116,6 +116,23 @@ const dict = {
     "player.unlike": "Не нравится",
     "player.addToPlaylist": "Добавить в плейлист",
 
+    "missingFile.title": "Упс!",
+    "missingFile.trackBody":
+      "Упс! Файла нет на диске! Удалить запись о треке из библиотеки? Это затрагивает только базу music.sh.",
+    "missingFile.albumBody":
+      "Удалить запись об альбоме и все связанные треки только в базе music.sh? На диске ничего не меняется.",
+    "missingFile.artistBody":
+      "Удалить запись об исполнителе и связанные альбомы/треки только в базе music.sh? На диске ничего не меняется.",
+    "missingFile.stripLead": "Удалить записи о ",
+    "missingFile.stripTail": " недоступных треках из базы music.sh (файлы на диске не трогаются)?",
+    "missingFile.yes": "Да",
+    "missingFile.no": "Нет",
+    "missingFile.banner": "На диске нет некоторых файлов из этого альбома.",
+    "missingFile.bannerArtist": "У этого исполнителя есть записи без файлов на диске.",
+    "missingFile.stripAlbumTracks": "Удалить недоступные треки из БД",
+    "missingFile.deleteAlbumDb": "Удалить альбом из БД",
+    "missingFile.deleteArtistDb": "Удалить исполнителя из БД",
+
     "profile.title": "Профиль",
     "profile.close": "Закрыть",
     "profile.uploadAvatar": "Загрузить аватар",
@@ -342,6 +359,23 @@ const dict = {
     "player.like": "Like",
     "player.unlike": "Unlike",
     "player.addToPlaylist": "Add to playlist",
+
+    "missingFile.title": "Whoops!",
+    "missingFile.trackBody":
+      "Whoops! File is missing! Remove record from library? This change affects only the music.sh database.",
+    "missingFile.albumBody":
+      "Remove this album record and related tracks only from the music.sh database? Nothing on disk will be touched.",
+    "missingFile.artistBody":
+      "Remove this artist record and related albums/tracks only from the music.sh database? Nothing on disk will be touched.",
+    "missingFile.stripLead": "Remove database records for ",
+    "missingFile.stripTail": " tracks whose files are missing on disk?",
+    "missingFile.yes": "Yes",
+    "missingFile.no": "No",
+    "missingFile.banner": "Some audio files referenced by this album are missing on disk.",
+    "missingFile.bannerArtist": "This artist still has tracks with missing audio files.",
+    "missingFile.stripAlbumTracks": "Remove missing-track records",
+    "missingFile.deleteAlbumDb": "Remove album from database",
+    "missingFile.deleteArtistDb": "Remove artist from database",
 
     "profile.title": "Profile",
     "profile.close": "Close",

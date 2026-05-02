@@ -1203,3 +1203,131 @@ func (a *App) runScan(ctx context.Context) {
 		a.scanState.Error = err.Error()
 	}
 }
+
+type trackFileCheckIn struct {
+	IDs []string `json:"ids"`
+}
+
+func (a *App) postTracksFileCheck(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userIDFromCtx(r.Context()); !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	var in trackFileCheckIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	const maxIDs = 800
+	raw := in.IDs
+	if len(raw) > maxIDs {
+		raw = raw[:maxIDs]
+	}
+	seen := make(map[uuid.UUID]struct{})
+	var uuids []uuid.UUID
+	for _, s := range raw {
+		u, err := uuid.Parse(strings.TrimSpace(s))
+		if err != nil {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		uuids = append(uuids, u)
+	}
+	if len(uuids) == 0 {
+		JSON(w, 200, map[string]any{"missingIds": []string{}})
+		return
+	}
+	list, err := a.DB.ListTracksMissingFiles(r.Context(), a.MusicDir, uuids)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	out := make([]string, len(list))
+	for i, u := range list {
+		out[i] = u.String()
+	}
+	JSON(w, 200, map[string]any{"missingIds": out})
+}
+
+func (a *App) libraryReconcileFiles(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userIDFromCtx(r.Context()); !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	n, err := a.DB.DeleteTracksWithMissingFiles(r.Context(), a.MusicDir)
+	if err != nil {
+		JSONError(w, 500, "reconcile failed")
+		return
+	}
+	_ = a.DB.AfterLibraryEntityDelete(r.Context())
+	JSON(w, 200, map[string]any{"removed": int(n)})
+}
+
+func (a *App) deleteLibraryTrackRecord(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userIDFromCtx(r.Context()); !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	if err := a.DB.DeleteLibraryTrack(r.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	_ = a.DB.AfterLibraryEntityDelete(r.Context())
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) deleteLibraryAlbumRecord(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userIDFromCtx(r.Context()); !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	if err := a.DB.DeleteLibraryAlbum(r.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	_ = a.DB.AfterLibraryEntityDelete(r.Context())
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) deleteLibraryArtistRecord(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userIDFromCtx(r.Context()); !ok {
+		JSONError(w, 401, "unauthorized")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		JSONError(w, 400, "id")
+		return
+	}
+	if err := a.DB.DeleteLibraryArtist(r.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			JSONError(w, 404, "not found")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	_ = a.DB.AfterLibraryEntityDelete(r.Context())
+	w.WriteHeader(http.StatusNoContent)
+}
