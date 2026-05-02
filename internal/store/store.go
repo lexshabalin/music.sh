@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -2256,36 +2258,9 @@ func (d *DB) CleanupOrphanAlbums(ctx context.Context) error {
 	return err
 }
 
-// filePathUnderLibraryRoot returns true if trackPath is inside musicRoot (handles Clean/Abs).
-func filePathUnderLibraryRoot(trackPath, musicRoot string) bool {
-	rootAbs, err := filepath.Abs(filepath.Clean(musicRoot))
-	if err != nil || rootAbs == "" || rootAbs == "." {
-		rootAbs = filepath.Clean(musicRoot)
-	}
-	pathAbs, err := filepath.Abs(filepath.Clean(trackPath))
-	if err != nil {
-		pathAbs = filepath.Clean(trackPath)
-	}
-	rel, err := filepath.Rel(rootAbs, pathAbs)
-	if err != nil {
-		return false
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return false
-	}
-	return true
-}
-
-// DeleteTracksUnderRootNotSeen removes rows for files under musicRoot that were not seen during
-// a full directory walk (removed or renamed off disk). seenPaths keys must be filepath.Clean paths.
-func (d *DB) DeleteTracksUnderRootNotSeen(ctx context.Context, musicRoot string, seenPaths map[string]struct{}) (int64, error) {
-	if musicRoot == "" || seenPaths == nil {
-		return 0, nil
-	}
-	rootAbs, err := filepath.Abs(filepath.Clean(musicRoot))
-	if err != nil {
-		rootAbs = filepath.Clean(musicRoot)
-	}
+// DeleteTracksWithMissingFiles removes rows whose file_path no longer exists on disk.
+// Only Stat errors meaning "missing" trigger deletion; permission / transient I/O errors skip the row.
+func (d *DB) DeleteTracksWithMissingFiles(ctx context.Context) (int64, error) {
 	rows, err := d.Pool.Query(ctx, `SELECT id, file_path FROM tracks`)
 	if err != nil {
 		return 0, err
@@ -2314,14 +2289,14 @@ func (d *DB) DeleteTracksUnderRootNotSeen(ctx context.Context, musicRoot string,
 		if err := rows.Scan(&id, &fp); err != nil {
 			return total, err
 		}
-		if !filePathUnderLibraryRoot(fp, rootAbs) {
-			continue
+		fp = strings.TrimSpace(fp)
+		if fp == "" {
+			ids = append(ids, id)
+		} else if _, statErr := os.Stat(fp); statErr != nil {
+			if errors.Is(statErr, fs.ErrNotExist) || os.IsNotExist(statErr) {
+				ids = append(ids, id)
+			}
 		}
-		k := filepath.Clean(fp)
-		if _, ok := seenPaths[k]; ok {
-			continue
-		}
-		ids = append(ids, id)
 		if len(ids) >= batch {
 			n, e := flush()
 			total += n

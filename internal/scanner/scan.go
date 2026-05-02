@@ -48,14 +48,6 @@ func getenvIntPositive(key string, def int) int {
 	return x
 }
 
-// rememberLibraryPath records a path confirmed on disk during a full walk (after normalize + Stat).
-func rememberLibraryPath(seen map[string]struct{}, path string) {
-	if seen == nil || strings.TrimSpace(path) == "" {
-		return
-	}
-	seen[filepath.Clean(path)] = struct{}{}
-}
-
 // normalizeAudioPathOnDisk renames bad basenames (trailing space before ext, HTML entities like &#39;) when the target is free, and updates DB paths.
 func normalizeAudioPathOnDisk(ctx context.Context, s *store.DB, path string) (string, error) {
 	base := filepath.Base(path)
@@ -83,7 +75,6 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	if musicDir == "" {
 		return 0, fmt.Errorf("MUSIC_DIR empty")
 	}
-	seen := make(map[string]struct{})
 	var audioCount int
 	err = filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -103,7 +94,6 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		if e != nil {
 			return e
 		}
-		rememberLibraryPath(seen, path)
 		st := info.Size()
 		mt := info.ModTime()
 		audioCount++
@@ -131,7 +121,7 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	})
 	if err == nil {
 		var removed int64
-		removed, err = s.DeleteTracksUnderRootNotSeen(ctx, musicDir, seen)
+		removed, err = s.DeleteTracksWithMissingFiles(ctx)
 		if err == nil {
 			changed += int(removed)
 			err = s.PrunePlaybackQueuesRemovedTracks(ctx)
@@ -150,7 +140,6 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if musicDir == "" {
 		return fmt.Errorf("MUSIC_DIR empty")
 	}
-	seen := make(map[string]struct{})
 	lastReport := 0
 	err := filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -170,7 +159,6 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		if e != nil {
 			return e
 		}
-		rememberLibraryPath(seen, path)
 		st := info.Size()
 		mt := info.ModTime()
 		ns := mt.UnixNano()
@@ -206,7 +194,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if err != nil {
 		return err
 	}
-	removed, delErr := s.DeleteTracksUnderRootNotSeen(ctx, musicDir, seen)
+	removed, delErr := s.DeleteTracksWithMissingFiles(ctx)
 	if delErr != nil {
 		return delErr
 	}
