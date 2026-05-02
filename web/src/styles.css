@@ -1452,6 +1452,32 @@ select.lang-select {
 }
 .mobile-player-progress .range.progress {
   touch-action: pan-x;
+  /* +4px vs default .range (16px) for a slightly taller hit area */
+  height: 20px;
+}
+.mobile-player-progress .range.mono::-webkit-slider-runnable-track {
+  height: 8px; /* base track 4px + 4px */
+}
+.mobile-player-progress .range.mono::-moz-range-track {
+  height: 8px;
+}
+.mobile-player-progress .range.mono::-webkit-slider-thumb {
+  margin-top: -2px; /* vertically center 12px thumb on 8px track */
+  transition: transform 0.12s ease;
+}
+.mobile-player-progress .range.mono::-moz-range-thumb {
+  transition: transform 0.12s ease;
+}
+/* :active = mouse / some browsers; --thumb-active = reliable touch scrub (see App.jsx pointers) */
+.mobile-player-progress .range.mono:active::-webkit-slider-thumb,
+.mobile-player-progress.mobile-player-progress--thumb-active .range.mono::-webkit-slider-thumb {
+  transform: scale(1.5);
+  transform-origin: center;
+}
+.mobile-player-progress .range.mono:active::-moz-range-thumb,
+.mobile-player-progress.mobile-player-progress--thumb-active .range.mono::-moz-range-thumb {
+  transform: scale(1.5);
+  transform-origin: center;
 }
 .mobile-player-times {
   display: flex;

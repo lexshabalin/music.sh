@@ -1738,14 +1738,26 @@ function Shell({ children }) {
                         max={Math.max(1, dur || 0)}
                         step="0.25"
                         value={Math.min(curT, Math.max(1, dur || 0))}
-                        onPointerDown={() => {
+                        onPointerDown={(e) => {
                           progressScrubbingRef.current = true;
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.add(
+                            "mobile-player-progress--thumb-active"
+                          );
+                          try {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                          } catch (_) {}
                         }}
-                        onPointerUp={() => {
+                        onPointerUp={(e) => {
                           progressScrubbingRef.current = false;
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
+                            "mobile-player-progress--thumb-active"
+                          );
                         }}
-                        onPointerCancel={() => {
+                        onPointerCancel={(e) => {
                           progressScrubbingRef.current = false;
+                          e.currentTarget.closest(".mobile-player-progress")?.classList.remove(
+                            "mobile-player-progress--thumb-active"
+                          );
                         }}
                         onInput={(e) => {
                           applyLocalSeekFromSlider(e.target.value);
