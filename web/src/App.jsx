@@ -715,7 +715,7 @@ function Shell({ children }) {
           return;
         }
       }
-      // Defer actual seek until after `syncAudioAfterPlaybackClaim` may call `load()` (resets currentTime).
+      // Defer seek until after `syncAudioAfterTakeoverAwait` runs `load()` (resets currentTime).
       postTakeoverSeekSecRef.current = Math.max(0, positionMs / 1000);
     } catch (_) {
       postTakeoverSeekSecRef.current = null;
@@ -736,7 +736,7 @@ function Shell({ children }) {
     } catch (_) {}
   }, []);
 
-  /** After `syncAudioAfterPlaybackClaim` (may call `load()` and wipe time), re-apply takeover position before `play()`. */
+  /** Re-seek after `syncAudioAfterPlaybackClaim` may call `load()` (resets `currentTime`). */
   const applyPostTakeoverSeekRescue = React.useCallback(async () => {
     const rescue = postTakeoverSeekSecRef.current;
     postTakeoverSeekSecRef.current = null;
@@ -747,6 +747,20 @@ function Shell({ children }) {
       return normPlaybackTrackId(playerCurrentIdRef.current) === wantKey;
     });
   }, [p.ref]);
+
+  /**
+   * `POST /takeover` must finish (and set `postTakeoverSeekSecRef`) before `load()`:
+   * otherwise the audio pipeline resets to 0 and the rescue target was never written.
+   */
+  const syncAudioAfterTakeoverAwait = React.useCallback(
+    async (el, wantUrl) => {
+      if (!el) return;
+      await awaitPlaybackTakeoverAfterRelease();
+      syncAudioAfterPlaybackClaim(el, wantUrl);
+      await applyPostTakeoverSeekRescue();
+    },
+    [syncAudioAfterPlaybackClaim, awaitPlaybackTakeoverAfterRelease, applyPostTakeoverSeekRescue]
+  );
 
   const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
   /** While mirroring another client, a local seek must POST /takeover; otherwise PUT is enough. */
@@ -880,7 +894,7 @@ function Shell({ children }) {
         skipAutoplayOnceRef.current = true;
         // Prefer the id on the row we actually play so pending-seek matches `p.current.id`.
         pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? origId ?? null;
-        pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
+        pendingSeekSecRef.current = Math.max(0, serverPlaybackSeekSec(st) - 0.25);
         playQueueRef.current(items, newIdx, { skipPlaybackRelease: true });
         playbackAllowEmptyPutRef.current = true;
       } catch (_) {
@@ -1360,9 +1374,7 @@ function Shell({ children }) {
           const a = p.ref.current;
           if (!a) return;
           const want = p.current?.url || "";
-          syncAudioAfterPlaybackClaim(a, want);
-          await awaitPlaybackTakeoverAfterRelease();
-          await applyPostTakeoverSeekRescue();
+          await syncAudioAfterTakeoverAwait(a, want);
           const pr = a.play();
           if (pr && typeof pr.catch === "function") pr.catch(() => {});
         });
@@ -1613,7 +1625,7 @@ function Shell({ children }) {
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
     };
-  }, [p.current?.id, syncAudioAfterPlaybackClaim, awaitPlaybackTakeoverAfterRelease, applyPostTakeoverSeekRescue]);
+  }, [p.current?.id, syncAudioAfterTakeoverAwait]);
 
   // After each track (or queue index) change: start at 0 unless we have a valid reload/cross-device restore pending.
   // Also gates late metadata/takeover seeks via playbackSwitchEpochRef.
@@ -1939,9 +1951,7 @@ function Shell({ children }) {
               if (el.paused) {
                 claimPlaybackSync();
                 const want = p.current?.url || "";
-                syncAudioAfterPlaybackClaim(el, want);
-                await awaitPlaybackTakeoverAfterRelease();
-                await applyPostTakeoverSeekRescue();
+                await syncAudioAfterTakeoverAwait(el, want);
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch((err) => {
@@ -2169,9 +2179,7 @@ function Shell({ children }) {
                   if (el.paused) {
                     claimPlaybackSync();
                     const want = p.current?.url || "";
-                    syncAudioAfterPlaybackClaim(el, want);
-                    await awaitPlaybackTakeoverAfterRelease();
-                    await applyPostTakeoverSeekRescue();
+                    await syncAudioAfterTakeoverAwait(el, want);
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") {
                       pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
@@ -2506,9 +2514,7 @@ function Shell({ children }) {
                           if (el.paused) {
                             claimPlaybackSync();
                             const want = p.current?.url || "";
-                            syncAudioAfterPlaybackClaim(el, want);
-                            await awaitPlaybackTakeoverAfterRelease();
-                            await applyPostTakeoverSeekRescue();
+                            await syncAudioAfterTakeoverAwait(el, want);
                             const pr = el.play();
                             if (pr && typeof pr.catch === "function") {
                               pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
@@ -2682,9 +2688,7 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    syncAudioAfterPlaybackClaim(el, it.url);
-                                    await awaitPlaybackTakeoverAfterRelease();
-                                    await applyPostTakeoverSeekRescue();
+                                    await syncAudioAfterTakeoverAwait(el, it.url);
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
                                       pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
@@ -2700,9 +2704,7 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    syncAudioAfterPlaybackClaim(el, it.url);
-                                    await awaitPlaybackTakeoverAfterRelease();
-                                    await applyPostTakeoverSeekRescue();
+                                    await syncAudioAfterTakeoverAwait(el, it.url);
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
                                       pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
