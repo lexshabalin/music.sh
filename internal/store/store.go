@@ -47,6 +47,9 @@ const sqlDispImprintGenreLegacyExpr = `COALESCE(
   NULLIF(BTRIM(COALESCE(al.genre::text, '')), '')
 )`
 
+// sqlDispTrackPerformer is the performer credit line shown in lists (pins > verbatim tag line > fallback row name).
+const sqlDispTrackPerformer = `COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), NULLIF(BTRIM(t.tag_artist), ''), ar.name)`
+
 func imprintGenreQueryShouldRetry(err error) bool {
 	var pe *pgconn.PgError
 	if !errors.As(err, &pe) {
@@ -81,7 +84,11 @@ func (d *DB) AlbumBelongsToArtistContext(ctx context.Context, albumID, artistID 
 			SELECT 1 FROM albums a
 			WHERE a.id = $1 AND (
 				a.artist_id = $2 OR EXISTS (
-					SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.artist_id = $2
+					SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (
+						t.artist_id = $2 OR EXISTS (
+							SELECT 1 FROM track_artists ta WHERE ta.track_id = t.id AND ta.artist_id = $2
+						)
+					)
 				)
 			)
 		)`, albumID, artistID).Scan(&ok)
@@ -137,7 +144,7 @@ func (d *DB) TrackIdentifyInput(ctx context.Context, id uuid.UUID) (filePath str
 		SELECT tr.file_path,
 			COALESCE(NULLIF(BTRIM(tr.meta_user_title), ''), tr.title),
 			tr.duration_ms,
-			COALESCE(NULLIF(BTRIM(tr.meta_user_artist), ''), ar.name),
+			COALESCE(NULLIF(BTRIM(tr.meta_user_artist), ''), NULLIF(BTRIM(tr.tag_artist), ''), ar.name),
 			COALESCE(NULLIF(BTRIM(tr.meta_user_album), ''), al.title),
 			tr.mb_recording_id
 		FROM tracks tr
@@ -237,7 +244,12 @@ func (d *DB) ApplyIdentifiedMeta(ctx context.Context, trackID uuid.UUID, title, 
 		useAlbum = "Unknown"
 	}
 
-	artistID, e := d.FindOrCreateArtist(ctx, useArtist)
+	cr := ArtistCreditParts(useArtist)
+	if len(cr) == 0 {
+		cr = []string{useArtist}
+	}
+
+	artistID, e := d.FindOrCreateArtist(ctx, cr[0])
 	if e != nil {
 		return uuid.Nil, e
 	}
@@ -271,7 +283,18 @@ func (d *DB) ApplyIdentifiedMeta(ctx context.Context, trackID uuid.UUID, title, 
 		    identified_at = now()
 		WHERE id = $1
 	`, trackID, newTitle, artistID, albID, useYear, rec)
-	return albumID, err
+	if err != nil {
+		return albumID, err
+	}
+	if shouldSetArtist && strings.TrimSpace(artist) != "" {
+		if _, e := d.Pool.Exec(ctx, `UPDATE tracks SET tag_artist = $2 WHERE id = $1`, trackID, artist); e != nil {
+			return albumID, e
+		}
+	}
+	if e := d.RefreshTrackArtistCredits(ctx, trackID); e != nil {
+		return albumID, e
+	}
+	return albumID, nil
 }
 
 func metaPinString(ns sql.NullString) bool {
@@ -528,6 +551,108 @@ func (d *DB) FindOrCreateAlbum(ctx context.Context, artistID *uuid.UUID, title s
 	return aid, nil
 }
 
+// ReplaceTrackArtistCredits replaces junction rows used to index credited performers (collabs / feat / comma lists).
+func (d *DB) ReplaceTrackArtistCredits(ctx context.Context, trackID uuid.UUID, creditNames []string) error {
+	if len(creditNames) == 0 {
+		creditNames = []string{"Unknown Artist"}
+	}
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `DELETE FROM track_artists WHERE track_id = $1`, trackID); err != nil {
+		return err
+	}
+	var pos int16
+	seenAID := map[uuid.UUID]struct{}{}
+	for _, nm := range creditNames {
+		nm = strings.TrimSpace(nm)
+		if nm == "" {
+			continue
+		}
+		aid, ferr := d.FindOrCreateArtist(ctx, nm)
+		if ferr != nil {
+			return ferr
+		}
+		if _, dup := seenAID[aid]; dup {
+			continue
+		}
+		seenAID[aid] = struct{}{}
+		if _, err = tx.Exec(ctx, `
+			INSERT INTO track_artists (track_id, artist_id, position) VALUES ($1, $2, $3)
+		`, trackID, aid, pos); err != nil {
+			return err
+		}
+		pos++
+	}
+	return tx.Commit(ctx)
+}
+
+func trackArtistPinned(ns sql.NullString) bool {
+	return ns.Valid && strings.TrimSpace(ns.String) != ""
+}
+
+func (d *DB) reconcilePrimaryArtistColumn(ctx context.Context, trackID uuid.UUID, credits []string, pinArtist sql.NullString) error {
+	if trackArtistPinned(pinArtist) {
+		return nil
+	}
+	if len(credits) == 0 {
+		return nil
+	}
+	pid, err := d.FindOrCreateArtist(ctx, credits[0])
+	if err != nil {
+		return err
+	}
+	_, err = d.Pool.Exec(ctx, `UPDATE tracks SET artist_id = $2 WHERE id = $1`, trackID, pid)
+	return err
+}
+
+// RefreshTrackArtistCredits rebuilds performer junction rows from meta / tag lines and aligns artist_id unless pinned.
+func (d *DB) RefreshTrackArtistCredits(ctx context.Context, trackID uuid.UUID) error {
+	var mu, tagArtist, legacy sql.NullString
+	err := d.Pool.QueryRow(ctx, `
+		SELECT tr.meta_user_artist, tr.tag_artist, ar.name
+		FROM tracks tr
+		LEFT JOIN artists ar ON tr.artist_id = ar.id
+		WHERE tr.id = $1
+	`, trackID).Scan(&mu, &tagArtist, &legacy)
+	if err != nil {
+		return err
+	}
+	line := ""
+	switch {
+	case trackArtistPinned(mu):
+		line = strings.TrimSpace(mu.String)
+	case tagArtist.Valid && strings.TrimSpace(tagArtist.String) != "":
+		line = strings.TrimSpace(tagArtist.String)
+	case legacy.Valid:
+		line = strings.TrimSpace(legacy.String)
+	default:
+		line = ""
+	}
+	parts := ArtistCreditParts(line)
+	if len(parts) == 0 {
+		parts = []string{"Unknown Artist"}
+	}
+	if err := d.reconcilePrimaryArtistColumn(ctx, trackID, parts, mu); err != nil {
+		return err
+	}
+	return d.ReplaceTrackArtistCredits(ctx, trackID, parts)
+}
+
+// RepairTrackCreditsIfEmpty backfills junction rows for legacy tracks after introducing track_artists.
+func (d *DB) RepairTrackCreditsIfEmpty(ctx context.Context, trackID uuid.UUID) error {
+	var n int
+	if err := d.Pool.QueryRow(ctx, `SELECT COUNT(*)::int FROM track_artists WHERE track_id = $1`, trackID).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	return d.RefreshTrackArtistCredits(ctx, trackID)
+}
+
 // albumHasUserMeta is true if the user edited this album — rescan should not move tracks away from it.
 func (d *DB) albumHasUserMeta(ctx context.Context, albumID uuid.UUID) (bool, error) {
 	var ok bool
@@ -553,27 +678,34 @@ func sqlNullTrim(s string) interface{} {
 
 // TrackUnchangedFingerprint reports whether the DB already has this path with the same
 // size and mtime (typical unchanged file). The scanner skips tag reads and ffprobe in that case.
-func (d *DB) TrackUnchangedFingerprint(ctx context.Context, filePath string, fileSize, mtimeNs int64) (albumID uuid.UUID, unchanged bool, err error) {
-	var aid sql.NullString
+func (d *DB) TrackUnchangedFingerprint(ctx context.Context, filePath string, fileSize, mtimeNs int64) (trackID, albumID uuid.UUID, unchanged bool, err error) {
+	var albStr, tidStr sql.NullString
 	e := d.Pool.QueryRow(ctx, `
-		SELECT album_id::text FROM tracks
+		SELECT id::text, album_id::text FROM tracks
 		WHERE file_path = $1 AND file_size = $2 AND file_mtime_ns = $3
 		LIMIT 1
-	`, filePath, fileSize, mtimeNs).Scan(&aid)
+	`, filePath, fileSize, mtimeNs).Scan(&tidStr, &albStr)
 	if e == pgx.ErrNoRows {
-		return uuid.Nil, false, nil
+		return uuid.Nil, uuid.Nil, false, nil
 	}
 	if e != nil {
-		return uuid.Nil, false, e
+		return uuid.Nil, uuid.Nil, false, e
 	}
-	if !aid.Valid || aid.String == "" {
-		return uuid.Nil, false, nil
+	if !tidStr.Valid || tidStr.String == "" {
+		return uuid.Nil, uuid.Nil, false, nil
 	}
-	albumID, e = uuid.Parse(aid.String)
+	trackID, e = uuid.Parse(tidStr.String)
 	if e != nil {
-		return uuid.Nil, false, nil
+		return uuid.Nil, uuid.Nil, false, nil
 	}
-	return albumID, true, nil
+	if !albStr.Valid || albStr.String == "" {
+		return uuid.Nil, uuid.Nil, false, nil
+	}
+	albumID, e = uuid.Parse(albStr.String)
+	if e != nil {
+		return uuid.Nil, uuid.Nil, false, nil
+	}
+	return trackID, albumID, true, nil
 }
 
 // UpsertTrack reads metadata from the scanner and inserts or updates a file row.
@@ -588,13 +720,24 @@ func (d *DB) UpsertTrack(
 	bitrateKbps *int,
 	tagAlbumArtist, tagGenreScan, tagComposer, tagComment string,
 ) (trackID, albumID uuid.UUID, isNewOrChanged bool, err error) {
-	artistID, err := d.FindOrCreateArtist(ctx, artistName)
+	tagLine := strings.TrimSpace(artistName)
+	creditParts := ArtistCreditParts(tagLine)
+	if len(creditParts) == 0 {
+		creditParts = []string{"Unknown Artist"}
+	}
+	artistID, err := d.FindOrCreateArtist(ctx, creditParts[0])
 	if err != nil {
 		return
 	}
 	albumArtistID := artistID
-	if strings.TrimSpace(albumArtistName) != "" && !strings.EqualFold(strings.TrimSpace(albumArtistName), strings.TrimSpace(artistName)) {
-		if aaid, e := d.FindOrCreateArtist(ctx, albumArtistName); e == nil {
+	if strings.TrimSpace(albumArtistName) != "" && !strings.EqualFold(strings.TrimSpace(albumArtistName), tagLine) {
+		aa := strings.TrimSpace(albumArtistName)
+		ap := ArtistCreditParts(aa)
+		if len(ap) > 0 {
+			if aaid, e := d.FindOrCreateArtist(ctx, ap[0]); e == nil {
+				albumArtistID = aaid
+			}
+		} else if aaid, e := d.FindOrCreateArtist(ctx, aa); e == nil {
 			albumArtistID = aaid
 		}
 	}
@@ -622,6 +765,16 @@ func (d *DB) UpsertTrack(
 		FROM tracks WHERE file_path = $1`, filePath).
 		Scan(&id, &oldMtime, &oldSize, &curAlbumID, &curArtistID, &curTitle,
 			&muTitle, &muArtist, &muAlbum, &muYear, &muTrackNo, &muDiscNo)
+	syncCreditsFromUpsert := func(track uuid.UUID, pinArtist bool, muArt sql.NullString, scanCredits []string) error {
+		names := scanCredits
+		if pinArtist && trackArtistPinned(muArt) {
+			pp := ArtistCreditParts(strings.TrimSpace(muArt.String))
+			if len(pp) > 0 {
+				names = pp
+			}
+		}
+		return d.ReplaceTrackArtistCredits(ctx, track, names)
+	}
 	if err2 == nil {
 		trackID = id
 		pinTitle := metaPinString(muTitle)
@@ -696,11 +849,15 @@ func (d *DB) UpsertTrack(
 				file_size = $2, file_mtime_ns = $3, duration_ms = $4, title = $5,
 				format = $6, bitrate_kbps = $7,
 				track_no = $8, disc_no = $9, year = $10, album_id = $11, artist_id = $12,
-				tag_album_artist = $13, tag_composer = $14, tag_comment = $15
+				tag_album_artist = $13, tag_artist = $14, tag_composer = $15, tag_comment = $16
 			WHERE id = $1
 		`, id, fileSize, mtimeNs, durationMS, finalTitle, format, bitrateKbps, finalTrackNo, finalDiscNo, finalYear, finalAlbumID, finalArtistID,
-			sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
+			sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagLine), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 		if e != nil {
+			err = e
+			return
+		}
+		if e := syncCreditsFromUpsert(id, pinArtist, muArtist, creditParts); e != nil {
 			err = e
 			return
 		}
@@ -717,11 +874,14 @@ func (d *DB) UpsertTrack(
 		INSERT INTO tracks (
 			id, file_path, file_size, file_mtime_ns, duration_ms, title, format, bitrate_kbps,
 			track_no, disc_no, year, album_id, artist_id,
-			tag_album_artist, tag_composer, tag_comment
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			tag_album_artist, tag_artist, tag_composer, tag_comment
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`, trackID, filePath, fileSize, mtimeNs, durationMS, trackTitle, format, bitrateKbps, trackNo, discNo, year, albumID, artistID,
-		sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
+		sqlNullTrim(tagAlbumArtist), sqlNullTrim(tagLine), sqlNullTrim(tagComposer), sqlNullTrim(tagComment))
 	if err != nil {
+		return
+	}
+	if err = d.ReplaceTrackArtistCredits(ctx, trackID, creditParts); err != nil {
 		return
 	}
 	_ = d.mergeTrackGenresFromScan(ctx, trackID, albumID, tagGenreScan)
@@ -861,7 +1021,11 @@ func (d *DB) ListAlbums(ctx context.Context, q string, artistID *uuid.UUID) ([]A
 			SELECT a.*
 			FROM albums a
 			WHERE ($3::uuid IS NULL OR a.artist_id = $3 OR EXISTS (
-				SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.artist_id = $3
+				SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (
+					t.artist_id = $3 OR EXISTS (
+						SELECT 1 FROM track_artists ta WHERE ta.track_id = t.id AND ta.artist_id = $3
+					)
+				)
 			))
 		),
 		base AS (
@@ -996,7 +1160,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 			t.album_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			`+sqlDispTrackPerformer+` AS disp_artist_name,
 			t.art_path,
 			` + sqlDispTrackGenres + `,
 			t.genres_manual AS pin_genres,
@@ -1012,10 +1176,10 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 		WHERE ($1 = '' OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) ILIKE $2) OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) ILIKE $2) OR
-			(COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) ILIKE $2) OR
+			(`+sqlDispTrackPerformer+` ILIKE $2) OR
 			(t.file_path ILIKE $2))
 		AND ($3::uuid IS NULL OR t.album_id = $3)
-		AND ($4::uuid IS NULL OR t.artist_id = $4)
+		AND ($4::uuid IS NULL OR t.artist_id = $4 OR EXISTS (SELECT 1 FROM track_artists ta WHERE ta.track_id = t.id AND ta.artist_id = $4))
 		AND ($5::uuid IS NULL OR (
 			EXISTS (SELECT 1 FROM track_genres tg WHERE tg.track_id = t.id AND tg.genre_id = $5)
 			OR (
@@ -1024,7 +1188,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 			)
 		))
 		ORDER BY
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
+			`+sqlDispTrackPerformer+` NULLS LAST,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
@@ -1060,10 +1224,10 @@ func (d *DB) ListTrackIDs(ctx context.Context, query string, albumID, artistID, 
 		WHERE ($1 = '' OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) ILIKE $2) OR
 			(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) ILIKE $2) OR
-			(COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) ILIKE $2) OR
+			(`+sqlDispTrackPerformer+` ILIKE $2) OR
 			(t.file_path ILIKE $2))
 		AND ($3::uuid IS NULL OR t.album_id = $3)
-		AND ($4::uuid IS NULL OR t.artist_id = $4)
+		AND ($4::uuid IS NULL OR t.artist_id = $4 OR EXISTS (SELECT 1 FROM track_artists ta WHERE ta.track_id = t.id AND ta.artist_id = $4))
 		AND ($5::uuid IS NULL OR (
 			EXISTS (SELECT 1 FROM track_genres tg WHERE tg.track_id = t.id AND tg.genre_id = $5)
 			OR (
@@ -1124,7 +1288,7 @@ func (d *DB) queryAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID, 
 			t.file_path,
 			COALESCE(t.format, '') AS fmt,
 			COALESCE(COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title), '') AS disp_title,
-			COALESCE(COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name), '') AS disp_artist_name,
+			COALESCE(`+sqlDispTrackPerformer+`, '') AS disp_artist_name,
 			COALESCE(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title), '') AS disp_album_title,
 			COALESCE(COALESCE(
 				NULLIF(BTRIM(t.meta_user_album_artist), ''),
@@ -1149,7 +1313,7 @@ func (d *DB) queryAlbumTracksForImprint(ctx context.Context, albumID uuid.UUID, 
 		LEFT JOIN artists aal ON al.artist_id = aal.id
 		WHERE t.album_id = $1
 		ORDER BY
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) NULLS LAST,
+			`+sqlDispTrackPerformer+` NULLS LAST,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
@@ -1458,7 +1622,11 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 	// Resolve artist_id
 	var artistID uuid.UUID
 	if metaPinString(muA) {
-		aid, e := d.FindOrCreateArtist(ctx, muA.String)
+		ps := ArtistCreditParts(strings.TrimSpace(muA.String))
+		if len(ps) == 0 {
+			ps = []string{"Unknown Artist"}
+		}
+		aid, e := d.FindOrCreateArtist(ctx, ps[0])
 		if e != nil {
 			return e
 		}
@@ -1580,6 +1748,9 @@ func (d *DB) UpdateTrackMeta(ctx context.Context, trackID uuid.UUID, u TrackMeta
 		if _, e := d.Pool.Exec(ctx, `UPDATE tracks SET art_path = NULL WHERE id = $1`, trackID); e != nil {
 			return e
 		}
+	}
+	if e := d.RefreshTrackArtistCredits(ctx, trackID); e != nil {
+		return e
 	}
 	if u.Genres != nil {
 		if err := d.ReplaceTrackGenres(ctx, trackID, *u.Genres, true); err != nil {
@@ -1892,7 +2063,7 @@ func (d *DB) GetPlaylist(ctx context.Context, userID, plID uuid.UUID) (Playlist,
 			t.album_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			`+sqlDispTrackPerformer+` AS disp_artist_name,
 			t.art_path,
 			`+sqlDispTrackGenres+`,
 			t.genres_manual AS pin_genres,
@@ -2222,7 +2393,7 @@ func (d *DB) GetTrackByID(ctx context.Context, id uuid.UUID) (Track, error) {
 			t.album_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			`+sqlDispTrackPerformer+` AS disp_artist_name,
 			t.art_path,
 			`+sqlDispTrackGenres+`,
 			t.genres_manual AS pin_genres,
@@ -2268,7 +2439,7 @@ func (d *DB) ListTracksByIds(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 			t.album_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) AS disp_album_title,
 			t.artist_id::text,
-			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
+			`+sqlDispTrackPerformer+` AS disp_artist_name,
 			t.art_path,
 			`+sqlDispTrackGenres+`,
 			t.genres_manual AS pin_genres,

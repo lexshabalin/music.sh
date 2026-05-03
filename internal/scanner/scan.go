@@ -212,7 +212,8 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		audioCount++
 		scanThrottleMaybe(audioCount)
 		ns := mt.UnixNano()
-		if alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+		if tid, alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+			_ = s.RepairTrackCreditsIfEmpty(ctx, tid)
 			_ = enqueueMetaJob(ctx, s, alb)
 			return nil
 		}
@@ -289,7 +290,8 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		scanned++
 		found++
 		scanThrottleMaybe(scanned)
-		if alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+		if tid, alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
+			_ = s.RepairTrackCreditsIfEmpty(ctx, tid)
 			_ = enqueueMetaJob(ctx, s, alb)
 			pg.emit(scanned, found, changed, false)
 			return nil
