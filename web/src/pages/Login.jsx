@@ -20,18 +20,27 @@ export function Login() {
     }
   };
   return (
-    <form onSubmit={submit} className="card" style={{ maxWidth: 360, margin: "2rem auto" }}>
+    <form onSubmit={submit} className="card" style={{ maxWidth: 360, margin: "2rem auto" }} data-testid="login-form">
       <h2>{t("auth.login")}</h2>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <p>
         <label>{t("auth.usernameOrEmail")}</label>
-        <input value={login} onChange={(e) => setLogin(e.target.value)} autoCapitalize="none" autoCorrect="off" required />
+        <input
+          data-testid="login-username"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          required
+        />
       </p>
       <p>
         <label>{t("auth.password")}</label>
-        <input value={pw} onChange={(e) => setP(e.target.value)} type="password" required />
+        <input data-testid="login-password" value={pw} onChange={(e) => setP(e.target.value)} type="password" required />
       </p>
-      <button type="submit">{t("auth.login")}</button>
+      <button type="submit" data-testid="login-submit">
+        {t("auth.login")}
+      </button>
       <p className="muted">
         {t("auth.noAccount")} <Link to="/register">{t("auth.register")}</Link>
       </p>

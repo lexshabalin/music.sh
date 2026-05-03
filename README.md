@@ -64,7 +64,7 @@ Self‑hosted веб‑приложение для прослушивания м
 
 ### Тесты в CI
 
-После **`deploy:dev`** на ветке по умолчанию выполняется **`test:web:post_dev_deploy`** (`cd web && npm ci && npm run test`). На остальных ветках и в MR — джоба **`test:web`** после **`build:image`**.
+После **`deploy:dev`** на ветке по умолчанию выполняется **`test:web:post_dev_deploy`** (`cd web && npm ci`, установка Chromium для Playwright, `npm run test:ci`). На остальных ветках и в MR — джоба **`test:web`** после **`build:image`**.
 
 ## Разработка (без Docker для Go/Node)
 
@@ -80,7 +80,10 @@ go run ./cmd/server
 cd web && npm install && npm run dev
 ```
 
-Тесты фронта: `cd web && npm run test` (Vitest + Testing Library).
+Тесты фронта:
+
+- **Юнит / компоненты:** `cd web && npm run test` (Vitest + Testing Library).
+- **E2E по UI:** `cd web && npx playwright install chromium` (один раз после `npm install`), затем `cd web && npm run test:e2e` или всё вместе как в CI: `cd web && npm run test:ci`. Playwright поднимает Vite (`npm run dev`) и подменяет `/api/*` моками (без Go-сервера).
 
 Vite проксирует `/api` на `http://127.0.0.1:8080` (см. `web/vite.config.js`).
 

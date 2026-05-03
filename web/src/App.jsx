@@ -1643,10 +1643,11 @@ function Shell({ children }) {
         </main>
       </div>
       {p.current && getToken() && !isMobile ? (
-        <div className={"player" + (p.isPlaying ? " player--playing" : "")}>
+        <div className={"player" + (p.isPlaying ? " player--playing" : "")} data-testid="desktop-player">
           <button
             className="player-skip"
             type="button"
+            data-testid="player-prev"
             onClick={() => {
               claimPlaybackSync();
               p.prev();
@@ -1659,6 +1660,7 @@ function Shell({ children }) {
           <button
             className="player-play"
             type="button"
+            data-testid="player-play-pause"
             onClick={() => {
               const el = p.ref.current;
               if (!el) return;
@@ -1686,6 +1688,7 @@ function Shell({ children }) {
           <button
             className="player-skip"
             type="button"
+            data-testid="player-next"
             onClick={() => {
               claimPlaybackSync();
               p.next();
@@ -1698,6 +1701,7 @@ function Shell({ children }) {
           <button
             className="player-skip"
             type="button"
+            data-testid="player-mute"
             onClick={p.toggleMute}
             title={p.muted ? t("player.unmute") : t("player.mute")}
           >
@@ -1706,6 +1710,7 @@ function Shell({ children }) {
 
           <input
             className="range mono vol"
+            data-testid="player-volume"
             aria-label={t("player.volume")}
             type="range"
             min="0"
@@ -1766,6 +1771,7 @@ function Shell({ children }) {
           <div className="player-progress-wrap">
             <input
               className="range mono progress"
+              data-testid="player-seek"
               aria-label={t("player.seek")}
               type="range"
               min="0"
@@ -2368,6 +2374,7 @@ function Shell({ children }) {
       {getToken() ? (
         /* No `key` on <audio>: remounting each track breaks iOS Safari background playback / Now Playing continuity. */
         <audio
+          data-testid="app-audio"
           autoPlay={false}
           playsInline
           preload="auto"

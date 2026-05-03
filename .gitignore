@@ -10,3 +10,6 @@ appdata/
 music
 !music/.gitkeep
 docker-compose.yml
+web/test-results/
+web/playwright-report/
+web/blob-report/
