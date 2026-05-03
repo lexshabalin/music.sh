@@ -169,7 +169,6 @@ function Shell({ children }) {
   const ghostPlaybackTrackIdRef = React.useRef("");
   const [ghostPlaybackDlg, setGhostPlaybackDlg] = React.useState(false);
   const [ghostPlaybackBusy, setGhostPlaybackBusy] = React.useState(false);
-  const [playErr, setPlayErr] = React.useState("");
   const dismissPlaybackGhost = React.useCallback(() => {
     const sid = ghostPlaybackTrackIdRef.current;
     if (sid && typeof p.removeTrackFromQueueById === "function") {
@@ -180,7 +179,6 @@ function Shell({ children }) {
     ghostPlaybackBusyRef.current = false;
     setGhostPlaybackBusy(false);
     setGhostPlaybackDlg(false);
-    setPlayErr("");
   }, [p]);
   const confirmPlaybackGhostDelete = React.useCallback(async () => {
     const sid = ghostPlaybackTrackIdRef.current;
@@ -201,12 +199,8 @@ function Shell({ children }) {
       ghostPlaybackBusyRef.current = false;
       setGhostPlaybackBusy(false);
       setGhostPlaybackDlg(false);
-      setPlayErr("");
     }
   }, [p]);
-  React.useEffect(() => {
-    setPlayErr("");
-  }, [p.current?.id]);
 
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
@@ -1110,10 +1104,12 @@ function Shell({ children }) {
     const onError = async () => {
       const tidAtErr = p.current?.id ?? null;
       const urlAtErr = p.current?.url || el.currentSrc || "";
+      const streamLike = typeof urlAtErr === "string" && urlAtErr.includes("/stream");
+      if ((tidAtErr == null || tidAtErr === "") && !streamLike) return;
       const errCodeSnap = el.error?.code ?? null;
       const mediaErr = errCodeSnap ? `mediaErr=${errCodeSnap}` : "";
       let http = "";
-      if (urlAtErr) {
+      if (urlAtErr && streamLike) {
         try {
           // Prefer HEAD: matches the stream handler without Range quirks that some proxies mishandle vs <audio>.
           let r = await fetch(urlAtErr, { method: "HEAD", credentials: "same-origin" });
@@ -1127,7 +1123,11 @@ function Shell({ children }) {
       }
       // Stale callbacks: `<audio>` can fire `error` when src is replaced (aborted decode / race).
       // Async probe can finish after `playing`/next track — never override a visibly working stream.
-      if (String(playerCurrentIdRef.current ?? "") !== String(tidAtErr ?? "")) return;
+      const refId = playerCurrentIdRef.current ?? null;
+      const refStr = String(refId ?? "");
+      const tidStr = String(tidAtErr ?? "");
+      if (!tidStr && !refStr) return;
+      if (refStr !== tidStr) return;
       if (p.ref.current !== el) return;
       try {
         if (!el.paused) return;
@@ -1150,14 +1150,12 @@ function Shell({ children }) {
         ghostPlaybackTrackIdRef.current = sid;
         setGhostPlaybackBusy(false);
         setGhostPlaybackDlg(true);
-        setPlayErr("");
         try {
           el.pause();
         } catch (_) {}
         /* Do not dequeue here — flaky probes/CDN sometimes look like 404; removal hid the footer. */
         return;
       }
-      setPlayErr(msg);
     };
     const onEnded = () => {
       // Guard: failed load / empty file — don't advance the queue blindly.
@@ -1193,7 +1191,6 @@ function Shell({ children }) {
     };
 
     const onPlaying = () => {
-      setPlayErr("");
       bindLockScreenMediaHandlers();
     };
     el.addEventListener("playing", onPlaying);
@@ -1568,7 +1565,6 @@ function Shell({ children }) {
                       tag: "playback",
                       message: "Playback blocked or failed.",
                     });
-                    setPlayErr("Playback blocked or failed.");
                   });
                 }
               }
@@ -1705,12 +1701,6 @@ function Shell({ children }) {
           <div className="muted" style={{ minWidth: 64 }}>
             {fmtTime(dur)}
           </div>
-
-          {playErr ? (
-            <div className="muted" style={{ color: "tomato", fontSize: 12, marginLeft: 8, maxWidth: 280 }}>
-              {playErr}
-            </div>
-          ) : null}
         </div>
       ) : null}
       {p.current && getToken() && isMobile ? (
