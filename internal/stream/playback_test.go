@@ -11,7 +11,10 @@ func TestShouldTranscodeToMP3(t *testing.T) {
 	t.Cleanup(func() { _ = os.Unsetenv("MUSICSH_DISABLE_PLAYBACK_TRANSCODE") })
 	_ = os.Unsetenv("MUSICSH_DISABLE_PLAYBACK_TRANSCODE")
 
-	for _, ext := range []string{".flac", ".FLAC", ".aiff", ".aif"} {
+	for _, ext := range []string{
+		".flac", ".FLAC", ".aiff", ".aif",
+		".ogg", ".Ogg", ".oga", ".opus", ".weba", ".webm",
+	} {
 		if !shouldTranscodeToMP3("/x"+ext, "") {
 			t.Errorf("path *%q: want true", ext)
 		}
@@ -30,12 +33,14 @@ func TestShouldTranscodeToMP3(t *testing.T) {
 		{"/a/x.mp3", "flac"},
 		{"/a/x.m4a", "flac"},
 		{"/a/x.wav", "flac"},
+		{"/a/x.mp3", "ogg"},
+		{"/a/x.m4a", "opus"},
 	} {
 		if shouldTranscodeToMP3(tc.path, tc.hint) {
 			t.Errorf("path=%q hint=%q: want false (trust file extension)", tc.path, tc.hint)
 		}
 	}
-	for _, ext := range []string{".mp3", ".m4a", ".wav", ""} {
+	for _, ext := range []string{".mp3", ".m4a", ".mp4", ".wav", ""} {
 		if shouldTranscodeToMP3("/x"+ext, "") {
 			t.Errorf("path *%q hint empty: want false", ext)
 		}
