@@ -69,6 +69,16 @@ function interpolatePlaybackPositionMsFromServer(st) {
   return Math.round(base + Math.max(0, Date.now() - updatedAt));
 }
 
+/** Seek position in seconds from a `/api/me/playback` row (extrapolate while `isPlaying`). */
+function serverPlaybackSeekSec(st) {
+  if (!st) return 0;
+  if (st.isPlaying) {
+    const ms = interpolatePlaybackPositionMsFromServer(st);
+    if (ms != null && Number.isFinite(ms)) return Math.max(0, ms / 1000);
+  }
+  return Math.max(0, (Number(st.positionMs) || 0) / 1000);
+}
+
 function seekMediaWhenReady(mediaRef, sec, shouldApply) {
   if (sec == null || !Number.isFinite(sec)) return;
   const el = mediaRef?.current;
@@ -626,6 +636,13 @@ function Shell({ children }) {
         }
         positionMs = Math.max(positionMs, Math.round(ms));
       }
+      // Floor by server's *current* track row (covers queue order mismatch vs `sameTrackAsServer` / stale element time).
+      const srvIds = Array.isArray(st.trackIds) ? st.trackIds : [];
+      const ci = typeof st.currentIndex === "number" ? st.currentIndex : -1;
+      const srvCurId = ci >= 0 && ci < srvIds.length ? srvIds[ci] : null;
+      if (myKey && srvCurId && normPlaybackTrackId(srvCurId) === myKey) {
+        positionMs = Math.max(positionMs, Math.round(serverPlaybackSeekSec(st) * 1000));
+      }
     } catch (_) {}
     // User may have changed track while awaiting (e.g. next/prev after `claimPlaybackServerSync`). Do not POST stale
     // state or seek the new track to the previous track's position.
@@ -994,13 +1011,16 @@ function Shell({ children }) {
             const items = tracksToQueueItems(tracks);
             skipAutoplayOnceRef.current = true;
             pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? remoteTrackId ?? null;
-            pendingSeekSecRef.current = Math.max(0, (Number(st.positionMs) || 0) / 1000 - 0.5);
+            pendingSeekSecRef.current = serverPlaybackSeekSec(st);
             playQueueRef.current(items, newIdx, { skipPlaybackRelease: true });
           } catch (_) {}
           return;
         }
         if (remoteIdx !== indexRef.current) {
           skipAutoplayOnceRef.current = true;
+          // Without this, useLayoutEffect resets `<audio>` to 0 on track id change (jump only, no full reload).
+          pendingSeekTrackIdRef.current = remoteTrackId;
+          pendingSeekSecRef.current = serverPlaybackSeekSec(st);
           jumpToRef.current(remoteIdx);
         }
       } catch (_) {}
