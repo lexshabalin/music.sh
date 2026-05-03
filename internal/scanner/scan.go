@@ -152,21 +152,13 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	defer globalScanMu.Unlock()
 
 	var audioCount int
-	err = filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info == nil || info.IsDir() {
-			return nil
-		}
-		if !store.IsAudioFilename(info.Name()) {
-			return nil
-		}
-		path, e := normalizeAudioPathOnDisk(ctx, s, path)
+	err = walkLibraryAudio(ctx, musicDir, scanFollowSymlinks(), func(path string) error {
+		var e error
+		path, e = normalizeAudioPathOnDisk(ctx, s, path)
 		if e != nil {
 			return e
 		}
-		info, e = os.Stat(path)
+		info, e := os.Stat(path)
 		if e != nil {
 			return e
 		}
@@ -222,21 +214,13 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	pg := newScanProgressGate(progress)
 	// Immediate tick so status polling sees Running + zero counts (avoids silent gap on huge dirs before first audio).
 	pg.emit(0, 0, 0, true)
-	err := filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info == nil || info.IsDir() {
-			return nil
-		}
-		if !store.IsAudioFilename(info.Name()) {
-			return nil
-		}
-		path, e := normalizeAudioPathOnDisk(ctx, s, path)
+	err := walkLibraryAudio(ctx, musicDir, scanFollowSymlinks(), func(path string) error {
+		var e error
+		path, e = normalizeAudioPathOnDisk(ctx, s, path)
 		if e != nil {
 			return e
 		}
-		info, e = os.Stat(path)
+		info, e := os.Stat(path)
 		if e != nil {
 			return e
 		}

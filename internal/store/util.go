@@ -36,7 +36,15 @@ func isAudioExt(ext string) bool {
 
 // AudioExt for MIME - caller passes lowercase with dot
 func IsAudioFilename(name string) bool {
+	name = strings.TrimSpace(name)
+	// Some rippers / filesystems use ideographic or fullwidth full stop before the extension.
+	name = strings.ReplaceAll(name, "\uFF0E", ".")
+	name = strings.ReplaceAll(name, "\u3002", ".")
 	lower := strings.ToLower(name)
+	// Explicit suffix so odd punctuation in the stem does not steal the "last dot" from ".flac".
+	if strings.HasSuffix(lower, ".flac") {
+		return true
+	}
 	dot := strings.LastIndexByte(lower, '.')
 	if dot < 0 {
 		return false
