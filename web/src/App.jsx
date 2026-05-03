@@ -1846,6 +1846,11 @@ function Shell({ children }) {
   // Remote mirror often has no `<audio>` duration yet (paused); cap must grow with curT or the thumb stays at 0.
   const progressSliderCap = Math.max(1, dur || 0, remotePlaybackActive ? curT + 120 : 0);
 
+  const mobileMiniProgressPct =
+    Number.isFinite(dur) && dur > 0 && Number.isFinite(curT)
+      ? Math.min(100, Math.max(0, (curT / dur) * 100))
+      : 0;
+
   return (
     <>
       <BackgroundLayer bg={bg} />
@@ -2140,6 +2145,9 @@ function Shell({ children }) {
               }
             }}
           >
+            <div className="mobile-mini-progress-rail" aria-hidden="true">
+              <div className="mobile-mini-progress-fill" style={{ width: `${mobileMiniProgressPct}%` }} />
+            </div>
             <div className="nowplaying">
               <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
               <div className="nowplaying-text">

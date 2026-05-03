@@ -344,7 +344,10 @@ var reArtistTitle = regexp.MustCompile(`\s*-\s*`)
 var reTrackPrefix = regexp.MustCompile(`^\s*(\d{1,3})([.)\s_-]+)\s*`)
 var reYearPrefix = regexp.MustCompile(`^\d{4}$`)
 
-func inferFromPath(p string) (artist, album, title string) {
+// inferFromPath guesses artist/title from the basename and parent folder name only.
+// Album names must come from embedded tags (readTrackMeta); we intentionally never
+// treat directory names or multi-segment filenames as album titles.
+func inferFromPath(p string) (artist, title string) {
 	title = strings.TrimSpace(store.BaseName(p))
 
 	// Strip leading track numbers like "01 -", "1.", "03_"
@@ -355,7 +358,7 @@ func inferFromPath(p string) (artist, album, title string) {
 	// Examples in flat libraries:
 	// - "1970 - Led Zeppelin - Immigrant Song"
 	// - "Led Zeppelin - Immigrant Song"
-	// - "Artist - Album - Title"
+	// - "Artist - Something - Title" → treat first segment as artist, last as title (no album from path)
 	if len(parts) >= 2 {
 		p0 := strings.TrimSpace(parts[0])
 		// drop year prefix if present
@@ -371,33 +374,19 @@ func inferFromPath(p string) (artist, album, title string) {
 				title = t
 			}
 		} else if len(parts) >= 3 {
-			// best-effort: Artist - Album - Title
 			a := p0
-			alb := strings.TrimSpace(parts[1])
 			t := strings.TrimSpace(parts[len(parts)-1])
 			if a != "" && t != "" {
 				artist = a
 				title = t
 			}
-			// album is optional; avoid treating "feat" etc as album by mistake
-			if alb != "" && alb != t {
-				album = alb
-			}
 		}
 	}
 
-	// Folder-based: /Artist/Album/Track.ext
+	// Folder-based artist only: /Artist/.../Track.ext (never use folder names as album)
 	dir := filepath.Dir(p)
-	albumDir := strings.TrimSpace(filepath.Base(dir))
 	parent := filepath.Dir(dir)
 	artistDir := strings.TrimSpace(filepath.Base(parent))
-
-	if albumDir != "" && albumDir != "." && albumDir != string(filepath.Separator) {
-		// only use folder album if we didn't already infer album from filename
-		if strings.TrimSpace(album) == "" {
-			album = albumDir
-		}
-	}
 	if artist == "" && artistDir != "" && artistDir != "." && artistDir != string(filepath.Separator) {
 		artist = artistDir
 	}
@@ -408,11 +397,11 @@ func readTrackMeta(p string) trackMeta {
 	disklog.Printf("scan_read_tags path=%q", p)
 	f, err := os.Open(p)
 	if err != nil {
-		artist, album, title := inferFromPath(p)
+		artist, title := inferFromPath(p)
 		out := trackMeta{
 			artist:      strings.TrimSpace(artist),
 			albumArtist: strings.TrimSpace(artist),
-			album:       strings.TrimSpace(album),
+			album:       "Unknown",
 			title:       strings.TrimSpace(title),
 		}
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
@@ -427,9 +416,6 @@ func readTrackMeta(p string) trackMeta {
 		if strings.TrimSpace(out.artist) == "" {
 			out.artist = "Unknown Artist"
 			out.albumArtist = out.artist
-		}
-		if strings.TrimSpace(out.album) == "" {
-			out.album = "Unknown"
 		}
 		out.albumArtist = primaryArtistForAlbumGrouping(out.albumArtist)
 		out.inferred = true
@@ -438,11 +424,11 @@ func readTrackMeta(p string) trackMeta {
 	defer f.Close()
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		artist, album, title := inferFromPath(p)
+		artist, title := inferFromPath(p)
 		out := trackMeta{
 			artist:      strings.TrimSpace(artist),
 			albumArtist: strings.TrimSpace(artist),
-			album:       strings.TrimSpace(album),
+			album:       "Unknown",
 			title:       strings.TrimSpace(title),
 		}
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
@@ -457,9 +443,6 @@ func readTrackMeta(p string) trackMeta {
 		if strings.TrimSpace(out.artist) == "" {
 			out.artist = "Unknown Artist"
 			out.albumArtist = out.artist
-		}
-		if strings.TrimSpace(out.album) == "" {
-			out.album = "Unknown"
 		}
 		out.albumArtist = primaryArtistForAlbumGrouping(out.albumArtist)
 		out.inferred = true
@@ -494,9 +477,9 @@ func readTrackMeta(p string) trackMeta {
 	out.albumArtist = primaryArtistForAlbumGrouping(albumArtist)
 	out.album = album
 
-	// If tags were empty-ish, try to improve from filename/folders.
+	// If tags were empty-ish, try to improve artist/title from basename/parent folder only (not album).
 	if strings.EqualFold(strings.TrimSpace(out.title), strings.TrimSpace(store.BaseName(p))) || out.title == "" {
-		ia, ialb, it := inferFromPath(p)
+		ia, it := inferFromPath(p)
 		if strings.TrimSpace(out.title) == "" && strings.TrimSpace(it) != "" {
 			out.title = strings.TrimSpace(it)
 		}
@@ -506,9 +489,6 @@ func readTrackMeta(p string) trackMeta {
 			if albumArtistRaw == "" {
 				out.albumArtist = primaryArtistForAlbumGrouping(artist)
 			}
-		}
-		if (album == "" || album == "Unknown") && strings.TrimSpace(ialb) != "" {
-			out.album = strings.TrimSpace(ialb)
 		}
 		out.inferred = true
 	}
