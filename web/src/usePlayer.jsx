@@ -48,8 +48,9 @@ export function PlayerProvider({ children }) {
     }
   }, []);
 
-  const playQueue = useCallback((items, startIndex) => {
-    releasePlaybackServerSync();
+  const playQueue = useCallback((items, startIndex, opts) => {
+    const skipRelease = opts && opts.skipPlaybackRelease === true;
+    if (!skipRelease) releasePlaybackServerSync();
     const list = Array.isArray(items) ? items : [];
     if (!list.length) {
       setQueue([]);

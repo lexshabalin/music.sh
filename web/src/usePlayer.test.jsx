@@ -53,6 +53,14 @@ describe("usePlayer", () => {
     expect(api.releasePlaybackServerSync).toHaveBeenCalled();
   });
 
+  it("playQueue can skip release for passive server mirror", () => {
+    const { result } = renderHook(() => usePlayer(), { wrapper });
+    act(() => {
+      result.current.playQueue([{ id: "1", label: "a", url: "/u1" }], 0, { skipPlaybackRelease: true });
+    });
+    expect(api.releasePlaybackServerSync).not.toHaveBeenCalled();
+  });
+
   it("next and prev move index within bounds", () => {
     const { result } = renderHook(() => usePlayer(), { wrapper });
     act(() => {

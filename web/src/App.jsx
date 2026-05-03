@@ -666,7 +666,7 @@ function Shell({ children }) {
         // Prefer the id on the row we actually play so pending-seek matches `p.current.id`.
         pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? origId ?? null;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
-        playQueueRef.current(items, newIdx);
+        playQueueRef.current(items, newIdx, { skipPlaybackRelease: true });
         playbackAllowEmptyPutRef.current = true;
       } catch (_) {
         /* Transient failures: stay off empty PUT until a later successful restore builds a queue. */
@@ -754,7 +754,7 @@ function Shell({ children }) {
   }, [remotePlaybackActive]);
 
   React.useEffect(() => {
-    if (!getToken() || !p.current?.id) {
+    if (!getToken()) {
       setRemotePlaybackActive(false);
       remotePlaybackActiveRef.current = false;
       remoteInactiveStreakRef.current = 0;
@@ -823,7 +823,26 @@ function Shell({ children }) {
         const q = Array.isArray(queueRef.current) ? queueRef.current : [];
         const rk = normPlaybackTrackId(remoteTrackId);
         const remoteIdx = q.findIndex((x) => normPlaybackTrackId(x?.id) === rk);
-        if (remoteIdx >= 0 && remoteIdx !== indexRef.current) {
+        if (remoteIdx < 0) {
+          if (!playbackHydratedRef.current) return;
+          try {
+            skipPlaybackPushUntilRef.current = Date.now() + 4000;
+            const tracks = await lib.tracksByIds(st.trackIds);
+            if (!getToken() || !tracks.length) return;
+            let newIdx = rk ? tracks.findIndex((t) => normPlaybackTrackId(t.id) === rk) : -1;
+            if (newIdx < 0) {
+              const ci = typeof st.currentIndex === "number" ? st.currentIndex : 0;
+              newIdx = Math.max(0, Math.min(tracks.length - 1, ci));
+            }
+            const items = tracksToQueueItems(tracks);
+            skipAutoplayOnceRef.current = true;
+            pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? remoteTrackId ?? null;
+            pendingSeekSecRef.current = Math.max(0, (Number(st.positionMs) || 0) / 1000 - 0.5);
+            playQueueRef.current(items, newIdx, { skipPlaybackRelease: true });
+          } catch (_) {}
+          return;
+        }
+        if (remoteIdx !== indexRef.current) {
           skipAutoplayOnceRef.current = true;
           jumpToRef.current(remoteIdx);
         }
@@ -832,7 +851,7 @@ function Shell({ children }) {
     const id = window.setInterval(syncRemote, 1000);
     syncRemote();
     return () => clearInterval(id);
-  }, [p.current?.id, suspendPlaybackForRemoteSession]);
+  }, [me?.id, suspendPlaybackForRemoteSession]);
 
   React.useEffect(() => {
     if (!remotePlaybackActive) return;
