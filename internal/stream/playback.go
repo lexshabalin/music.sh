@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"musicsh/internal/disklog"
 	"musicsh/internal/store"
 	"musicsh/internal/subproclow"
 )
@@ -103,6 +104,7 @@ func serveTranscodedMP3(w http.ResponseWriter, r *http.Request, abs string) erro
 	w.Header().Del("Content-Length")
 	w.Header().Del("Content-Range")
 
+	disklog.Printf("stream_transcode_ffmpeg path=%q", abs)
 	cmd := subproclow.Command(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "error",
 		"-nostdin",

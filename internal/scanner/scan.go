@@ -16,6 +16,7 @@ import (
 	"github.com/dhowden/tag"
 	"github.com/google/uuid"
 
+	"musicsh/internal/disklog"
 	"musicsh/internal/store"
 )
 
@@ -330,11 +331,11 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 
 type trackMeta struct {
 	artist, albumArtist, album, title string
-	track, disc, year                *int
-	durationMS                      *int
-	format                          *string
-	bitrateKbps                     *int
-	inferred                        bool
+	track, disc, year                 *int
+	durationMS                        *int
+	format                            *string
+	bitrateKbps                       *int
+	inferred                          bool
 	// Optional tag-derived strings stored on tracks for imprint (raw from tags / file).
 	tagAlbumArtist, genre, composer, comment string
 }
@@ -404,6 +405,7 @@ func inferFromPath(p string) (artist, album, title string) {
 }
 
 func readTrackMeta(p string) trackMeta {
+	disklog.Printf("scan_read_tags path=%q", p)
 	f, err := os.Open(p)
 	if err != nil {
 		artist, album, title := inferFromPath(p)

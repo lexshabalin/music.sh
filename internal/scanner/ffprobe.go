@@ -7,12 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"musicsh/internal/disklog"
 	"musicsh/internal/subproclow"
 )
 
 // probeDurationMS tries to read duration via ffprobe.
 // Returns (ms, true) on success; (nil, false) if ffprobe missing or fails.
 func probeDurationMS(path string) (*int, bool) {
+	disklog.Printf("ffprobe_duration path=%q", path)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -54,4 +56,3 @@ func isFinitePositive(f float64) bool {
 	}
 	return true
 }
-

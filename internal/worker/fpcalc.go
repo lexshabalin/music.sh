@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"musicsh/internal/disklog"
 	"musicsh/internal/subproclow"
 )
 
@@ -16,6 +17,7 @@ type fpcalcOut struct {
 }
 
 func runFpcalc(path string) (durationSec int, fingerprint string, ok bool) {
+	disklog.Printf("fpcalc path=%q", path)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -37,4 +39,3 @@ func runFpcalc(path string) (durationSec int, fingerprint string, ok bool) {
 	}
 	return v.Duration, fp, true
 }
-

@@ -18,14 +18,15 @@ import (
 
 	"musicsh/internal/acoustid"
 	"musicsh/internal/cover"
+	"musicsh/internal/disklog"
 	"musicsh/internal/mb"
 	"musicsh/internal/scanner"
 	"musicsh/internal/store"
 )
 
 type Config struct {
-	MusicDir string
-	DataDir  string
+	MusicDir    string
+	DataDir     string
 	AcoustIDKey string
 }
 
@@ -152,8 +153,8 @@ func (h *Worker) runOne(ctx context.Context) error {
 		var p struct {
 			AlbumID string `json:"albumId"`
 			Tracks  []struct {
-				TrackID string   `json:"trackId"`
-				Fields  []string `json:"fields"`
+				TrackID   string   `json:"trackId"`
+				Fields    []string `json:"fields"`
 				Overrides *struct {
 					Title       *string `json:"title,omitempty"`
 					Artist      *string `json:"artist,omitempty"`
@@ -162,9 +163,9 @@ func (h *Worker) runOne(ctx context.Context) error {
 					Genre       *string `json:"genre,omitempty"`
 					Composer    *string `json:"composer,omitempty"`
 					Comment     *string `json:"comment,omitempty"`
-					Year    *int `json:"year,omitempty"`
-					TrackNo *int `json:"trackNo,omitempty"`
-					DiscNo  *int `json:"discNo,omitempty"`
+					Year        *int    `json:"year,omitempty"`
+					TrackNo     *int    `json:"trackNo,omitempty"`
+					DiscNo      *int    `json:"discNo,omitempty"`
 				} `json:"overrides,omitempty"`
 			} `json:"tracks"`
 		}
@@ -360,6 +361,7 @@ func (h *Worker) findLocalCoverForAlbum(ctx context.Context, albumID uuid.UUID) 
 }
 
 func copyFile(dst, src string) error {
+	disklog.Printf("file_copy src=%q dst=%q", src, dst)
 	in, err := os.Open(src)
 	if err != nil {
 		return err

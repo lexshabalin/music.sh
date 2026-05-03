@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/bogem/id3v2/v2"
+
+	"musicsh/internal/disklog"
 )
 
 type mp3Tags struct {
@@ -24,6 +26,7 @@ type mp3Tags struct {
 }
 
 func readMP3Tags(path string) (mp3Tags, []string, error) {
+	disklog.Printf("imprint_mp3_read path=%q", path)
 	var warn []string
 	tag, err := id3v2.Open(path, id3v2.Options{Parse: true})
 	if err != nil {
@@ -77,6 +80,7 @@ func readMP3Tags(path string) (mp3Tags, []string, error) {
 }
 
 func writeMP3Tags(path string, desired TrackTarget, writeFields map[Field]bool, coverBytes []byte, coverMime string) ([]string, error) {
+	disklog.Printf("imprint_mp3_write path=%q", path)
 	var warn []string
 
 	// ensure file is writable early for clearer errors
@@ -174,4 +178,3 @@ func writeMP3Tags(path string, desired TrackTarget, writeFields map[Field]bool, 
 	}
 	return warn, nil
 }
-

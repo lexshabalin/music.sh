@@ -19,11 +19,12 @@ import (
 
 	"musicsh/internal/artistimage"
 	"musicsh/internal/coverproc"
+	"musicsh/internal/disklog"
 	"musicsh/internal/genres"
 	"musicsh/internal/imprint"
+	"musicsh/internal/scanner"
 	"musicsh/internal/store"
 	"musicsh/internal/stream"
-	"musicsh/internal/scanner"
 )
 
 // --- library ---
@@ -151,9 +152,9 @@ type albumMetaJSON struct {
 	// Genres replaces album_genres and rolls out to tracks (null = omit; [] = clear all).
 	Genres *[]string `json:"genres"`
 	// Genre is deprecated: split into tags (same as genres from a joined string).
-	Genre *string `json:"genre"`
-	Year       *int    `json:"year"`
-	Clear      []string `json:"clear"`
+	Genre *string  `json:"genre"`
+	Year  *int     `json:"year"`
+	Clear []string `json:"clear"`
 }
 
 func (a *App) patchAlbumMeta(w http.ResponseWriter, r *http.Request) {
@@ -534,17 +535,17 @@ func (a *App) getTrack(w http.ResponseWriter, r *http.Request) {
 }
 
 type trackMetaJSON struct {
-	Title           *string `json:"title"`
-	ArtistName      *string `json:"artistName"`
-	AlbumTitle      *string `json:"albumTitle"`
-	AlbumArtistName *string `json:"albumArtistName"`
-	AlbumID         *string `json:"albumId"`
-	Year            *int    `json:"year"`
-	TrackNo         *int    `json:"trackNo"`
-	DiscNo          *int    `json:"discNo"`
+	Title           *string   `json:"title"`
+	ArtistName      *string   `json:"artistName"`
+	AlbumTitle      *string   `json:"albumTitle"`
+	AlbumArtistName *string   `json:"albumArtistName"`
+	AlbumID         *string   `json:"albumId"`
+	Year            *int      `json:"year"`
+	TrackNo         *int      `json:"trackNo"`
+	DiscNo          *int      `json:"discNo"`
 	Genres          *[]string `json:"genres"`
 	Genre           *string   `json:"genre"`
-	Clear           []string `json:"clear"`
+	Clear           []string  `json:"clear"`
 }
 
 func (a *App) patchTrackMeta(w http.ResponseWriter, r *http.Request) {
@@ -657,6 +658,7 @@ func (a *App) stream(w http.ResponseWriter, r *http.Request) {
 		JSONError(tw, 404, "not found")
 		return
 	}
+	disklog.Printf("stream_request track=%s path=%q method=%s", id, abs, r.Method)
 	// ServePlayback may return nil even if the client cancels mid-stream (seek/buffer),
 	// which is expected for <audio>. Only errors before headers are meaningful here.
 	if err := stream.ServePlayback(tw, r, abs, format); err != nil {
@@ -744,6 +746,7 @@ func (a *App) albumCover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) serveAlbumCoverFile(w http.ResponseWriter, r *http.Request, abs string) {
+	disklog.Printf("cover_album_serve path=%q method=%s", abs, r.Method)
 	if r.Method == http.MethodHead {
 		fi, err := os.Stat(abs)
 		if err != nil {
@@ -857,6 +860,7 @@ func (a *App) trackCover(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, 404, "file")
 		return
 	}
+	disklog.Printf("cover_track_serve path=%q method=%s size=%d", abs, r.Method, fi.Size())
 	ct := "image/jpeg"
 	switch filepath.Ext(abs) {
 	case ".png":
@@ -981,16 +985,16 @@ type imprintApplyIn struct {
 		Fields  []string `json:"fields"`
 		// Optional per-field overrides for imprint apply (library metadata is the default).
 		Overrides *struct {
-			Title        *string `json:"title,omitempty"`
-			Artist       *string `json:"artist,omitempty"`
-			Album        *string `json:"album,omitempty"`
-			AlbumArtist  *string `json:"albumArtist,omitempty"`
-			Genre        *string `json:"genre,omitempty"`
-			Composer     *string `json:"composer,omitempty"`
-			Comment      *string `json:"comment,omitempty"`
-			Year    *int    `json:"year,omitempty"`
-			TrackNo *int    `json:"trackNo,omitempty"`
-			DiscNo  *int    `json:"discNo,omitempty"`
+			Title       *string `json:"title,omitempty"`
+			Artist      *string `json:"artist,omitempty"`
+			Album       *string `json:"album,omitempty"`
+			AlbumArtist *string `json:"albumArtist,omitempty"`
+			Genre       *string `json:"genre,omitempty"`
+			Composer    *string `json:"composer,omitempty"`
+			Comment     *string `json:"comment,omitempty"`
+			Year        *int    `json:"year,omitempty"`
+			TrackNo     *int    `json:"trackNo,omitempty"`
+			DiscNo      *int    `json:"discNo,omitempty"`
 		} `json:"overrides,omitempty"`
 	} `json:"tracks"`
 }

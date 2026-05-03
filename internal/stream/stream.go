@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"musicsh/internal/disklog"
 	"musicsh/internal/store"
 )
 
@@ -33,6 +34,12 @@ func serveFileWithRangeContentType(w http.ResponseWriter, r *http.Request, path,
 		return err
 	}
 	size := st.Size()
+	ra := r.Header.Get("Range")
+	if ra == "" {
+		disklog.Printf("stream_open path=%q method=%s bytes=full/%d", path, r.Method, size)
+	} else {
+		disklog.Printf("stream_open path=%q method=%s range_hdr=%q size=%d", path, r.Method, ra, size)
+	}
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", contentType)
 
@@ -42,7 +49,6 @@ func serveFileWithRangeContentType(w http.ResponseWriter, r *http.Request, path,
 		return nil
 	}
 
-	ra := r.Header.Get("Range")
 	if ra == "" {
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		_, err = io.Copy(w, f)
