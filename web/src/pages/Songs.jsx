@@ -18,6 +18,38 @@ function shuffleCopy(arr) {
 }
 
 const SONGS_PAGE_SIZE = 100;
+const SPINNER_DOT_COUNT = 8;
+
+/** Dot ring like classic loading throbbers: head largest/darkest, tail fades (orbit rotates clockwise). */
+function SongsLoadSpinner() {
+  const orbit = 13;
+  return (
+    <div className="songs-load-spinner" aria-hidden>
+      <div className="songs-load-spinner__orbit">
+        {Array.from({ length: SPINNER_DOT_COUNT }, (_, i) => {
+          const t = i / Math.max(SPINNER_DOT_COUNT - 1, 1);
+          const opacity = 0.12 + 0.88 * Math.pow(1 - t, 1.65);
+          const w = 2.15 + (1 - t) * 3.95;
+          return (
+            <div key={i} className="songs-load-spinner__arm" style={{ transform: `rotate(${i * 45}deg)` }}>
+              <span
+                className="songs-load-spinner__dot"
+                style={{
+                  opacity,
+                  width: w,
+                  height: w,
+                  marginLeft: -(w / 2),
+                  top: -(orbit + (1 - opacity) * 1.25),
+                  backgroundColor: `rgba(243, 243, 244, ${0.55 + opacity * 0.45})`,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function sortTracks(list, key, dir) {
   const a = Array.isArray(list) ? list.slice() : [];
@@ -35,7 +67,7 @@ function sortTracks(list, key, dir) {
       const ax = get(x.t);
       const ay = get(y.t);
       const r = coll.compare(ax, ay);
-      return r !== 0 ? r * mult : (x.i - y.i);
+      return r !== 0 ? r * mult : x.i - y.i;
     })
     .map((x) => x.t);
 }
@@ -49,27 +81,119 @@ export function Songs() {
   const [sortKey, setSortKey] = React.useState("title");
   const [sortDir, setSortDir] = React.useState("asc");
   const [shuffleBusy, setShuffleBusy] = React.useState(false);
+  const [hasMore, setHasMore] = React.useState(false);
+  const [loadingInitial, setLoadingInitial] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const p = usePlayer();
-  // split/list modes removed (desktop-only simplification)
 
-  const load = React.useCallback(() => {
-    lib
-      .tracks("", {}, { limit: SONGS_PAGE_SIZE })
-      .then((x) => {
-        setErr("");
-        setTracks(Array.isArray(x) ? x : []);
-      })
-      .catch((e) => setErr(e?.message || "error"));
-
-    lib
-      .likeIds()
-      .then((r) => setLiked(new Set(Array.isArray(r?.trackIds) ? r.trackIds : [])))
-      .catch(() => setLiked(new Set()));
-  }, []);
+  const hasMoreRef = React.useRef(false);
+  const loadingInitialRef = React.useRef(false);
+  const loadingMoreRef = React.useRef(false);
 
   React.useEffect(() => {
-    load();
-  }, [load]);
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  const sentinelRef = React.useRef(null);
+  const tracksLenRef = React.useRef(0);
+  React.useEffect(() => {
+    tracksLenRef.current = tracks.length;
+  }, [tracks]);
+
+  const reload = React.useCallback(async () => {
+    loadingInitialRef.current = true;
+    setLoadingInitial(true);
+    setErr("");
+    try {
+      const x = await lib.tracks("", {}, { limit: SONGS_PAGE_SIZE, offset: 0 });
+      const safe = Array.isArray(x) ? x : [];
+      setTracks(safe);
+      const more = safe.length >= SONGS_PAGE_SIZE;
+      setHasMore(more);
+      hasMoreRef.current = more;
+    } catch (e) {
+      setErr(e?.message || "error");
+      setTracks([]);
+      setHasMore(false);
+      hasMoreRef.current = false;
+    } finally {
+      loadingInitialRef.current = false;
+      setLoadingInitial(false);
+    }
+
+    try {
+      const r = await lib.likeIds();
+      setLiked(new Set(Array.isArray(r?.trackIds) ? r.trackIds : []));
+    } catch (_) {
+      setLiked(new Set());
+    }
+  }, []);
+
+  const loadMore = React.useCallback(async () => {
+    if (!hasMoreRef.current || loadingMoreRef.current || loadingInitialRef.current) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const offset = tracksLenRef.current;
+      const batch = await lib.tracks("", {}, { limit: SONGS_PAGE_SIZE, offset });
+      const list = Array.isArray(batch) ? batch : [];
+
+      if (!list.length) {
+        setHasMore(false);
+        hasMoreRef.current = false;
+        return;
+      }
+
+      setTracks((prev) => {
+        const seen = new Set(prev.map((tr) => tr.id));
+        const merged = [...prev];
+        for (const tr of list) {
+          if (!seen.has(tr.id)) {
+            seen.add(tr.id);
+            merged.push(tr);
+          }
+        }
+        return merged;
+      });
+
+      if (list.length < SONGS_PAGE_SIZE) {
+        setHasMore(false);
+        hasMoreRef.current = false;
+      }
+    } catch (e) {
+      setErr(e?.message || "error");
+      setHasMore(false);
+      hasMoreRef.current = false;
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
+
+  const loadMoreRef = React.useRef(loadMore);
+  loadMoreRef.current = loadMore;
+
+  React.useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  React.useEffect(() => {
+    if (loadingInitial || !hasMore) return undefined;
+    const el = sentinelRef.current;
+    if (!el) return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((ent) => ent.isIntersecting)) return;
+        if (!hasMoreRef.current || loadingMoreRef.current || loadingInitialRef.current) return;
+        void loadMoreRef.current();
+      },
+      { root: null, rootMargin: "320px", threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loadingInitial, hasMore, tracks.length]);
 
   const sortedTracks = React.useMemo(() => sortTracks(tracks, sortKey, sortDir), [tracks, sortKey, sortDir]);
 
@@ -88,7 +212,6 @@ export function Songs() {
   );
 
   const items = React.useMemo(() => {
-    // Playback order should follow the original (unsorted) library order.
     return tracks.map((tr) => buildQueueItem(tr));
   }, [tracks, buildQueueItem]);
 
@@ -98,8 +221,6 @@ export function Songs() {
     const idx = Math.max(0, Math.min(items.length - 1, raw));
     const it = items[idx];
     p.playQueue(items, idx);
-    // iOS Safari sometimes ignores audio.play() when called after render.
-    // Trigger it right from the click handler to guarantee the first tap.
     try {
       const el = p.ref.current;
       if (el && it?.url) {
@@ -146,6 +267,24 @@ export function Songs() {
     }
   };
 
+  const listFooter =
+    loadingInitial && tracks.length === 0 ? (
+      <div className="songs-load-footer songs-load-footer--initial" role="status" aria-live="polite">
+        <SongsLoadSpinner />
+        <span className="songs-load-footer__label">{t("tracks.loadingMore")}</span>
+      </div>
+    ) : (
+      <>
+        {loadingMore ? (
+          <div className="songs-load-footer" role="status" aria-live="polite">
+            <SongsLoadSpinner />
+            <span className="songs-load-footer__label">{t("tracks.loadingMore")}</span>
+          </div>
+        ) : null}
+        {hasMore ? <div ref={sentinelRef} className="songs-infinite-sentinel" aria-hidden /> : null}
+      </>
+    );
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
@@ -165,7 +304,10 @@ export function Songs() {
 
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
 
-      {mode === "grid" ? (
+      {loadingInitial && tracks.length === 0 ? (
+        listFooter
+      ) : mode === "grid" ? (
+        <>
           <div className="grid">
             {sortedTracks.map((tr) => {
               const cover = effectiveTrackCoverUrl(tr);
@@ -216,42 +358,46 @@ export function Songs() {
               );
             })}
           </div>
+          {tracks.length ? listFooter : null}
+        </>
       ) : (
-        <ul className="plain-list">
-          <TrackHeader
-            columns="full"
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={(k) => {
-              if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-              else {
-                setSortKey(k);
-                setSortDir("asc");
-              }
-            }}
-          />
-          {sortedTracks.map((t2) => (
-            <TrackRow
-              key={t2.id}
-              track={t2}
-              index={0}
-              onPlayAt={() => {
-                const idx = tracks.findIndex((x) => x.id === t2.id);
-                playAt(Math.max(0, idx));
-              }}
-              onPlayNext={(trk) => playNext(trk)}
-              isLiked={liked.has(t2.id)}
-              onToggleLike={(id2) => toggleLike(id2)}
-              label={`${t2.title || t("common.untitled")}`}
-              isNowPlaying={p.current?.id === t2.id}
-              isPlaying={p.isPlaying}
+        <>
+          <ul className="plain-list">
+            <TrackHeader
               columns="full"
-              onMetaSaved={load}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={(k) => {
+                if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                else {
+                  setSortKey(k);
+                  setSortDir("asc");
+                }
+              }}
             />
-          ))}
-        </ul>
+            {sortedTracks.map((t2) => (
+              <TrackRow
+                key={t2.id}
+                track={t2}
+                index={0}
+                onPlayAt={() => {
+                  const idx = tracks.findIndex((x) => x.id === t2.id);
+                  playAt(Math.max(0, idx));
+                }}
+                onPlayNext={(trk) => playNext(trk)}
+                isLiked={liked.has(t2.id)}
+                onToggleLike={(id2) => toggleLike(id2)}
+                label={`${t2.title || t("common.untitled")}`}
+                isNowPlaying={p.current?.id === t2.id}
+                isPlaying={p.isPlaying}
+                columns="full"
+                onMetaSaved={reload}
+              />
+            ))}
+          </ul>
+          {tracks.length ? listFooter : null}
+        </>
       )}
     </div>
   );
 }
-

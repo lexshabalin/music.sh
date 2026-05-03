@@ -2617,3 +2617,75 @@ select.lang-select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Songs: infinite-scroll loader — monochrome dotted ring like classic GIF throbbers */
+.songs-infinite-sentinel {
+  width: 100%;
+  height: 2px;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.songs-load-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px 32px;
+  color: rgba(154, 154, 163, 0.95);
+}
+
+.songs-load-footer__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.songs-load-footer--initial {
+  min-height: 44vh;
+  padding-top: 18vh;
+}
+
+.songs-load-spinner {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.songs-load-spinner__orbit {
+  position: absolute;
+  inset: 0;
+  animation: songs-load-spin 0.74s linear infinite;
+}
+
+@keyframes songs-load-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.songs-load-spinner__arm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.songs-load-spinner__dot {
+  position: absolute;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .songs-load-spinner__orbit {
+    animation: none;
+    opacity: 0.88;
+  }
+}

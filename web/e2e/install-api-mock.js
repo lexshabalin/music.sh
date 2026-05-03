@@ -156,8 +156,10 @@ export async function installApiMock(page) {
         return json(out);
       }
       const lim = parseInt(url.searchParams.get("limit") || "", 10);
+      const off = parseInt(url.searchParams.get("offset") || "", 10);
+      const offset = Number.isFinite(off) && off >= 0 ? off : 0;
       if (Number.isFinite(lim) && lim > 0) {
-        return json(TRACKS_LIST.slice(0, lim));
+        return json(TRACKS_LIST.slice(offset, offset + lim));
       }
       return json(TRACKS_LIST);
     }
