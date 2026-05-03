@@ -80,6 +80,62 @@ function seekMediaWhenReady(mediaRef, sec, shouldApply) {
   else el.addEventListener("loadedmetadata", run, { once: true });
 }
 
+/**
+ * Align `<audio>` with the current queue URL before `play()`.
+ * After a load error, `play()` keeps rejecting until `src` is set again and `load()` runs.
+ */
+function syncAudioElementForPlayback(el, wantUrl) {
+  if (!el || typeof wantUrl !== "string") return;
+  const want = wantUrl.trim();
+  if (!want) return;
+  let targetHref = "";
+  try {
+    targetHref = new URL(want, window.location.href).href;
+  } catch (_) {
+    return;
+  }
+  try {
+    if (el.error != null) {
+      el.src = want;
+      el.load();
+      return;
+    }
+    if ((el.currentSrc || "") !== targetHref) {
+      el.src = want;
+    }
+  } catch (_) {}
+}
+
+function logPlaybackPromiseRejection(el, err, wantUrl) {
+  const parts = [];
+  if (err && typeof err === "object") {
+    if (err.name) parts.push(String(err.name));
+    if (err.message) parts.push(String(err.message));
+  } else if (err) parts.push(String(err));
+  let mediaCode = "";
+  try {
+    if (el?.error?.code != null) mediaCode = `mediaError.code=${el.error.code}`;
+  } catch (_) {}
+  let currentSrc = "";
+  try {
+    currentSrc = el?.currentSrc ? `currentSrc=${el.currentSrc}` : "";
+  } catch (_) {}
+  const detail = [
+    wantUrl ? `queueUrl=${wantUrl}` : "queueUrl=(empty)",
+    currentSrc,
+    el && el.readyState != null ? `readyState=${el.readyState}` : "",
+    mediaCode,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  appendDebugFeed({
+    level: "warn",
+    tag: "playback",
+    message: parts.length ? `Playback failed: ${parts.join(" — ")}` : "Playback failed.",
+    detail,
+  });
+}
+
 /** Current 2D rotation in degrees from `transform: matrix(...)` / `rotate(...)`. */
 function cssRotationDegFromTransform(transform) {
   if (!transform || transform === "none") return 0;
@@ -1295,6 +1351,8 @@ function Shell({ children }) {
       skipAutoplayOnceRef.current = false;
       return;
     }
+    const want = p.current?.url || "";
+    syncAudioElementForPlayback(el, want);
     const pr = el.play?.();
     if (pr && typeof pr.catch === "function") {
       pr.catch(() => {
@@ -1554,17 +1612,15 @@ function Shell({ children }) {
               if (!el) return;
               if (el.paused) {
                 claimPlaybackSync();
+                const want = p.current?.url || "";
+                syncAudioElementForPlayback(el, want);
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
-                  pr.catch(() => {
+                  pr.catch((err) => {
                     try {
                       el.pause();
                     } catch (_) {}
-                    appendDebugFeed({
-                      level: "warn",
-                      tag: "playback",
-                      message: "Playback blocked or failed.",
-                    });
+                    logPlaybackPromiseRejection(el, err, want);
                   });
                 }
               }
@@ -1791,9 +1847,13 @@ function Shell({ children }) {
                   const el = p.ref.current;
                   if (!el) return;
                   if (el.paused) {
-                  claimPlaybackSync();
+                    claimPlaybackSync();
+                    const want = p.current?.url || "";
+                    syncAudioElementForPlayback(el, want);
                     const pr = el.play();
-                    if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                    if (pr && typeof pr.catch === "function") {
+                      pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
+                    }
                   } else {
                     el.pause();
                   }
@@ -2083,8 +2143,12 @@ function Shell({ children }) {
                           if (!el) return;
                           if (el.paused) {
                             claimPlaybackSync();
+                            const want = p.current?.url || "";
+                            syncAudioElementForPlayback(el, want);
                             const pr = el.play();
-                            if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                            if (pr && typeof pr.catch === "function") {
+                              pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
+                            }
                           } else {
                             el.pause();
                           }
@@ -2189,9 +2253,11 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    if (el.src !== it.url) el.src = it.url;
+                                    syncAudioElementForPlayback(el, it.url);
                                     const pr = el.play?.();
-                                    if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                                    if (pr && typeof pr.catch === "function") {
+                                      pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
+                                    }
                                   }
                                 } catch (_) {}
                               }}
@@ -2202,9 +2268,11 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    if (el.src !== it.url) el.src = it.url;
+                                    syncAudioElementForPlayback(el, it.url);
                                     const pr = el.play?.();
-                                    if (pr && typeof pr.catch === "function") pr.catch(() => {});
+                                    if (pr && typeof pr.catch === "function") {
+                                      pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
+                                    }
                                   }
                                 } catch (_) {}
                               }}
