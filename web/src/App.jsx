@@ -105,11 +105,13 @@ function streamUrlsEffectivelyEqual(currentSrc, wantRelative) {
  * Align `<audio>` with the current queue URL before `play()`.
  * After a load error, `play()` keeps rejecting until `src` is set again and `load()` runs.
  * Does not touch `src` when the element already plays the same stream (avoids restart mid-playback).
+ * @param {{ forceReload?: boolean }} [opts] — set after taking over from another device so a stuck decoder (e.g. mediaErr=4) is reset even when the URL is unchanged.
  */
-function syncAudioElementForPlayback(el, wantUrl) {
+function syncAudioElementForPlayback(el, wantUrl, opts) {
   if (!el || typeof wantUrl !== "string") return;
   const want = wantUrl.trim();
   if (!want) return;
+  const forceReload = opts && opts.forceReload === true;
   let targetHref = "";
   try {
     targetHref = new URL(want, window.location.href).href;
@@ -117,13 +119,16 @@ function syncAudioElementForPlayback(el, wantUrl) {
     return;
   }
   try {
-    if (el.error != null) {
+    if (el.error != null || forceReload) {
       el.src = want;
       el.load();
       return;
     }
     const cur = el.currentSrc || "";
     if (cur && streamUrlsEffectivelyEqual(cur, want)) {
+      try {
+        if (el.error != null) el.load();
+      } catch (_) {}
       return;
     }
     if (cur !== targetHref) {
@@ -407,7 +412,15 @@ function Shell({ children }) {
   const suspendPlaybackPushRef = React.useRef(false);
   const takeoverRequestedRef = React.useRef(false);
   const takeoverGuardUntilRef = React.useRef(0);
+  /** After release while mirroring remote playback, next local `play()` must `load()` even if `src` is unchanged (decoder can stay errored). */
+  const playbackHardReloadAfterRemoteClaimRef = React.useRef(false);
   const ownerEpochRef = React.useRef(0);
+
+  const syncAudioAfterPlaybackClaim = React.useCallback((el, wantUrl) => {
+    const hard = playbackHardReloadAfterRemoteClaimRef.current;
+    playbackHardReloadAfterRemoteClaimRef.current = false;
+    syncAudioElementForPlayback(el, wantUrl, { forceReload: hard });
+  }, []);
 
   /** Pause local `<audio>` and stop passive `/playback` PUTs — same client must not overwrite remote owner on server. */
   const suspendPlaybackForRemoteSession = React.useCallback(() => {
@@ -706,6 +719,9 @@ function Shell({ children }) {
 
   React.useEffect(() => {
     const onRelease = () => {
+      if (remotePlaybackActiveRef.current) {
+        playbackHardReloadAfterRemoteClaimRef.current = true;
+      }
       suspendPlaybackPushRef.current = false;
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
@@ -1130,6 +1146,8 @@ function Shell({ children }) {
           } catch (_) {}
           const a = p.ref.current;
           if (!a) return;
+          const want = p.current?.url || "";
+          syncAudioAfterPlaybackClaim(a, want);
           const pr = a.play();
           if (pr && typeof pr.catch === "function") pr.catch(() => {});
         });
@@ -1371,7 +1389,7 @@ function Shell({ children }) {
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
     };
-  }, [p.current?.id]);
+  }, [p.current?.id, syncAudioAfterPlaybackClaim]);
 
   // After each track (or queue index) change: start at 0 unless we have a valid reload/cross-device restore pending.
   // Also gates late metadata/takeover seeks via playbackSwitchEpochRef.
@@ -1697,7 +1715,7 @@ function Shell({ children }) {
               if (el.paused) {
                 claimPlaybackSync();
                 const want = p.current?.url || "";
-                syncAudioElementForPlayback(el, want);
+                syncAudioAfterPlaybackClaim(el, want);
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
                   pr.catch((err) => {
@@ -1925,7 +1943,7 @@ function Shell({ children }) {
                   if (el.paused) {
                     claimPlaybackSync();
                     const want = p.current?.url || "";
-                    syncAudioElementForPlayback(el, want);
+                    syncAudioAfterPlaybackClaim(el, want);
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") {
                       pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
@@ -2216,7 +2234,7 @@ function Shell({ children }) {
                           if (el.paused) {
                             claimPlaybackSync();
                             const want = p.current?.url || "";
-                            syncAudioElementForPlayback(el, want);
+                            syncAudioAfterPlaybackClaim(el, want);
                             const pr = el.play();
                             if (pr && typeof pr.catch === "function") {
                               pr.catch((err) => logPlaybackPromiseRejection(el, err, want));
@@ -2325,7 +2343,7 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    syncAudioElementForPlayback(el, it.url);
+                                    syncAudioAfterPlaybackClaim(el, it.url);
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
                                       pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
@@ -2340,7 +2358,7 @@ function Shell({ children }) {
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
-                                    syncAudioElementForPlayback(el, it.url);
+                                    syncAudioAfterPlaybackClaim(el, it.url);
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
                                       pr.catch((err) => logPlaybackPromiseRejection(el, err, it.url));
