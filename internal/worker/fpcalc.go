@@ -24,7 +24,7 @@ func runFpcalc(path string) (durationSec int, fingerprint string, ok bool) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	if err := subproclow.Run(cmd); err != nil {
+	if err := subproclow.Run(ctx, cmd); err != nil {
 		return 0, "", false
 	}
 	var v fpcalcOut

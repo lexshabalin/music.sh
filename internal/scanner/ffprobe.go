@@ -26,7 +26,7 @@ func probeDurationMS(path string) (*int, bool) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	if err := subproclow.Run(cmd); err != nil {
+	if err := subproclow.Run(ctx, cmd); err != nil {
 		return nil, false
 	}
 	s := strings.TrimSpace(out.String())

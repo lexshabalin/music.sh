@@ -67,8 +67,9 @@ func releaseSlot() {
 }
 
 // Run acquires a media slot (if configured), then runs cmd.
-func Run(cmd *exec.Cmd) error {
-	if err := acquireSlot(cmd.Context()); err != nil {
+// ctx controls waiting for a slot (same as the command's lifetime); explicit param supports Go <1.21 (no *exec.Cmd.Context).
+func Run(ctx context.Context, cmd *exec.Cmd) error {
+	if err := acquireSlot(ctx); err != nil {
 		return err
 	}
 	defer releaseSlot()
@@ -76,8 +77,8 @@ func Run(cmd *exec.Cmd) error {
 }
 
 // Output acquires a media slot (if configured), then runs cmd.Output().
-func Output(cmd *exec.Cmd) ([]byte, error) {
-	if err := acquireSlot(cmd.Context()); err != nil {
+func Output(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	if err := acquireSlot(ctx); err != nil {
 		return nil, err
 	}
 	defer releaseSlot()
@@ -85,8 +86,8 @@ func Output(cmd *exec.Cmd) ([]byte, error) {
 }
 
 // CombinedOutput acquires a media slot (if configured), then runs cmd.CombinedOutput().
-func CombinedOutput(cmd *exec.Cmd) ([]byte, error) {
-	if err := acquireSlot(cmd.Context()); err != nil {
+func CombinedOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	if err := acquireSlot(ctx); err != nil {
 		return nil, err
 	}
 	defer releaseSlot()

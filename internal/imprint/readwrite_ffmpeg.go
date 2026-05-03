@@ -36,7 +36,7 @@ func ffprobeProbe(ctx context.Context, path string) (ffprobeJSON, error) {
 		"-show_streams",
 		path,
 	)
-	b, err := subproclow.Output(cmd)
+	b, err := subproclow.Output(ctx, cmd)
 	if err != nil {
 		return out, err
 	}
@@ -154,7 +154,7 @@ func extractCoverHash(ctx context.Context, path string, streamIndex int, codecNa
 		"-y",
 		outPath,
 	)
-	if err := subproclow.Run(cmd); err != nil {
+	if err := subproclow.Run(ctx, cmd); err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(outPath)
@@ -333,7 +333,7 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 	args = append(args, tmpPath)
 
 	cmd := subproclow.Command(ctx, "ffmpeg", args...)
-	out, err := subproclow.CombinedOutput(cmd)
+	out, err := subproclow.CombinedOutput(ctx, cmd)
 	if err != nil {
 		return warn, fmt.Errorf("ffmpeg: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
