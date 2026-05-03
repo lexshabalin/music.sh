@@ -24,18 +24,36 @@ import (
 var globalScanMu sync.Mutex
 
 // Yield every N scanned audio files so HDDs can breathe (Linux page cache stays useful on large libraries).
-// Defaults (25 files, 35 ms) apply when the corresponding env var is unset. If either value is 0, throttling is off.
+// Defaults (20 files, 45 ms) apply when the corresponding env var is unset. If either value is 0, throttling is off.
 func scanThrottleMaybe(filesProcessed int) {
 	if filesProcessed <= 0 {
 		return
 	}
-	const defEvery, defMS = 25, 35
+	const defEvery, defMS = 20, 45
 	n := getenvScanYieldInt("LIBRARY_SCAN_YIELD_EVERY", defEvery)
 	ms := getenvScanYieldInt("LIBRARY_SCAN_YIELD_MS", defMS)
 	if n <= 0 || ms <= 0 {
 		return
 	}
 	if filesProcessed%n != 0 {
+		return
+	}
+	time.Sleep(time.Duration(ms) * time.Millisecond)
+}
+
+// scanDirYieldMaybe sleeps every N directory entries during walkLibraryAudio (ReadDir + subtree recursion).
+// Reduces sustained metadata I/O on slow disks. LIBRARY_SCAN_DIR_YIELD_EVERY / _MS (defaults 8 / 25 ms). Either 0 disables.
+func scanDirYieldMaybe(dirsEntered int) {
+	if dirsEntered <= 0 {
+		return
+	}
+	const defEvery, defMS = 8, 25
+	n := getenvScanYieldInt("LIBRARY_SCAN_DIR_YIELD_EVERY", defEvery)
+	ms := getenvScanYieldInt("LIBRARY_SCAN_DIR_YIELD_MS", defMS)
+	if n <= 0 || ms <= 0 {
+		return
+	}
+	if dirsEntered%n != 0 {
 		return
 	}
 	time.Sleep(time.Duration(ms) * time.Millisecond)

@@ -58,11 +58,14 @@ func walkLibraryAudio(ctx context.Context, musicDir string, followSymlinks bool,
 		return fmt.Errorf("music dir is not a directory: %s", musicDir)
 	}
 	symlinkDirSeen := make(map[string]struct{})
+	dirEntered := 0
 	var walk func(dir string, depth int) error
 	walk = func(dir string, depth int) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		dirEntered++
+		scanDirYieldMaybe(dirEntered)
 		maxD := libraryWalkMaxDepth()
 		if depth > maxD {
 			return fmt.Errorf("library walk: max depth %d exceeded at %s", maxD, dir)
