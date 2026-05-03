@@ -80,7 +80,7 @@ function normPlaybackTrackId(id) {
 }
 
 /** Max ms to extrapolate past `positionMs` when `isPlaying` — avoids runaway seeks if `updated_at` is stale. */
-const maxPlaybackExtrapolateMs = 25_000;
+const maxPlaybackExtrapolateMs = 90_000;
 
 /** Wall-clock estimate of server `positionMs` while `isPlaying` (cross-device takeover). */
 function interpolatePlaybackPositionMsFromServer(st) {
@@ -606,6 +606,8 @@ function Shell({ children }) {
   React.useEffect(() => {
     flushPlaybackRef.current = flushPlayback;
   }, [flushPlayback]);
+  /** Throttle seek-triggered PUTs (loadedmetadata + slider can fire seeked in quick succession). */
+  const lastPlaybackSeekFlushMsRef = React.useRef(0);
 
   const pushTakeoverNow = React.useCallback(async () => {
     if (!getToken()) return;
@@ -747,6 +749,11 @@ function Shell({ children }) {
   }, [p.ref]);
 
   const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
+  /** While mirroring another client, a local seek must POST /takeover; otherwise PUT is enough. */
+  const flushOrClaimPlaybackAfterLocalSeek = React.useCallback(() => {
+    if (remotePlaybackActiveRef.current) claimPlaybackSync();
+    else void flushPlaybackRef.current({ forceNow: true });
+  }, [claimPlaybackSync]);
 
   /** Disc art uses @keyframes on --disc-rot; CSS cannot smoothly unwind to 0 on hover, so we snapshot matrix → rotate(0). */
   const onDesktopNowplayingDiscEnter = React.useCallback((e) => {
@@ -1093,7 +1100,7 @@ function Shell({ children }) {
 
   React.useEffect(() => {
     if (!getToken()) return;
-    const id = window.setInterval(() => flushPlayback(), 5000);
+    const id = window.setInterval(() => flushPlayback(), 2500);
     return () => clearInterval(id);
   }, [flushPlayback]);
 
@@ -1535,6 +1542,15 @@ function Shell({ children }) {
     };
     const onSeeked = () => {
       if (remotePlaybackActiveRef.current) return;
+      if (getToken()) {
+        const now = Date.now();
+        if (now - lastPlaybackSeekFlushMsRef.current >= 550) {
+          lastPlaybackSeekFlushMsRef.current = now;
+          try {
+            flushPlaybackRef.current({ forceNow: true });
+          } catch (_) {}
+        }
+      }
       try {
         const ms = navigator.mediaSession;
         if (!ms?.setPositionState) return;
@@ -2046,7 +2062,7 @@ function Shell({ children }) {
               }}
               onChange={(e) => {
                 applyLocalSeekFromSlider(e.target.value);
-                claimPlaybackSync();
+                flushOrClaimPlaybackAfterLocalSeek();
               }}
             />
           </div>
@@ -2438,7 +2454,7 @@ function Shell({ children }) {
                         }}
                         onChange={(e) => {
                           applyLocalSeekFromSlider(e.target.value);
-                          claimPlaybackSync();
+                          flushOrClaimPlaybackAfterLocalSeek();
                         }}
                       />
                       <div className="mobile-player-progress-footer">
@@ -2661,7 +2677,8 @@ function Shell({ children }) {
                                 if (e.cancelable) e.preventDefault();
                                 e.stopPropagation();
                                 p.jumpTo(i);
-                                claimPlaybackSync();
+                                if (remotePlaybackActiveRef.current) claimPlaybackSync();
+                                else await flushPlaybackRef.current({ forceNow: true });
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
@@ -2678,7 +2695,8 @@ function Shell({ children }) {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 p.jumpTo(i);
-                                claimPlaybackSync();
+                                if (remotePlaybackActiveRef.current) claimPlaybackSync();
+                                else await flushPlaybackRef.current({ forceNow: true });
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
@@ -2761,7 +2779,11 @@ function Shell({ children }) {
           items={Array.isArray(p.queue) ? p.queue : []}
           currentIndex={typeof p.index === "number" ? p.index : -1}
           historyUX
-          onJump={(i) => p.jumpTo(i)}
+          onJump={(i) => {
+            p.jumpTo(i);
+            if (remotePlaybackActiveRef.current) claimPlaybackSync();
+            else void flushPlaybackRef.current({ forceNow: true });
+          }}
           onClose={() => setShowQueue(false)}
         />
       ) : null}

@@ -245,6 +245,12 @@ func (a *App) takeoverPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newEpoch := cur.OwnerEpoch + 1
+	// This tab already owns the row: refresh queue/position/is_playing without bumping
+	// owner_epoch. Unconditional bumps broke multi-tab PUTs and cross-device sync because
+	// play/seek/next all route through POST /takeover.
+	if cid != "" && cur.PlaybackClientID == cid {
+		newEpoch = cur.OwnerEpoch
+	}
 	// Explicit takeover always marks playback as active under this client.
 	ok, err = a.DB.UpsertUserPlayback(r.Context(), uid, ids, idx, in.PositionMs, true, srcPl, cid, nil, cur.OwnerEpoch, newEpoch)
 	if err != nil {
