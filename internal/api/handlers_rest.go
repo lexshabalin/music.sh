@@ -1165,7 +1165,7 @@ func (a *App) scan(w http.ResponseWriter, r *http.Request) {
 		JSON(w, 202, map[string]any{"ok": true, "running": true, "state": st})
 		return
 	}
-	a.scanState = scanState{Running: true, StartedAt: time.Now()}
+	a.scanState = scanState{Running: true, StartedAt: time.Now(), Error: ""}
 	a.scanMu.Unlock()
 
 	go a.runScan(context.Background())

@@ -53,11 +53,28 @@ func workerConcurrency() int {
 	return n
 }
 
+func workerPollInterval() time.Duration {
+	const defSec = 4
+	v := strings.TrimSpace(os.Getenv("WORKER_POLL_SECONDS"))
+	if v == "" {
+		return time.Duration(defSec) * time.Second
+	}
+	sec, err := strconv.Atoi(v)
+	if err != nil || sec < 1 {
+		return time.Duration(defSec) * time.Second
+	}
+	if sec > 60 {
+		sec = 60
+	}
+	return time.Duration(sec) * time.Second
+}
+
 func (h *Worker) Run(ctx context.Context) {
 	n := workerConcurrency()
+	interval := workerPollInterval()
 	for i := 0; i < n; i++ {
 		go func() {
-			tick := time.NewTicker(2 * time.Second)
+			tick := time.NewTicker(interval)
 			defer tick.Stop()
 			for {
 				select {

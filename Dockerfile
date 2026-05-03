@@ -23,7 +23,8 @@ FROM alpine:3.19
 # Runtime deps:
 # - chromaprint provides fpcalc (AcoustID fingerprint)
 # - ffmpeg provides ffprobe (duration probing)
-RUN apk add --no-cache ca-certificates tzdata chromaprint ffmpeg
+# util-linux: ionice for low-priority ffprobe/fpcalc/ffmpeg (see internal/subproclow).
+RUN apk add --no-cache ca-certificates tzdata chromaprint ffmpeg util-linux
 WORKDIR /app
 COPY --from=gob /out/musicsh /app/musicsh
 ENV HTTP_ADDR=0.0.0.0:8080

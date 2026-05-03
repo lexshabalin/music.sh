@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
 	"time"
+
+	"musicsh/internal/subproclow"
 )
 
 type fpcalcOut struct {
@@ -19,11 +20,11 @@ func runFpcalc(path string) (durationSec int, fingerprint string, ok bool) {
 	defer cancel()
 
 	// fpcalc -json <file>
-	cmd := exec.CommandContext(ctx, "fpcalc", "-json", path)
+	cmd := subproclow.Command(ctx, "fpcalc", "-json", path)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	if err := cmd.Run(); err != nil {
+	if err := subproclow.Run(cmd); err != nil {
 		return 0, "", false
 	}
 	var v fpcalcOut

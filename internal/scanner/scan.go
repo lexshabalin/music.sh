@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dhowden/tag"
@@ -17,17 +18,20 @@ import (
 	"musicsh/internal/store"
 )
 
+// globalScanMu ensures at most one library walk runs at a time (HTTP scan, worker "scan" job),
+// similar to Navidrome's single-flight scan — avoids doubled disk and DB load.
+var globalScanMu sync.Mutex
+
 // Yield every N scanned audio files so HDDs can breathe (Linux page cache stays useful on large libraries).
+// Defaults (25 files, 35 ms) apply when the corresponding env var is unset. If either value is 0, throttling is off.
 func scanThrottleMaybe(filesProcessed int) {
 	if filesProcessed <= 0 {
 		return
 	}
-	n := getenvIntPositive("LIBRARY_SCAN_YIELD_EVERY", 0)
-	if n <= 0 {
-		return
-	}
-	ms := getenvIntPositive("LIBRARY_SCAN_YIELD_MS", 0)
-	if ms <= 0 {
+	const defEvery, defMS = 25, 35
+	n := getenvScanYieldInt("LIBRARY_SCAN_YIELD_EVERY", defEvery)
+	ms := getenvScanYieldInt("LIBRARY_SCAN_YIELD_MS", defMS)
+	if n <= 0 || ms <= 0 {
 		return
 	}
 	if filesProcessed%n != 0 {
@@ -36,7 +40,7 @@ func scanThrottleMaybe(filesProcessed int) {
 	time.Sleep(time.Duration(ms) * time.Millisecond)
 }
 
-func getenvIntPositive(key string, def int) int {
+func getenvScanYieldInt(key string, def int) int {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
 		return def
@@ -46,6 +50,75 @@ func getenvIntPositive(key string, def int) int {
 		return def
 	}
 	return x
+}
+
+func scanProgressMinInterval() time.Duration {
+	const defMS = 500
+	v := strings.TrimSpace(os.Getenv("SCAN_PROGRESS_INTERVAL_MS"))
+	if v == "" {
+		return time.Duration(defMS) * time.Millisecond
+	}
+	ms, err := strconv.Atoi(v)
+	if err != nil || ms < 0 {
+		return time.Duration(defMS) * time.Millisecond
+	}
+	if ms > 30000 {
+		ms = 30000
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+func scanProgressMinFiles() int {
+	const def = 25
+	v := strings.TrimSpace(os.Getenv("SCAN_PROGRESS_MIN_FILES"))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return def
+	}
+	if n > 500 {
+		return 500
+	}
+	return n
+}
+
+// scanProgressGate coalesces progress callbacks to cut mutex churn and UI poll amplification (Navidrome-style throttling).
+type scanProgressGate struct {
+	progress    func(int, int, int)
+	minInterval time.Duration
+	minFiles    int
+	lastCount   int
+	lastEmitAt  time.Time
+}
+
+func newScanProgressGate(progress func(int, int, int)) *scanProgressGate {
+	if progress == nil {
+		return nil
+	}
+	return &scanProgressGate{
+		progress:    progress,
+		minInterval: scanProgressMinInterval(),
+		minFiles:    scanProgressMinFiles(),
+	}
+}
+
+func (g *scanProgressGate) emit(scanned, found, changed int, force bool) {
+	if g == nil {
+		return
+	}
+	if !force {
+		now := time.Now()
+		intervalOK := now.Sub(g.lastEmitAt) >= g.minInterval
+		filesOK := scanned <= 1 || scanned-g.lastCount >= g.minFiles
+		if !intervalOK && !filesOK {
+			return
+		}
+	}
+	g.lastCount = scanned
+	g.lastEmitAt = time.Now()
+	g.progress(scanned, found, changed)
 }
 
 // normalizeAudioPathOnDisk renames bad basenames (trailing space before ext, HTML entities like &#39;) when the target is free, and updates DB paths.
@@ -75,6 +148,9 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	if musicDir == "" {
 		return 0, fmt.Errorf("MUSIC_DIR empty")
 	}
+	globalScanMu.Lock()
+	defer globalScanMu.Unlock()
+
 	var audioCount int
 	err = filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -140,7 +216,12 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if musicDir == "" {
 		return fmt.Errorf("MUSIC_DIR empty")
 	}
-	lastReport := 0
+	globalScanMu.Lock()
+	defer globalScanMu.Unlock()
+
+	pg := newScanProgressGate(progress)
+	// Immediate tick so status polling sees Running + zero counts (avoids silent gap on huge dirs before first audio).
+	pg.emit(0, 0, 0, true)
 	err := filepath.Walk(musicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -167,10 +248,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		scanThrottleMaybe(scanned)
 		if alb, ok, qerr := s.TrackUnchangedFingerprint(ctx, path, st, ns); qerr == nil && ok {
 			_ = enqueueMetaJob(ctx, s, alb)
-			if progress != nil && (scanned-lastReport >= 10 || scanned == 1) {
-				lastReport = scanned
-				progress(scanned, found, changed)
-			}
+			pg.emit(scanned, found, changed, false)
 			return nil
 		}
 		meta := readTrackMeta(path)
@@ -185,10 +263,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		if ch {
 			changed++
 		}
-		if progress != nil && (scanned-lastReport >= 10 || scanned == 1) {
-			lastReport = scanned
-			progress(scanned, found, changed)
-		}
+		pg.emit(scanned, found, changed, false)
 		return nil
 	})
 	if err != nil {
@@ -202,9 +277,7 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	if err := s.PrunePlaybackQueuesRemovedTracks(ctx); err != nil {
 		return err
 	}
-	if progress != nil {
-		progress(scanned, found, changed)
-	}
+	pg.emit(scanned, found, changed, true)
 	_ = s.CleanupOrphanAlbums(ctx)
 	return nil
 }

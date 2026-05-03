@@ -50,9 +50,14 @@ services:
       DATA_DIR: /data
       HTTP_ADDR: "0.0.0.0:8080"
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-5}
       # Stronger pacing defaults for rotational drives; tune per host (raise EVERY / lower MS to go faster on SSD).
       LIBRARY_SCAN_YIELD_EVERY: ${LIBRARY_SCAN_YIELD_EVERY:-25}
       LIBRARY_SCAN_YIELD_MS: ${LIBRARY_SCAN_YIELD_MS:-35}
+      SCAN_PROGRESS_INTERVAL_MS: ${SCAN_PROGRESS_INTERVAL_MS:-500}
+      SCAN_PROGRESS_MIN_FILES: ${SCAN_PROGRESS_MIN_FILES:-25}
+      # Caps simultaneous ffprobe/ffmpeg/fpcalc (overlapping scan + background jobs).
+      MUSICSH_MEDIA_PROC_SLOTS: ${MUSICSH_MEDIA_PROC_SLOTS:-3}
       ACOUSTID_KEY: ${ACOUSTID_KEY:-}
     cpus: '1'
     mem_limit: 1536m

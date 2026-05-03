@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"musicsh/internal/subproclow"
 )
 
 var reFourDigitYear = regexp.MustCompile(`^\d{4}`)
@@ -28,14 +29,14 @@ type ffprobeJSON struct {
 
 func ffprobeProbe(ctx context.Context, path string) (ffprobeJSON, error) {
 	var out ffprobeJSON
-	cmd := exec.CommandContext(ctx, "ffprobe",
+	cmd := subproclow.Command(ctx, "ffprobe",
 		"-v", "error",
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
 		path,
 	)
-	b, err := cmd.Output()
+	b, err := subproclow.Output(cmd)
 	if err != nil {
 		return out, err
 	}
@@ -143,7 +144,7 @@ func extractCoverHash(ctx context.Context, path string, streamIndex int, codecNa
 	_ = f.Close()
 	defer os.Remove(outPath)
 
-	cmd := exec.CommandContext(ctx, "ffmpeg",
+	cmd := subproclow.Command(ctx, "ffmpeg",
 		"-nostdin",
 		"-v", "error",
 		"-threads", "1",
@@ -153,7 +154,7 @@ func extractCoverHash(ctx context.Context, path string, streamIndex int, codecNa
 		"-y",
 		outPath,
 	)
-	if err := cmd.Run(); err != nil {
+	if err := subproclow.Run(cmd); err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(outPath)
@@ -331,8 +332,8 @@ func writeFFmpegTags(path string, desired TrackTarget, writeFields map[Field]boo
 
 	args = append(args, tmpPath)
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	out, err := cmd.CombinedOutput()
+	cmd := subproclow.Command(ctx, "ffmpeg", args...)
+	out, err := subproclow.CombinedOutput(cmd)
 	if err != nil {
 		return warn, fmt.Errorf("ffmpeg: %w (%s)", err, strings.TrimSpace(string(out)))
 	}

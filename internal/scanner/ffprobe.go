@@ -3,10 +3,11 @@ package scanner
 import (
 	"bytes"
 	"context"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"musicsh/internal/subproclow"
 )
 
 // probeDurationMS tries to read duration via ffprobe.
@@ -16,7 +17,7 @@ func probeDurationMS(path string) (*int, bool) {
 	defer cancel()
 
 	// ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 <file>
-	cmd := exec.CommandContext(ctx, "ffprobe",
+	cmd := subproclow.Command(ctx, "ffprobe",
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=nk=1:nw=1",
@@ -25,7 +26,7 @@ func probeDurationMS(path string) (*int, bool) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	if err := cmd.Run(); err != nil {
+	if err := subproclow.Run(cmd); err != nil {
 		return nil, false
 	}
 	s := strings.TrimSpace(out.String())
