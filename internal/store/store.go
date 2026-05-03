@@ -1028,7 +1028,8 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
-			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST`
+			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST,
+			t.id ASC`
 	var (
 		rows pgx.Rows
 		err  error
