@@ -520,6 +520,16 @@ function Shell({ children }) {
     const el = p.ref.current;
     const cid = getPlaybackClientId();
     let positionMs = Math.round(Math.max(0, (el?.currentTime || 0) * 1000));
+    // While mirroring another device, `<audio>` stays paused near 0; UI progress lives in remote refs.
+    if (remotePlaybackActiveRef.current && positionMs < 500) {
+      const baseMs = remoteProgressBaseMsRef.current;
+      const updatedAt = remoteProgressUpdatedAtRef.current || Date.now();
+      let ms = Math.max(0, baseMs);
+      if (remoteServerPlayingRef.current) {
+        ms = Math.max(0, baseMs + Math.max(0, Date.now() - updatedAt));
+      }
+      positionMs = Math.round(ms);
+    }
     try {
       const st = await playback.get();
       ownerEpochRef.current = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : ownerEpochRef.current;
@@ -557,6 +567,20 @@ function Shell({ children }) {
       seekMediaWhenReady(p.ref, positionMs / 1000, () => playbackSwitchEpochRef.current === epochAtSeek);
     } catch (_) {}
   }, [p.queue, p.index, p.ref]);
+
+  const pushTakeoverNowRef = React.useRef(pushTakeoverNow);
+  React.useLayoutEffect(() => {
+    pushTakeoverNowRef.current = pushTakeoverNow;
+  }, [pushTakeoverNow]);
+  /** Set synchronously in PLAYBACK_SYNC_RELEASE handler so play() can await takeover+seek before starting audio. */
+  const takeoverFromReleasePromiseRef = React.useRef(null);
+  const awaitPlaybackTakeoverAfterRelease = React.useCallback(async () => {
+    const tp = takeoverFromReleasePromiseRef.current;
+    if (!tp) return;
+    try {
+      await tp;
+    } catch (_) {}
+  }, []);
 
   const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
 
@@ -731,12 +755,16 @@ function Shell({ children }) {
       // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
       // would send isPlaying:false and mute server state the user is about to resume.
       try {
-        void pushTakeoverNow();
+        const p = pushTakeoverNowRef.current();
+        takeoverFromReleasePromiseRef.current = p;
+        void p.finally(() => {
+          if (takeoverFromReleasePromiseRef.current === p) takeoverFromReleasePromiseRef.current = null;
+        });
       } catch (_) {}
     };
     window.addEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
     return () => window.removeEventListener(PLAYBACK_SYNC_RELEASE_EVENT, onRelease);
-  }, [pushTakeoverNow]);
+  }, []);
 
   React.useEffect(() => {
     if (!getToken()) return;
@@ -1141,6 +1169,12 @@ function Shell({ children }) {
       try {
         ms.setActionHandler("play", async () => {
           releasePlaybackServerSync();
+          const tp = takeoverFromReleasePromiseRef.current;
+          if (tp) {
+            try {
+              await tp;
+            } catch (_) {}
+          }
           try {
             ms.playbackState = "playing";
           } catch (_) {}
@@ -1709,11 +1743,12 @@ function Shell({ children }) {
           <button
             className="player-play"
             type="button"
-            onClick={() => {
+            onClick={async () => {
               const el = p.ref.current;
               if (!el) return;
               if (el.paused) {
                 claimPlaybackSync();
+                await awaitPlaybackTakeoverAfterRelease();
                 const want = p.current?.url || "";
                 syncAudioAfterPlaybackClaim(el, want);
                 const pr = el.play();
@@ -1936,12 +1971,13 @@ function Shell({ children }) {
               <button
                 className="player-play"
                 type="button"
-              onClick={(e) => {
+              onClick={async (e) => {
                   e.stopPropagation();
                   const el = p.ref.current;
                   if (!el) return;
                   if (el.paused) {
                     claimPlaybackSync();
+                    await awaitPlaybackTakeoverAfterRelease();
                     const want = p.current?.url || "";
                     syncAudioAfterPlaybackClaim(el, want);
                     const pr = el.play();
@@ -2228,11 +2264,12 @@ function Shell({ children }) {
                       <button
                         className="player-play"
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const el = p.ref.current;
                           if (!el) return;
                           if (el.paused) {
                             claimPlaybackSync();
+                            await awaitPlaybackTakeoverAfterRelease();
                             const want = p.current?.url || "";
                             syncAudioAfterPlaybackClaim(el, want);
                             const pr = el.play();
