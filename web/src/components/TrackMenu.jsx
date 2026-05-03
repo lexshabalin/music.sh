@@ -6,6 +6,7 @@ import GenreSuggestInput, {
   parseGenreInput,
 } from "./GenreSuggestInput";
 import { IClock, IHeart } from "./icons";
+import { MediaCover } from "./MediaCover";
 import { useI18n } from "../i18n";
 
 function fmtDur(ms) {
@@ -876,15 +877,11 @@ function TrackMetaEditModal({ trackId, onClose, onSaved }) {
                 {t("trackmeta.cover")} {m?.art ? <ResetLink onClick={() => resetField("art")} busy={busy} /> : null}
               </label>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
-                {full?.coverUrl || m?.art ? (
-                  <img
-                    src={trackCoverImgSrc(trackId, artVersion)}
-                    alt=""
-                    style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }}
-                  />
-                ) : (
-                  <div style={{ width: 96, height: 96, background: "#222", borderRadius: 8 }} />
-                )}
+                <MediaCover
+                  src={full?.coverUrl || m?.art ? trackCoverImgSrc(trackId, artVersion) : ""}
+                  className="cover-thumb-square"
+                  alt=""
+                />
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"

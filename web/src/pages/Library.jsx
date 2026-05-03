@@ -4,13 +4,14 @@ import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { IPlay } from "../components/icons";
+import { MediaCover } from "../components/MediaCover";
 
 export function AlbumTile({ a, onPlay, playTitle }) {
   return (
     <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
       <div className="card album-tile">
         <div className="tile-media">
-          {a.coverUrl ? <img className="album-art" src={lib.coverUrl(a.id)} alt="" /> : <div className="album-art" />}
+          <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
           <button
             type="button"
             className="tile-play-btn"

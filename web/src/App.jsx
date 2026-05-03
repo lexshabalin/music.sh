@@ -31,6 +31,7 @@ const Genre = React.lazy(() => import("./pages/Genre").then((m) => ({ default: m
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { MissingLibraryItemDialog } from "./components/MissingLibraryItemDialog";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { MediaCover } from "./components/MediaCover";
 import { DebugLogPanel } from "./components/DebugLogPanel";
 import { appendDebugFeed } from "./debugFeed";
 import {
@@ -1691,11 +1692,7 @@ function Shell({ children }) {
             onMouseEnter={onDesktopNowplayingDiscEnter}
             onMouseLeave={onDesktopNowplayingDiscLeave}
           >
-            {p.current.coverUrl ? (
-              <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
-            ) : (
-              <div className="nowplaying-art placeholder" />
-            )}
+            <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
             <div className="nowplaying-text">
               <div className="nowplaying-line1">
                 {p.current.artist ? `${p.current.artist} — ` : ""}
@@ -1829,11 +1826,7 @@ function Shell({ children }) {
             }}
           >
             <div className="nowplaying">
-              {p.current.coverUrl ? (
-                <img className="nowplaying-art" src={p.current.coverUrl} alt="" />
-              ) : (
-                <div className="nowplaying-art placeholder" />
-              )}
+              <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
               <div className="nowplaying-text">
                 <div className="nowplaying-line1">
                   {p.current.title || p.current.label}
@@ -2062,11 +2055,7 @@ function Shell({ children }) {
                 >
                   <section className="mobile-player-page mobile-player-page--main" aria-label="Player">
                     <div className="mobile-player-cover-wrap">
-                      {p.current.coverUrl ? (
-                        <img className="mobile-player-cover" src={p.current.coverUrl} alt="" />
-                      ) : (
-                        <div className="mobile-player-cover placeholder" />
-                      )}
+                      <MediaCover src={p.current.coverUrl || ""} className="mobile-player-cover" alt="" />
                     </div>
                     <div className="mobile-player-meta">
                       <div className="mobile-player-title">{p.current.title || p.current.label}</div>

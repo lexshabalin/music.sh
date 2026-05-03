@@ -10,6 +10,7 @@ import GenreSuggestInput, {
 } from "../components/GenreSuggestInput";
 import { MissingLibraryItemDialog } from "../components/MissingLibraryItemDialog";
 import { useI18n } from "../i18n";
+import { MediaCover } from "../components/MediaCover";
 
 function ResetPinButton({ onClick, busy }) {
   const { t } = useI18n();
@@ -145,15 +146,11 @@ function AlbumMetaModal({ albumId, album, onClose, onRefresh }) {
             {t("album.meta.cover")} {m.cover ? <ResetPinButton onClick={() => resetField("cover")} busy={busy} /> : null}
           </label>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
-            {album?.coverUrl || m.cover ? (
-              <img
-                src={lib.coverUrl(albumId)}
-                alt=""
-                style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }}
-              />
-            ) : (
-              <div style={{ width: 96, height: 96, background: "#222", borderRadius: 8 }} />
-            )}
+            <MediaCover
+              src={album?.coverUrl || m.cover ? lib.coverUrl(albumId) : ""}
+              className="cover-thumb-square"
+              alt=""
+            />
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif,.gif"
@@ -856,15 +853,7 @@ export function Album() {
       </p>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "1rem" }}>
         <div style={{ display: "flex", gap: "1rem", minWidth: 0 }}>
-        {a?.coverUrl ? (
-          <img
-            src={lib.coverUrl(a.id)}
-            alt=""
-            style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8 }}
-          />
-        ) : (
-          <div style={{ width: 120, height: 120, background: "#222" }} />
-        )}
+        <MediaCover src={a?.coverUrl ? lib.coverUrl(a.id) : ""} className="cover-thumb-header" alt="" />
         <div style={{ minWidth: 0 }}>
           <h2 style={{ margin: 0 }}>
             {a?.title || t("album.editTitle")}

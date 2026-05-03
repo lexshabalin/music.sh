@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { useSectionViewMode } from "../viewPrefs";
 import { ViewModeControl } from "../components/ViewModeControl";
 import { IPlay } from "../components/icons";
+import { MediaCover } from "../components/MediaCover";
 
 export function Likes() {
   const { t } = useI18n();
@@ -74,7 +75,7 @@ export function Likes() {
             return (
               <div key={tr.id} className="card album-tile" style={{ cursor: "pointer" }} onClick={() => playAt(i)} role="button" tabIndex={0}>
                 <div className="tile-media">
-                  {cover ? <img className="album-art" src={cover} alt="" /> : <div className="album-art" />}
+                  <MediaCover src={cover || ""} className="album-art" alt="" />
                   <button type="button" className="tile-play-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); playAt(i); }} title={t("tracks.playAria")} aria-label={t("tracks.playAria")}>
                     <IPlay size={16} />
                   </button>

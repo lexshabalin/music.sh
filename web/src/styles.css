@@ -636,6 +636,72 @@ select.lang-select {
   background: #222;
 }
 
+/* Missing / failed cover art — theme monochrome (not user profile avatars) */
+.cover-art-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+.cover-art-placeholder .cover-note-icon {
+  width: 42%;
+  height: 42%;
+  max-width: 5.5rem;
+  max-height: 5.5rem;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+.album-art.cover-art-placeholder {
+  background: var(--card);
+}
+.cover-thumb-square {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.cover-thumb-square.cover-art-placeholder {
+  display: flex;
+  object-fit: unset;
+}
+.cover-thumb-header {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.cover-thumb-header.cover-art-placeholder {
+  display: flex;
+  object-fit: unset;
+}
+.pl-collage img,
+.pl-collage .pl-collage-cell {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pl-collage .pl-collage-cell.cover-art-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: unset;
+}
+.pl-collage-empty.cover-art-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: none;
+  background: var(--card);
+}
+
 .artist-page-head {
   display: flex;
   align-items: center;
@@ -651,8 +717,18 @@ select.lang-select {
   height: 72px;
   border-radius: 10px;
   object-fit: cover;
-  background: #222;
+  background: var(--card);
   flex-shrink: 0;
+}
+.artist-page-portrait.cover-art-placeholder {
+  display: flex;
+  object-fit: unset;
+}
+.artist-page-portrait.cover-art-placeholder .cover-note-icon {
+  width: 52%;
+  height: 52%;
+  max-width: 2.5rem;
+  max-height: 2.5rem;
 }
 
 .tile-media {
@@ -772,7 +848,7 @@ select.lang-select {
   aspect-ratio: 1;
   border-radius: 6px;
   overflow: hidden;
-  background: #222;
+  background: var(--card);
   display: grid;
   gap: 2px;
 }
@@ -783,15 +859,6 @@ select.lang-select {
 .pl-collage.one {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
-}
-.pl-collage img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.pl-collage-empty {
-  background: #222;
 }
 .plain-list {
   list-style: none;
@@ -1453,8 +1520,18 @@ select.lang-select {
   margin: 0 auto;
   display: block;
 }
-.mobile-player-cover.placeholder {
-  background: rgba(255, 255, 255, 0.04);
+.mobile-player-cover.placeholder,
+.mobile-player-cover.cover-art-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+}
+.mobile-player-cover.cover-art-placeholder .cover-note-icon {
+  width: 36%;
+  height: 36%;
+  max-width: 10rem;
+  max-height: 10rem;
 }
 .mobile-player-meta {
   text-align: left;
@@ -1892,8 +1969,15 @@ select.lang-select {
   background: #222;
   border: 1px solid var(--border);
 }
-.nowplaying-art.placeholder {
-  background: #222;
+.nowplaying-art.placeholder,
+.nowplaying-art.cover-art-placeholder {
+  background: var(--card);
+}
+.nowplaying-art.cover-art-placeholder .cover-note-icon {
+  width: 58%;
+  height: 58%;
+  max-width: 1.65rem;
+  max-height: 1.65rem;
 }
 
 /* --- Footer player “disc” effect (desktop hover) --- */

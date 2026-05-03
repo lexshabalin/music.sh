@@ -2,23 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { lib } from "../api";
 import { useI18n } from "../i18n";
-
-function ArtistCardImage({ artistId }) {
-  const [hidden, setHidden] = useState(false);
-  if (hidden) {
-    return <div className="album-art" aria-hidden />;
-  }
-  return (
-    <img
-      className="album-art"
-      src={lib.artistImageUrl(artistId)}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      onError={() => setHidden(true)}
-    />
-  );
-}
+import { MediaCover } from "../components/MediaCover";
 
 export function Artists() {
   const { t } = useI18n();
@@ -55,7 +39,7 @@ export function Artists() {
           <Link key={a.id} to={"/artist/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
             <div className="card album-tile" style={{ height: "100%" }}>
               <div className="tile-media">
-                <ArtistCardImage artistId={a.id} />
+                <MediaCover src={lib.artistImageUrl(a.id)} className="album-art" alt="" loading="lazy" decoding="async" />
               </div>
               <div className="album-meta">
                 <div className="album-title" style={{ fontWeight: 900, letterSpacing: 0.2 }}>

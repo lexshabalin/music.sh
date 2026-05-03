@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
+import { CoverNoteIcon, MediaCover } from "../components/MediaCover";
 import { useI18n } from "../i18n";
 
 function hash32(s) {
@@ -248,9 +249,13 @@ export function Playlists() {
               <div className="tile-media">
                 <div className={"pl-collage " + ((covers[p.id] || []).length <= 1 ? "one" : "four")}>
                   {(covers[p.id] || []).length ? (
-                    (covers[p.id] || []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)
+                    (covers[p.id] || []).slice(0, 4).map((u, i) => (
+                      <MediaCover key={i} src={u} className="pl-collage-cell" alt="" loading="lazy" />
+                    ))
                   ) : (
-                    <div className="pl-collage-empty" />
+                    <div className="pl-collage-empty cover-art-placeholder" aria-hidden>
+                      <CoverNoteIcon />
+                    </div>
                   )}
                 </div>
                 <button

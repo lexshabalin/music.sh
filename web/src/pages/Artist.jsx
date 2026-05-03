@@ -5,21 +5,12 @@ import { effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from ".
 import { MissingLibraryItemDialog } from "../components/MissingLibraryItemDialog";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
+import { MediaCover } from "../components/MediaCover";
 import { useI18n } from "../i18n";
 
 function ArtistPagePortrait({ artistId }) {
-  const [hidden, setHidden] = useState(false);
-  if (!artistId || hidden) return null;
-  return (
-    <img
-      src={lib.artistImageUrl(artistId)}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      className="artist-page-portrait"
-      onError={() => setHidden(true)}
-    />
-  );
+  const src = artistId ? lib.artistImageUrl(artistId) : "";
+  return <MediaCover src={src} className="artist-page-portrait" alt="" loading="lazy" decoding="async" />;
 }
 
 export function Artist() {
@@ -194,7 +185,7 @@ export function Artist() {
           <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
             <div className="card album-tile">
               <div className="tile-media">
-                {a.coverUrl ? <img className="album-art" src={lib.coverUrl(a.id)} alt="" /> : <div className="album-art" />}
+                <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
                 <button
                   type="button"
                   className="tile-play-btn"
