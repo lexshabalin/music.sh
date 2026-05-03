@@ -1293,20 +1293,29 @@ func (d *DB) SetTrackArtPath(ctx context.Context, id uuid.UUID, rel string) erro
 	return err
 }
 
-// GetTrackForStream returns file path, title for logging
-func (d *DB) GetTrackForStream(ctx context.Context, id uuid.UUID) (string, *string, error) {
+// GetTrackForStream returns absolute file path, optional display title, and normalized audio format
+// from DB (lowercase extension without dot, e.g. "flac"). Format is used when file_path has no extension.
+func (d *DB) GetTrackForStream(ctx context.Context, id uuid.UUID) (string, *string, string, error) {
 	var path string
 	var t sql.NullString
+	var f sql.NullString
 	err := d.Pool.QueryRow(ctx, `
-		SELECT file_path, COALESCE(NULLIF(BTRIM(meta_user_title), ''), title)
-		FROM tracks WHERE id = $1`, id).Scan(&path, &t)
+		SELECT t.file_path,
+			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title),
+			NULLIF(BTRIM(LOWER(t.format)), '')
+		FROM tracks t WHERE t.id = $1`, id).Scan(&path, &t, &f)
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
+	var tp *string
 	if t.Valid {
-		return path, &t.String, nil
+		tp = &t.String
 	}
-	return path, nil, nil
+	fs := ""
+	if f.Valid {
+		fs = strings.TrimPrefix(strings.TrimSpace(strings.ToLower(f.String)), ".")
+	}
+	return path, tp, fs, nil
 }
 
 // UpdateTrackMeta applies user edits; pinned fields are stored in meta_user_* and honored by UpsertTrack.

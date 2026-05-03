@@ -80,9 +80,25 @@ function seekMediaWhenReady(mediaRef, sec, shouldApply) {
   else el.addEventListener("loadedmetadata", run, { once: true });
 }
 
+/** True when both URLs point at the same stream resource (path + token), ignoring encoding quirks. */
+function streamUrlsEffectivelyEqual(currentSrc, wantRelative) {
+  if (!currentSrc || !wantRelative) return false;
+  try {
+    const a = new URL(currentSrc, window.location.href);
+    const b = new URL(wantRelative.trim(), window.location.href);
+    if (a.pathname !== b.pathname) return false;
+    const ta = new URLSearchParams(a.search).get("token") || "";
+    const tb = new URLSearchParams(b.search).get("token") || "";
+    return ta === tb;
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * Align `<audio>` with the current queue URL before `play()`.
  * After a load error, `play()` keeps rejecting until `src` is set again and `load()` runs.
+ * Does not touch `src` when the element already plays the same stream (avoids restart mid-playback).
  */
 function syncAudioElementForPlayback(el, wantUrl) {
   if (!el || typeof wantUrl !== "string") return;
@@ -100,7 +116,11 @@ function syncAudioElementForPlayback(el, wantUrl) {
       el.load();
       return;
     }
-    if ((el.currentSrc || "") !== targetHref) {
+    const cur = el.currentSrc || "";
+    if (cur && streamUrlsEffectivelyEqual(cur, want)) {
+      return;
+    }
+    if (cur !== targetHref) {
       el.src = want;
     }
   } catch (_) {}
@@ -1340,7 +1360,9 @@ function Shell({ children }) {
     if (el.readyState >= 1) apply();
     else el.addEventListener("loadedmetadata", apply, { once: true });
     return () => el.removeEventListener("loadedmetadata", apply);
-  }, [p.current?.id, p.index]);
+    // Only the playing track id should reset decode position. Queue index can change without a new
+    // track (e.g. removing an item above the current row) — including p.index here restarted playback.
+  }, [p.current?.id]);
 
   // iOS Safari in background is more reliable when we keep one audio element
   // and explicitly resume playback after source switch.

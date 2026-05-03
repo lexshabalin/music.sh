@@ -32,15 +32,25 @@ func playbackTranscodeDisabled() bool {
 	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 }
 
-// shouldTranscodeToMP3 reports extensions we pipe through ffmpeg as MP3 when ffmpeg is on PATH.
-// Includes .flac (large FLAC libraries: Safari and some browsers do not decode FLAC in <audio>),
-// plus .aiff / .aif for the same HTML5 limitations.
-func shouldTranscodeToMP3(ext string) bool {
+// shouldTranscodeToMP3 reports whether we pipe this file through ffmpeg as MP3 when ffmpeg is on PATH.
+// Uses file_path extension first; if missing or ambiguous, falls back on tracks.format from the DB
+// (e.g. path without ".flac" suffix but format = flac).
+func shouldTranscodeToMP3(filePath string, formatHint string) bool {
 	if playbackTranscodeDisabled() {
 		return false
 	}
-	switch strings.ToLower(ext) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
 	case ".flac", ".aiff", ".aif":
+		return true
+	// Obvious native-friendly extensions: never override with format hint alone.
+	case ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".weba":
+		return false
+	}
+	h := strings.TrimSpace(strings.ToLower(formatHint))
+	h = strings.TrimPrefix(h, ".")
+	switch h {
+	case "flac", "aiff", "aif":
 		return true
 	default:
 		return false
@@ -49,10 +59,10 @@ func shouldTranscodeToMP3(ext string) bool {
 
 // ServePlayback streams a library audio file. For a few extensions it pipes MP3 from ffmpeg
 // when ffmpeg is on PATH, so browsers that cannot decode the original container still play.
+// formatHint is DB tracks.format (e.g. "flac") when file_path may lack a reliable extension.
 // Otherwise it falls back to ServeFileWithRange (byte-accurate Range, native Content-Type).
-func ServePlayback(w http.ResponseWriter, r *http.Request, path string) error {
-	ext := filepath.Ext(path)
-	if ffmpegExecutable() != "" && shouldTranscodeToMP3(ext) {
+func ServePlayback(w http.ResponseWriter, r *http.Request, path string, formatHint string) error {
+	if ffmpegExecutable() != "" && shouldTranscodeToMP3(path, formatHint) {
 		return serveTranscodedMP3(w, r, path)
 	}
 	return ServeFileWithRange(w, r, path)
