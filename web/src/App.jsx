@@ -55,6 +55,11 @@ function fmtTime(sec) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+/** Compare track ids from `/api/me/playback` vs `/api/tracks` (casing / whitespace). */
+function normPlaybackTrackId(id) {
+  return String(id ?? "").trim().toLowerCase();
+}
+
 /** Wall-clock estimate of server `positionMs` while `isPlaying` (cross-device takeover). */
 function interpolatePlaybackPositionMsFromServer(st) {
   if (!st) return null;
@@ -431,6 +436,24 @@ function Shell({ children }) {
     const wouldPutEmptyQueue = !q.length || idx < 0;
     if (!forceNow && wouldPutEmptyQueue && !playbackAllowEmptyPutRef.current) return;
     const cid = getPlaybackClientId();
+    let positionMsForPut = Math.round(Math.max(0, (el?.currentTime || 0) * 1000));
+    if (q.length && idx >= 0 && idx < q.length) {
+      const pendSec = pendingSeekSecRef.current;
+      const pendId = pendingSeekTrackIdRef.current;
+      const cur = q[idx];
+      const pendKey = normPlaybackTrackId(pendId);
+      const curKey = normPlaybackTrackId(cur?.id);
+      if (
+        pendKey &&
+        pendKey === curKey &&
+        pendSec != null &&
+        Number.isFinite(pendSec) &&
+        el &&
+        (el.readyState < 1 || (el.currentTime || 0) < 0.5)
+      ) {
+        positionMsForPut = Math.round(Math.max(0, pendSec * 1000));
+      }
+    }
     const body =
       !q.length || idx < 0
         ? {
@@ -445,7 +468,7 @@ function Shell({ children }) {
         : {
             trackIds: q.map((x) => x.id),
             currentIndex: idx,
-            positionMs: Math.round(Math.max(0, (el?.currentTime || 0) * 1000)),
+            positionMs: positionMsForPut,
             isPlaying: !!(el && !el.paused),
             clientId: cid,
             ownerEpoch: ownerEpochRef.current,
@@ -632,14 +655,16 @@ function Shell({ children }) {
           return;
         }
         const origId = st.trackIds[st.currentIndex];
-        let newIdx = tracks.findIndex((t) => t.id === origId);
+        const origKey = normPlaybackTrackId(origId);
+        let newIdx = origKey ? tracks.findIndex((t) => normPlaybackTrackId(t.id) === origKey) : -1;
         if (newIdx < 0) newIdx = 0;
         const items = tracksToQueueItems(tracks);
         skipPlaybackPushUntilRef.current = Date.now() + 4000;
         // After refresh/reload we restore queue + position but DO NOT auto-play.
         // iOS Safari + UX: user should explicitly resume.
         skipAutoplayOnceRef.current = true;
-        pendingSeekTrackIdRef.current = origId ?? tracks[newIdx]?.id ?? null;
+        // Prefer the id on the row we actually play so pending-seek matches `p.current.id`.
+        pendingSeekTrackIdRef.current = tracks[newIdx]?.id ?? origId ?? null;
         pendingSeekSecRef.current = Math.max(0, (st.positionMs || 0) / 1000 - 0.5);
         playQueueRef.current(items, newIdx);
         playbackAllowEmptyPutRef.current = true;
@@ -796,7 +821,8 @@ function Shell({ children }) {
         const remoteTrackId = st.trackIds[st.currentIndex];
         if (!remoteTrackId) return;
         const q = Array.isArray(queueRef.current) ? queueRef.current : [];
-        const remoteIdx = q.findIndex((x) => x?.id === remoteTrackId);
+        const rk = normPlaybackTrackId(remoteTrackId);
+        const remoteIdx = q.findIndex((x) => normPlaybackTrackId(x?.id) === rk);
         if (remoteIdx >= 0 && remoteIdx !== indexRef.current) {
           skipAutoplayOnceRef.current = true;
           jumpToRef.current(remoteIdx);
@@ -1333,14 +1359,17 @@ function Shell({ children }) {
     let targetSec = 0;
     let clearPendingAfter = false;
     if (pendingSec != null && Number.isFinite(pendingSec)) {
-      const want = pendingId != null ? String(pendingId) : "";
-      const got = id != null ? String(id) : "";
-      if (want !== "" && want === got) {
+      const want = normPlaybackTrackId(pendingId);
+      const got = normPlaybackTrackId(id);
+      if (want && want === got) {
         targetSec = Math.max(0, pendingSec);
         clearPendingAfter = true;
-      } else {
+      } else if (want && want !== got) {
         pendingSeekSecRef.current = null;
         pendingSeekTrackIdRef.current = null;
+      } else if (!want && got) {
+        targetSec = Math.max(0, pendingSec);
+        clearPendingAfter = true;
       }
     }
 
