@@ -13,9 +13,9 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.5
-	golang.org/x/sync v0.1.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/image v0.23.0
+	golang.org/x/sync v0.10.0
 )
 
 require (

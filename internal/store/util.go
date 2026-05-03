@@ -126,3 +126,35 @@ func AudioContentTypeForPath(path string) string {
 		return "application/octet-stream"
 	}
 }
+
+// AudioContentTypeForFormatHint maps DB tracks.format (lowercase, no leading dot, e.g. "flac", "mpeg")
+// to an HTTP Content-Type for <audio> playback. Empty string if unknown — caller should keep path-based type.
+func AudioContentTypeForFormatHint(format string) string {
+	h := strings.TrimSpace(strings.ToLower(format))
+	h = strings.TrimPrefix(h, ".")
+	if h == "" {
+		return ""
+	}
+	switch h {
+	case "mp3", "mpeg", "mp2":
+		return "audio/mpeg"
+	case "flac":
+		return "audio/flac"
+	case "m4a", "mp4", "alac":
+		return "audio/mp4"
+	case "aac":
+		return "audio/aac"
+	case "ogg", "vorbis":
+		return "audio/ogg"
+	case "opus":
+		return "audio/ogg; codecs=opus"
+	case "wav", "wave":
+		return "audio/wav"
+	case "aiff", "aif", "aifc":
+		return "audio/aiff"
+	case "weba", "webm":
+		return "audio/webm"
+	default:
+		return ""
+	}
+}

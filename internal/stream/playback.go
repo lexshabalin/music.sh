@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"musicsh/internal/store"
 	"musicsh/internal/subproclow"
 )
 
@@ -30,6 +31,19 @@ func ffmpegExecutable() string {
 func playbackTranscodeDisabled() bool {
 	v := strings.TrimSpace(os.Getenv("MUSICSH_DISABLE_PLAYBACK_TRANSCODE"))
 	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+}
+
+// playbackRawContentType picks Content-Type for byte-accurate streaming when ffmpeg is not used.
+// Paths without an extension (or unknown ext → application/octet-stream) would otherwise make
+// browsers reject the stream (mediaErr=4 / NotSupportedError) even when bytes are valid audio.
+func playbackRawContentType(filePath string, formatHint string) string {
+	ct := store.AudioContentTypeForPath(filePath)
+	ext := strings.ToLower(filepath.Ext(filePath))
+	alt := store.AudioContentTypeForFormatHint(formatHint)
+	if alt != "" && (ext == "" || ct == "application/octet-stream") {
+		return alt
+	}
+	return ct
 }
 
 // shouldTranscodeToMP3 reports whether we pipe this file through ffmpeg as MP3 when ffmpeg is on PATH.
@@ -68,7 +82,7 @@ func ServePlayback(w http.ResponseWriter, r *http.Request, path string, formatHi
 	if ffmpegExecutable() != "" && shouldTranscodeToMP3(path, formatHint) {
 		return serveTranscodedMP3(w, r, path)
 	}
-	return ServeFileWithRange(w, r, path)
+	return serveFileWithRangeContentType(w, r, path, playbackRawContentType(path, formatHint))
 }
 
 func serveTranscodedMP3(w http.ResponseWriter, r *http.Request, abs string) error {

@@ -17,6 +17,12 @@ import (
 
 // ServeFileWithRange supports HTTP Range for audio; path must be absolute
 func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) error {
+	return serveFileWithRangeContentType(w, r, path, store.AudioContentTypeForPath(path))
+}
+
+// serveFileWithRangeContentType is like ServeFileWithRange but uses an explicit Content-Type
+// (e.g. from DB format when the file path has no extension).
+func serveFileWithRangeContentType(w http.ResponseWriter, r *http.Request, path, contentType string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -28,7 +34,7 @@ func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) err
 	}
 	size := st.Size()
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", store.AudioContentTypeForPath(path))
+	w.Header().Set("Content-Type", contentType)
 
 	if r.Method == http.MethodHead {
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))

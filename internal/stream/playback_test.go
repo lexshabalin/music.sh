@@ -94,4 +94,7 @@ func TestServePlaybackFormatHintWithoutExt(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("response code = %d, want 200", rec.Code)
 	}
+	if got := rec.Header().Get("Content-Type"); got != "audio/flac" {
+		t.Fatalf("Content-Type = %q, want audio/flac (browser needs MIME when path has no extension)", got)
+	}
 }

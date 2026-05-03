@@ -45,3 +45,24 @@ func TestAudioContentTypeForPath(t *testing.T) {
 		}
 	}
 }
+
+func TestAudioContentTypeForFormatHint(t *testing.T) {
+	cases := []struct {
+		format string
+		want   string
+	}{
+		{"flac", "audio/flac"},
+		{".FLAC", "audio/flac"},
+		{"mp3", "audio/mpeg"},
+		{"mpeg", "audio/mpeg"},
+		{"opus", "audio/ogg; codecs=opus"},
+		{"alac", "audio/mp4"},
+		{"", ""},
+		{"unknownfmt", ""},
+	}
+	for _, tc := range cases {
+		if got := AudioContentTypeForFormatHint(tc.format); got != tc.want {
+			t.Errorf("AudioContentTypeForFormatHint(%q) = %q, want %q", tc.format, got, tc.want)
+		}
+	}
+}
