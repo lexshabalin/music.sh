@@ -60,13 +60,17 @@ function normPlaybackTrackId(id) {
   return String(id ?? "").trim().toLowerCase();
 }
 
+/** Max ms to extrapolate past `positionMs` when `isPlaying` — avoids runaway seeks if `updated_at` is stale. */
+const maxPlaybackExtrapolateMs = 25_000;
+
 /** Wall-clock estimate of server `positionMs` while `isPlaying` (cross-device takeover). */
 function interpolatePlaybackPositionMsFromServer(st) {
   if (!st) return null;
   const base = Math.max(0, Number(st.positionMs) || 0);
   if (!st.isPlaying) return Math.round(base);
   const updatedAt = Date.parse(st.updatedAt || "") || Date.now();
-  return Math.round(base + Math.max(0, Date.now() - updatedAt));
+  const wall = Math.max(0, Date.now() - updatedAt);
+  return Math.round(base + Math.min(wall, maxPlaybackExtrapolateMs));
 }
 
 /** Seek position in seconds from a `/api/me/playback` row (extrapolate while `isPlaying`). */
@@ -636,12 +640,14 @@ function Shell({ children }) {
         }
         positionMs = Math.max(positionMs, Math.round(ms));
       }
-      // Floor by server's *current* track row (covers queue order mismatch vs `sameTrackAsServer` / stale element time).
-      const srvIds = Array.isArray(st.trackIds) ? st.trackIds : [];
-      const ci = typeof st.currentIndex === "number" ? st.currentIndex : -1;
-      const srvCurId = ci >= 0 && ci < srvIds.length ? srvIds[ci] : null;
-      if (myKey && srvCurId && normPlaybackTrackId(srvCurId) === myKey) {
-        positionMs = Math.max(positionMs, Math.round(serverPlaybackSeekSec(st) * 1000));
+      // Floor only when mirroring / another client is active — otherwise a zombie `is_playing` row can force a huge seek.
+      if (otherPlaying || remotePlaybackActiveRef.current) {
+        const srvIds = Array.isArray(st.trackIds) ? st.trackIds : [];
+        const ci = typeof st.currentIndex === "number" ? st.currentIndex : -1;
+        const srvCurId = ci >= 0 && ci < srvIds.length ? srvIds[ci] : null;
+        if (myKey && srvCurId && normPlaybackTrackId(srvCurId) === myKey) {
+          positionMs = Math.max(positionMs, Math.round(serverPlaybackSeekSec(st) * 1000));
+        }
       }
     } catch (_) {}
     // User may have changed track while awaiting (e.g. next/prev after `claimPlaybackServerSync`). Do not POST stale
