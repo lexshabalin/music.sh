@@ -35,16 +35,25 @@ import { MediaCover } from "./components/MediaCover";
 import { DebugLogPanel } from "./components/DebugLogPanel";
 import { appendDebugFeed } from "./debugFeed";
 import {
+  ICast,
+  IChevronDown,
   IFastForward,
+  IGear,
   IHeart,
+  ILyrics,
+  IMoreHoriz,
   IPause,
   IPlay,
   IPlus,
   IQueue,
   IRemoteDevice,
+  IRepeat,
   IRewind,
+  IShuffle,
+  ISleepTimer,
   ISpeaker,
   ISpeakerOff,
+  IStarOutline,
 } from "./components/icons";
 
 function fmtTime(sec) {
@@ -53,6 +62,16 @@ function fmtTime(sec) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+/** Remaining duration as `-m:ss` (reference-style now playing strip). */
+function fmtTimeRemaining(cur, dur) {
+  if (!Number.isFinite(dur) || dur <= 0 || !Number.isFinite(cur)) return "—";
+  const rem = Math.max(0, dur - cur);
+  const s = Math.floor(rem);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `-${m}:${String(r).padStart(2, "0")}`;
 }
 
 /** Compare track ids from `/api/me/playback` vs `/api/tracks` (casing / whitespace). */
@@ -392,6 +411,9 @@ function Shell({ children }) {
     mode: "", // "" | "h" | "v"
   });
   const [mobilePlayerPage, setMobilePlayerPage] = React.useState(0); // 0=player, 1=queue
+  /** Visual-only toggles until playback wiring lands in the player agent. */
+  const [mobileUiShuffle, setMobileUiShuffle] = React.useState(false);
+  const [mobileUiRepeat, setMobileUiRepeat] = React.useState(false);
   const mobileMiniSwipeRef = React.useRef({
     startX: 0,
     startY: 0,
@@ -1248,6 +1270,17 @@ function Shell({ children }) {
     },
     [setMobilePlayerTransform]
   );
+
+  const closeMobilePlayerSheet = React.useCallback(() => {
+    setMobilePlayerIsClosing(true);
+    setMobilePlayerPage(0);
+    setMobilePlayerTransform(window.innerHeight);
+    window.setTimeout(() => {
+      setMobilePlayerIsClosing(false);
+      setShowMobilePlayer(false);
+      setMobilePlayerTransform(0);
+    }, 180);
+  }, [setMobilePlayerTransform]);
 
   React.useEffect(() => {
     if (!mobilePlayerIsDragging) return undefined;
@@ -2154,26 +2187,11 @@ function Shell({ children }) {
               className="mobile-player-overlay"
               onMouseDown={(e) => {
                 if (e.target !== e.currentTarget) return;
-                // Close with animation (avoid abrupt unmount).
-                setMobilePlayerIsClosing(true);
-                setMobilePlayerPage(0);
-                setMobilePlayerTransform(window.innerHeight);
-                window.setTimeout(() => {
-                  setMobilePlayerIsClosing(false);
-                  setShowMobilePlayer(false);
-                  setMobilePlayerTransform(0);
-                }, 180);
+                closeMobilePlayerSheet();
               }}
               onTouchStart={(e) => {
                 if (e.target !== e.currentTarget) return;
-                setMobilePlayerIsClosing(true);
-                setMobilePlayerPage(0);
-                setMobilePlayerTransform(window.innerHeight);
-                window.setTimeout(() => {
-                  setMobilePlayerIsClosing(false);
-                  setShowMobilePlayer(false);
-                  setMobilePlayerTransform(0);
-                }, 180);
+                closeMobilePlayerSheet();
               }}
             >
               <div
@@ -2315,13 +2333,49 @@ function Shell({ children }) {
                     <div className="mobile-player-cover-wrap">
                       <MediaCover src={p.current.coverUrl || ""} className="mobile-player-cover" alt="" />
                     </div>
-                    <div className="mobile-player-meta">
+                    <div className="mobile-player-meta mobile-player-meta--center">
                       <div className="mobile-player-title">{p.current.title || p.current.label}</div>
-                      <div className="muted">{p.current.artist || ""}</div>
+                      <div className="mobile-player-artist muted">{p.current.artist || "\u00a0"}</div>
+                    </div>
+                    <div className="mobile-player-actions-row">
+                      <button
+                        className={"mobile-player-action-btn player-icon-btn" + (liked ? " is-liked" : "")}
+                        type="button"
+                        title={liked ? t("player.unlike") : t("player.like")}
+                        aria-label={liked ? t("player.unlike") : t("player.like")}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            if (!p.current?.id) return;
+                            if (liked) await lib.unlike(p.current.id);
+                            else await lib.like(p.current.id);
+                            setLiked(!liked);
+                          } catch (_) {}
+                        }}
+                      >
+                        <IHeart />
+                      </button>
+                      <div className="mobile-player-stars" aria-hidden="true">
+                        {[0, 1, 2, 3, 4].map((i) => (
+                          <IStarOutline key={i} size={18} />
+                        ))}
+                      </div>
+                      <button
+                        className="mobile-player-action-btn"
+                        type="button"
+                        title={t("tracks.more")}
+                        aria-label={t("tracks.more")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowPlModal(true);
+                        }}
+                      >
+                        <IMoreHoriz size={22} />
+                      </button>
                     </div>
                     <div className="mobile-player-progress">
                       <input
-                        className="range mono progress mobile-fs-seek"
+                        className="range mono progress mobile-fs-seek mobile-player-seek"
                         aria-label={t("player.seek")}
                         type="range"
                         min="0"
@@ -2387,27 +2441,50 @@ function Shell({ children }) {
                           claimPlaybackSync();
                         }}
                       />
-                      <div className="mobile-player-times">
-                        <span className="muted">{fmtTime(curT)}</span>
-                        <span className="muted">{fmtTime(dur)}</span>
+                      <div className="mobile-player-progress-footer">
+                        <span className="mono mobile-player-time-start">{fmtTime(curT)}</span>
+                        <span className="mobile-player-tech">
+                          {(() => {
+                            const raw = p.current?.format != null ? String(p.current.format).trim() : "";
+                            const codec = raw ? raw.toUpperCase() : t("player.codecUnknown");
+                            return `${t("player.techStreaming")} • ${codec} • ${t("player.bitrateUnknown")}`;
+                          })()}
+                        </span>
+                        <span className="mono mobile-player-time-end">{fmtTimeRemaining(curT, dur)}</span>
                       </div>
                     </div>
-                    <div className="mobile-player-controls">
+                    <div className="mobile-player-transport">
+                      <div className="mobile-player-transport-cluster mobile-player-transport-cluster--left">
+                        <button
+                          type="button"
+                          className={"mobile-player-aux-btn" + (mobileUiShuffle ? " is-active" : "")}
+                          title={t("tracks.shuffle")}
+                          aria-pressed={mobileUiShuffle}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMobileUiShuffle((v) => !v);
+                          }}
+                        >
+                          <IShuffle size={22} />
+                        </button>
+                        <button
+                          type="button"
+                          className="mobile-player-aux-btn"
+                          title={t("player.prev")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            claimPlaybackSync();
+                            p.prev();
+                          }}
+                        >
+                          <IRewind size={24} />
+                        </button>
+                      </div>
                       <button
-                        className="player-skip"
+                        className="mobile-player-fab"
                         type="button"
-                        onClick={() => {
-                          claimPlaybackSync();
-                          p.prev();
-                        }}
-                        title={t("player.prev")}
-                      >
-                        <IRewind />
-                      </button>
-                      <button
-                        className="player-play"
-                        type="button"
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           const el = p.ref.current;
                           if (!el) return;
                           if (el.paused) {
@@ -2425,19 +2502,83 @@ function Shell({ children }) {
                           }
                         }}
                         title={p.isPlaying ? t("player.pause") : t("player.play")}
+                        aria-label={p.isPlaying ? t("player.pause") : t("player.play")}
                       >
-                        {p.isPlaying ? <IPause /> : <IPlay />}
+                        {p.isPlaying ? <IPause size={30} /> : <IPlay size={30} />}
+                      </button>
+                      <div className="mobile-player-transport-cluster mobile-player-transport-cluster--right">
+                        <button
+                          type="button"
+                          className="mobile-player-aux-btn"
+                          title={t("player.next")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            claimPlaybackSync();
+                            p.next();
+                          }}
+                        >
+                          <IFastForward size={24} />
+                        </button>
+                        <button
+                          type="button"
+                          className={"mobile-player-aux-btn" + (mobileUiRepeat ? " is-active" : "")}
+                          title={t("player.repeat")}
+                          aria-pressed={mobileUiRepeat}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMobileUiRepeat((v) => !v);
+                          }}
+                        >
+                          <IRepeat size={22} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mobile-player-foot">
+                      <button type="button" className="mobile-player-foot-btn" title={t("player.cast")} aria-label={t("player.cast")}>
+                        <ICast size={22} />
                       </button>
                       <button
-                        className="player-skip"
                         type="button"
-                        onClick={() => {
-                          claimPlaybackSync();
-                          p.next();
+                        className="mobile-player-foot-btn"
+                        title={t("player.mobileSettings")}
+                        aria-label={t("player.mobileSettings")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowProfile(true);
                         }}
-                        title={t("player.next")}
                       >
-                        <IFastForward />
+                        <IGear size={22} />
+                      </button>
+                      <button
+                        type="button"
+                        className="mobile-player-foot-btn"
+                        title={t("player.collapseNowPlaying")}
+                        aria-label={t("player.collapseNowPlaying")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeMobilePlayerSheet();
+                        }}
+                      >
+                        <IChevronDown size={22} />
+                      </button>
+                      <button type="button" className="mobile-player-foot-btn" title={t("player.lyrics")} aria-label={t("player.lyrics")}>
+                        <ILyrics size={22} />
+                      </button>
+                      <button
+                        ref={mobileQueueBtnRef}
+                        type="button"
+                        className="mobile-player-foot-btn"
+                        title={t("player.upNext")}
+                        aria-label={t("player.upNext")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMobilePlayerPage(1);
+                        }}
+                      >
+                        <IQueue size={22} />
+                      </button>
+                      <button type="button" className="mobile-player-foot-btn" title={t("player.sleepTimer")} aria-label={t("player.sleepTimer")}>
+                        <ISleepTimer size={22} />
                       </button>
                     </div>
                   </section>

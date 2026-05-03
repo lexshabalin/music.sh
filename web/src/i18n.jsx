@@ -128,6 +128,15 @@ const dict = {
     "player.like": "Нравится",
     "player.unlike": "Не нравится",
     "player.addToPlaylist": "Добавить в плейлист",
+    "player.repeat": "Повтор",
+    "player.techStreaming": "Стриминг",
+    "player.codecUnknown": "Н/Д",
+    "player.bitrateUnknown": "—",
+    "player.cast": "Трансляция",
+    "player.mobileSettings": "Настройки",
+    "player.collapseNowPlaying": "Свернуть плеер",
+    "player.lyrics": "Текст песни",
+    "player.sleepTimer": "Таймер сна",
 
     "missingFile.title": "Упс!",
     "missingFile.trackBody":
@@ -393,6 +402,15 @@ const dict = {
     "player.like": "Like",
     "player.unlike": "Unlike",
     "player.addToPlaylist": "Add to playlist",
+    "player.repeat": "Repeat",
+    "player.techStreaming": "Streaming",
+    "player.codecUnknown": "N/A",
+    "player.bitrateUnknown": "—",
+    "player.cast": "Cast",
+    "player.mobileSettings": "Settings",
+    "player.collapseNowPlaying": "Minimize now playing",
+    "player.lyrics": "Lyrics",
+    "player.sleepTimer": "Sleep timer",
 
     "missingFile.title": "Whoops!",
     "missingFile.trackBody":
