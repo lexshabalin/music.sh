@@ -981,10 +981,10 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	return out, rows.Err()
 }
 
-func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID) ([]Track, error) {
+func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID, limit, offset int) ([]Track, error) {
 	qs := strings.TrimSpace(query)
 	like := "%" + qs + "%"
-	rows, err := d.Pool.Query(ctx, `
+	baseSQL := `
 		SELECT
 			t.id,
 			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) AS disp_title,
@@ -998,7 +998,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 			t.artist_id::text,
 			COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) AS disp_artist_name,
 			t.art_path,
-			`+sqlDispTrackGenres+`,
+			` + sqlDispTrackGenres + `,
 			t.genres_manual AS pin_genres,
 			(t.meta_user_title IS NOT NULL AND BTRIM(COALESCE(t.meta_user_title, '')) <> '') AS pin_title,
 			(t.meta_user_artist IS NOT NULL AND BTRIM(COALESCE(t.meta_user_artist, '')) <> '') AS pin_artist,
@@ -1028,13 +1028,62 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
 			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
 			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
-			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST
-	`, qs, like, albumID, artistID, genreID)
+			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST`
+	var (
+		rows pgx.Rows
+		err  error
+	)
+	if limit > 0 {
+		rows, err = d.Pool.Query(ctx, baseSQL+`
+		LIMIT $6 OFFSET $7
+	`, qs, like, albumID, artistID, genreID, limit, offset)
+	} else {
+		rows, err = d.Pool.Query(ctx, baseSQL, qs, like, albumID, artistID, genreID)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	return scanTrackRows(rows)
+}
+
+// ListTrackIDs returns every matching track id (same filters as ListTracks). No ORDER BY — lighter for shuffle / bulk use.
+func (d *DB) ListTrackIDs(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID) ([]uuid.UUID, error) {
+	qs := strings.TrimSpace(query)
+	like := "%" + qs + "%"
+	rows, err := d.Pool.Query(ctx, `
+		SELECT t.id
+		FROM tracks t
+		LEFT JOIN albums al ON t.album_id = al.id
+		LEFT JOIN artists ar ON t.artist_id = ar.id
+		WHERE ($1 = '' OR
+			(COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) ILIKE $2) OR
+			(COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) ILIKE $2) OR
+			(COALESCE(NULLIF(BTRIM(t.meta_user_artist), ''), ar.name) ILIKE $2) OR
+			(t.file_path ILIKE $2))
+		AND ($3::uuid IS NULL OR t.album_id = $3)
+		AND ($4::uuid IS NULL OR t.artist_id = $4)
+		AND ($5::uuid IS NULL OR (
+			EXISTS (SELECT 1 FROM track_genres tg WHERE tg.track_id = t.id AND tg.genre_id = $5)
+			OR (
+				NOT EXISTS (SELECT 1 FROM track_genres tg2 WHERE tg2.track_id = t.id)
+				AND EXISTS (SELECT 1 FROM album_genres ag WHERE ag.album_id = t.album_id AND ag.genre_id = $5)
+			)
+		))
+	`, qs, like, albumID, artistID, genreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
 }
 
 // ImprintTrackRow is a minimal row for imprint preview/apply.

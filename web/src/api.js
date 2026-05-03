@@ -143,13 +143,27 @@ export const lib = {
    * Track list. Filters: `{ albumId, artistId, genreId }` (omit unused).
    * @param {string} [query]
    * @param {{ albumId?: string; artistId?: string; genreId?: string }} [filters]
+   * @param {{ limit?: number; offset?: number; only?: "ids" }} [opts] `only: "ids"` → `{ trackIds: string[] }` (lightweight; same filters).
    */
-  tracks: (query = "", filters = {}) => {
+  tracks: (query = "", filters = {}, opts = {}) => {
+    const o = opts && typeof opts === "object" ? opts : {};
     const params = new URLSearchParams({ query: query || "" });
     if (filters?.albumId) params.set("albumId", filters.albumId);
     if (filters?.artistId) params.set("artistId", filters.artistId);
     if (filters?.genreId) params.set("genreId", filters.genreId);
+    if (o.only === "ids") params.set("only", "ids");
+    if (Number.isFinite(o.limit) && o.limit > 0) params.set("limit", String(o.limit));
+    if (Number.isFinite(o.offset) && o.offset > 0) params.set("offset", String(o.offset));
     return req("/api/tracks?" + params);
+  },
+  /** All matching track ids (strings); same filters as `tracks()`; for shuffle / bulk without loading full rows. */
+  trackIdsOnly: (query = "", filters = {}) => {
+    const params = new URLSearchParams({ query: query || "" });
+    if (filters?.albumId) params.set("albumId", filters.albumId);
+    if (filters?.artistId) params.set("artistId", filters.artistId);
+    if (filters?.genreId) params.set("genreId", filters.genreId);
+    params.set("only", "ids");
+    return req("/api/tracks?" + params).then((r) => (Array.isArray(r?.trackIds) ? r.trackIds : []));
   },
   track: (id) => req("/api/tracks/" + id),
   /** PATCH user metadata (pinned fields survive library rescan). */
@@ -207,19 +221,33 @@ export const lib = {
   likeIds: () => req("/api/likes"),
   like: (trackId) => req("/api/likes", { method: "POST", body: JSON.stringify({ trackId }) }),
   unlike: (trackId) => req("/api/likes/" + trackId, { method: "DELETE" }),
-  /** Ordered tracks matching `ids` (skips missing). Chunks long lists for URL limits. */
-  tracksByIds: async (orderedIds) => {
+  /**
+   * Ordered tracks matching `ids` (skips missing). Chunks long lists for URL limits.
+   * @param {string[]} orderedIds
+   * @param {{ concurrency?: number }} [opts] parallel chunk fetches (default 1); use 6–8 for large shuffle queues.
+   */
+  tracksByIds: async (orderedIds, opts = {}) => {
     if (!Array.isArray(orderedIds) || !orderedIds.length) return [];
     const chunk = 350;
+    const maxParallel = Math.max(1, Math.min(8, Number(opts.concurrency) || 1));
+    const parts = [];
+    for (let i = 0; i < orderedIds.length; i += chunk) parts.push(orderedIds.slice(i, i + chunk));
     const out = [];
-    for (let i = 0; i < orderedIds.length; i += chunk) {
-      const part = orderedIds.slice(i, i + chunk);
-      const list = await req("/api/tracks?ids=" + part.join(","));
-      const m = new Map(list.map((t) => [t.id, t]));
-      for (const id of part) {
-        const t = m.get(id);
-        if (t) out.push(t);
-      }
+    for (let i = 0; i < parts.length; i += maxParallel) {
+      const batch = parts.slice(i, i + maxParallel);
+      const batchResults = await Promise.all(
+        batch.map(async (part) => {
+          const list = await req("/api/tracks?ids=" + part.join(","));
+          const m = new Map(list.map((t) => [t.id, t]));
+          const row = [];
+          for (const id of part) {
+            const t = m.get(id);
+            if (t) row.push(t);
+          }
+          return row;
+        })
+      );
+      for (const br of batchResults) out.push(...br);
     }
     return out;
   },

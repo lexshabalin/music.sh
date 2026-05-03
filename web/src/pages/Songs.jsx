@@ -17,6 +17,8 @@ function shuffleCopy(arr) {
   return a;
 }
 
+const SONGS_PAGE_SIZE = 100;
+
 function sortTracks(list, key, dir) {
   const a = Array.isArray(list) ? list.slice() : [];
   const mult = dir === "desc" ? -1 : 1;
@@ -46,12 +48,13 @@ export function Songs() {
   const [liked, setLiked] = React.useState(new Set());
   const [sortKey, setSortKey] = React.useState("title");
   const [sortDir, setSortDir] = React.useState("asc");
+  const [shuffleBusy, setShuffleBusy] = React.useState(false);
   const p = usePlayer();
   // split/list modes removed (desktop-only simplification)
 
   const load = React.useCallback(() => {
     lib
-      .tracks("", {})
+      .tracks("", {}, { limit: SONGS_PAGE_SIZE })
       .then((x) => {
         setErr("");
         setTracks(Array.isArray(x) ? x : []);
@@ -70,19 +73,24 @@ export function Songs() {
 
   const sortedTracks = React.useMemo(() => sortTracks(tracks, sortKey, sortDir), [tracks, sortKey, sortDir]);
 
+  const buildQueueItem = React.useCallback(
+    (trk) => ({
+      id: trk.id,
+      label: (trk.artist ? trk.artist.name + " — " : "") + (trk.title || t("common.track")),
+      url: lib.streamUrl(trk.id),
+      artist: trk.artist?.name || "",
+      title: trk.title || t("common.track"),
+      album: trk.album?.title || "",
+      coverUrl: effectiveTrackCoverUrl(trk),
+      format: trackFormatForPlayback(trk),
+    }),
+    [t]
+  );
+
   const items = React.useMemo(() => {
     // Playback order should follow the original (unsorted) library order.
-    return tracks.map((t) => ({
-      id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
-      url: lib.streamUrl(t.id),
-      artist: t.artist?.name || "",
-      title: t.title || t("common.track"),
-      album: t.album?.title || "",
-      coverUrl: effectiveTrackCoverUrl(t),
-      format: trackFormatForPlayback(t),
-    }));
-  }, [tracks]);
+    return tracks.map((tr) => buildQueueItem(tr));
+  }, [tracks, buildQueueItem]);
 
   const playAt = (startIdx) => {
     if (!items.length) return;
@@ -102,17 +110,8 @@ export function Songs() {
     } catch (_) {}
   };
 
-  const playNext = (t) => {
-    const item = {
-      id: t.id,
-      label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
-      url: lib.streamUrl(t.id),
-      artist: t.artist?.name || "",
-      title: t.title || t("common.track"),
-      album: t.album?.title || "",
-      coverUrl: effectiveTrackCoverUrl(t),
-      format: trackFormatForPlayback(t),
-    };
+  const playNext = (trk) => {
+    const item = buildQueueItem(trk);
     if (!p.current) p.playQueue([item], 0);
     else p.playNext(item);
   };
@@ -129,9 +128,22 @@ export function Songs() {
     } catch (_) {}
   };
 
-  const shuffle = () => {
-    const shuffled = shuffleCopy(items);
-    if (shuffled.length) p.playQueue(shuffled, 0);
+  const shuffle = async () => {
+    if (shuffleBusy) return;
+    setShuffleBusy(true);
+    setErr("");
+    try {
+      const ids = await lib.trackIdsOnly("", {});
+      if (!ids.length) return;
+      const shuffledIds = shuffleCopy(ids);
+      const rows = await lib.tracksByIds(shuffledIds, { concurrency: 8 });
+      const queue = rows.map((trk) => buildQueueItem(trk));
+      if (queue.length) p.playQueue(queue, 0);
+    } catch (e) {
+      setErr(e?.message || "error");
+    } finally {
+      setShuffleBusy(false);
+    }
   };
 
   return (
@@ -141,10 +153,11 @@ export function Songs() {
         <button
           type="button"
           className="ghost icon-btn"
-          onClick={shuffle}
-          disabled={!items.length}
-          title={t("tracks.shuffle")}
-          aria-label={t("tracks.shuffle")}
+          onClick={() => void shuffle()}
+          disabled={shuffleBusy}
+          title={shuffleBusy ? t("tracks.shuffleLoading") : t("tracks.shuffle")}
+          aria-label={shuffleBusy ? t("tracks.shuffleLoading") : t("tracks.shuffle")}
+          aria-busy={shuffleBusy}
         >
           ⇄
         </button>
@@ -154,16 +167,37 @@ export function Songs() {
 
       {mode === "grid" ? (
           <div className="grid">
-            {sortedTracks.map((tr, i) => {
+            {sortedTracks.map((tr) => {
               const cover = effectiveTrackCoverUrl(tr);
               const title = tr?.title || t("common.untitled");
               const artist = tr?.artist?.name || t("common.unknownArtist");
               const album = tr?.album?.title || "";
               return (
-                <div key={tr.id} className="card album-tile" style={{ cursor: "pointer" }} onClick={() => playAt(i)} role="button" tabIndex={0}>
+                <div
+                  key={tr.id}
+                  className="card album-tile"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => {
+                    const idx = tracks.findIndex((x) => x.id === tr.id);
+                    playAt(Math.max(0, idx));
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
                   <div className="tile-media">
                     <MediaCover src={cover || ""} className="album-art" alt="" />
-                    <button type="button" className="tile-play-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); playAt(i); }} title={t("tracks.playAria")} aria-label={t("tracks.playAria")}>
+                    <button
+                      type="button"
+                      className="tile-play-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const idx = tracks.findIndex((x) => x.id === tr.id);
+                        playAt(Math.max(0, idx));
+                      }}
+                      title={t("tracks.playAria")}
+                      aria-label={t("tracks.playAria")}
+                    >
                       <IPlay size={16} />
                     </button>
                   </div>

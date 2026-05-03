@@ -138,6 +138,10 @@ export async function installApiMock(page) {
     if (path === "/api/tracks" && method === "GET") {
       const albumId = url.searchParams.get("albumId");
       const ids = url.searchParams.get("ids");
+      const only = url.searchParams.get("only");
+      if (only === "ids") {
+        return json({ trackIds: TRACKS_LIST.map((t) => t.id) });
+      }
       if (albumId === ALBUM_ID) {
         return json(TRACKS_LIST);
       }
@@ -151,7 +155,11 @@ export async function installApiMock(page) {
         }
         return json(out);
       }
-      return json([]);
+      const lim = parseInt(url.searchParams.get("limit") || "", 10);
+      if (Number.isFinite(lim) && lim > 0) {
+        return json(TRACKS_LIST.slice(0, lim));
+      }
+      return json(TRACKS_LIST);
     }
 
     if (path.startsWith("/api/tracks/") && path.endsWith("/stream") && method === "GET") {

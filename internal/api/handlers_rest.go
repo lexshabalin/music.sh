@@ -512,7 +512,48 @@ func (a *App) listTracks(w http.ResponseWriter, r *http.Request) {
 		}
 		genreID = &u
 	}
-	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID, genreID)
+
+	if strings.TrimSpace(r.URL.Query().Get("only")) == "ids" {
+		ids, err := a.DB.ListTrackIDs(r.Context(), q, albumID, artistID, genreID)
+		if err != nil {
+			JSONError(w, 500, "db")
+			return
+		}
+		out := make([]string, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, id.String())
+		}
+		JSON(w, 200, map[string]any{"trackIds": out})
+		return
+	}
+
+	limit := 0
+	offset := 0
+	if s := strings.TrimSpace(r.URL.Query().Get("limit")); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n <= 0 {
+			JSONError(w, 400, "bad limit")
+			return
+		}
+		if n > 10000 {
+			n = 10000
+		}
+		limit = n
+	}
+	if s := strings.TrimSpace(r.URL.Query().Get("offset")); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 {
+			JSONError(w, 400, "bad offset")
+			return
+		}
+		offset = n
+	}
+	if limit == 0 && offset > 0 {
+		JSONError(w, 400, "offset requires limit")
+		return
+	}
+
+	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID, genreID, limit, offset)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
