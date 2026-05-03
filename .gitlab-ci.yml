@@ -1,6 +1,7 @@
 stages:
   - build
   - deploy
+  - test
 
 default:
   interruptible: true
@@ -14,6 +15,18 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
 
+.build_image_rules: &build_image_rules
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+.deploy_alpine:
+  stage: deploy
+  image: alpine:3.20
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache openssh-client rsync bash
+
 build:image:
   stage: build
   image: docker:27
@@ -21,8 +34,7 @@ build:image:
     - docker
   variables:
     DOCKER_HOST: "unix:///var/run/docker.sock"
-  rules:
-    - if: $CI_COMMIT_BRANCH
+  <<: *build_image_rules
   before_script:
     - unset DOCKER_TLS_VERIFY || true
     - unset DOCKER_CERT_PATH || true
@@ -30,62 +42,68 @@ build:image:
     - docker version
     - docker build --pull -t "$CI_PROJECT_NAME:$CI_COMMIT_SHA" .
 
-deploy:prod:
-  stage: deploy
-  image: alpine:3.20
-  tags:
-    - docker
+# Home / self-hosted dev server (was mislabeled production).
+deploy:dev:
+  extends: .deploy_alpine
   environment:
-    name: production
+    name: development
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: on_success
-  before_script:
-    - apk add --no-cache openssh-client rsync bash
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - eval "$(ssh-agent -s)"
-    # Prefer base64 form (single-line, can be masked): DEPLOY_SSH_PRIVATE_KEY_B64
-    # Fallback: DEPLOY_SSH_PRIVATE_KEY (either base64 or raw multiline)
-    - |
-      key_src=""
-      if [ -n "${DEPLOY_SSH_PRIVATE_KEY_B64:-}" ]; then
-        key_src="$DEPLOY_SSH_PRIVATE_KEY_B64"
-      else
-        key_src="${DEPLOY_SSH_PRIVATE_KEY:-}"
-      fi
-
-      if [ -z "$key_src" ]; then
-        echo "Missing DEPLOY_SSH_PRIVATE_KEY_B64 (preferred) or DEPLOY_SSH_PRIVATE_KEY" >&2
-        exit 1
-      fi
-
-      # If value is base64, decode; otherwise treat as raw private key.
-      if echo "$key_src" | base64 -d >/tmp/deploy_key 2>/dev/null; then
-        tr -d '\r' </tmp/deploy_key | ssh-add -
-      else
-        echo "$key_src" | tr -d '\r' | ssh-add -
-      fi
-    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
   script:
-    # Sync repo to server (do not upload git metadata)
-    # Important: do not touch runtime volumes created by Docker (pgdata/appdata),
-    # otherwise rsync --delete may fail on permissions and/or destroy data.
-    - rsync -az --delete
-      --exclude '.git'
-      --exclude '.gitlab-ci.yml'
-      --exclude '.env'
-      --exclude 'pgdata/'
-      --exclude 'appdata/'
-      --exclude 'music/'
-      ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
-    # .env is not rsync'd. Optionally inject MUSIC_HOST_DIR from CI when DEPLOY_WRITE_ENV_FROM_CI=1:
-    - |
-      if [ -n "${DEPLOY_WRITE_ENV_FROM_CI:-}" ]; then
-        : "${MUSIC_HOST_DIR:?Set CI/CD variable MUSIC_HOST_DIR when using DEPLOY_WRITE_ENV_FROM_CI}"
-        printf '%s\n' "MUSIC_HOST_DIR=$MUSIC_HOST_DIR" > .env.musicsh.ci
-        rsync -az .env.musicsh.ci "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/.env"
-        rm -f .env.musicsh.ci
-      fi
-    # Run deploy on server
-    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash '$DEPLOY_DIR/scripts/deploy_remote.sh'"
+    - export GITLAB_CI_SSH_KEY_B64="${DEV_DEPLOY_SSH_PRIVATE_KEY_B64:-}"
+    - export GITLAB_CI_SSH_KEY="${DEV_DEPLOY_SSH_PRIVATE_KEY:-}"
+    - export GITLAB_CI_DEPLOY_HOST="${DEV_DEPLOY_HOST:?Set CI/CD variable DEV_DEPLOY_HOST}"
+    - export GITLAB_CI_DEPLOY_USER="${DEV_DEPLOY_USER:?Set CI/CD variable DEV_DEPLOY_USER}"
+    - export GITLAB_CI_DEPLOY_DIR="${DEV_DEPLOY_DIR:?Set CI/CD variable DEV_DEPLOY_DIR}"
+    - export GITLAB_CI_WRITE_ENV_FROM_CI="${DEV_DEPLOY_WRITE_ENV_FROM_CI:-}"
+    - export GITLAB_CI_MUSIC_HOST_DIR="${DEV_MUSIC_HOST_DIR:-}"
+    - bash scripts/gitlab_rsync_deploy.sh
+
+# Remote demo / quasi-prod - only from Play in GitLab UI (manual).
+deploy:demo:
+  extends: .deploy_alpine
+  environment:
+    name: demo
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - export GITLAB_CI_SSH_KEY_B64="${DEMO_DEPLOY_SSH_PRIVATE_KEY_B64:-}"
+    - export GITLAB_CI_SSH_KEY="${DEMO_DEPLOY_SSH_PRIVATE_KEY:-}"
+    - export GITLAB_CI_DEPLOY_HOST="${DEMO_DEPLOY_HOST:?Set CI/CD variable DEMO_DEPLOY_HOST}"
+    - export GITLAB_CI_DEPLOY_USER="${DEMO_DEPLOY_USER:?Set CI/CD variable DEMO_DEPLOY_USER}"
+    - export GITLAB_CI_DEPLOY_DIR="${DEMO_DEPLOY_DIR:?Set CI/CD variable DEMO_DEPLOY_DIR}"
+    - export GITLAB_CI_WRITE_ENV_FROM_CI="${DEMO_DEPLOY_WRITE_ENV_FROM_CI:-}"
+    - export GITLAB_CI_MUSIC_HOST_DIR="${DEMO_MUSIC_HOST_DIR:-}"
+    - bash scripts/gitlab_rsync_deploy.sh
+
+.test_web_template: &test_web_template
+  stage: test
+  image: node:20-bookworm-slim
+  tags:
+    - docker
+  variables:
+    CI: "true"
+  script:
+    - cd web && npm ci && npm run test
+
+# Branches and MRs: run unit tests after build (no deploy on this path).
+test:web:
+  <<: *test_web_template
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  needs:
+    - job: build:image
+
+# Default branch push: run tests only after home dev deploy succeeds.
+test:web:post_dev_deploy:
+  <<: *test_web_template
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  needs:
+    - job: build:image
+    - job: deploy:dev

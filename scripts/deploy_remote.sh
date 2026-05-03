@@ -26,7 +26,7 @@ set +a
 
 if [ -z "${MUSIC_HOST_DIR:-}" ]; then
   echo "Missing MUSIC_HOST_DIR (path to your audio library on the Docker host)." >&2
-  echo "Set it in $APP_DIR/.env or export before deploy. GitLab: DEPLOY_WRITE_ENV_FROM_CI=1 and CI variable MUSIC_HOST_DIR." >&2
+  echo "Set it in $APP_DIR/.env or export before deploy. GitLab dev: DEV_DEPLOY_WRITE_ENV_FROM_CI=1 and CI variable DEV_MUSIC_HOST_DIR (written as MUSIC_HOST_DIR in .env)." >&2
   exit 1
 fi
 

@@ -26,11 +26,45 @@ Self‑hosted веб‑приложение для прослушивания м
 
 Если нужен только образ без compose: см. **`Dockerfile`**. Для публичного сервера усильте **`POSTGRES_PASSWORD`** и настройте резервное копирование тома с **`/data`** (там же лежит **`.jwt_secret`**).
 
-## Деплой через GitLab CI (`deploy:prod`)
+## Деплой через GitLab CI
 
-Репозиторий **не заливает `.env`**. На сервере нужен хотя бы **`MUSIC_HOST_DIR`** в **`$DEPLOY_DIR/.env`** (или экспорт переменной окружения перед `docker compose`).
+Репозиторий **не заливает `.env`**. На сервере нужен хотя бы **`MUSIC_HOST_DIR`** в каталоге деплоя в **`.env`** (или экспорт переменной окружения перед `docker compose`).
 
-Через GitLab: переменная **`MUSIC_HOST_DIR`** и включите **`DEPLOY_WRITE_ENV_FROM_CI=1`** — на каждый деплой в `$DEPLOY_DIR/.env` запишется эта строка (при желании добавьте в шаг свой блок с другими ключами).
+### `deploy:dev` (домашний dev-сервер, ветка по умолчанию)
+
+Запускается автоматически после успешной сборки образа. В GitLab CI/CD задайте:
+
+| Переменная | Смысл |
+|------------|--------|
+| `DEV_DEPLOY_HOST` | SSH-хост |
+| `DEV_DEPLOY_USER` | SSH-пользователь |
+| `DEV_DEPLOY_DIR` | Абсолютный путь к каталогу с клоном на сервере (куда rsync и откуда `scripts/deploy_remote.sh`) |
+| `DEV_DEPLOY_SSH_PRIVATE_KEY_B64` | Приватный ключ в base64 (предпочтительно, одна строка, можно mask) |
+| `DEV_DEPLOY_SSH_PRIVATE_KEY` | Либо сырой ключ / base64, если не используете `*_B64` |
+
+Опционально запись **`MUSIC_HOST_DIR`** на сервер при каждом деплое:
+
+| Переменная | Смысл |
+|------------|--------|
+| `DEV_DEPLOY_WRITE_ENV_FROM_CI` | Любое непустое значение — включить запись `.env` на сервере |
+| `DEV_MUSIC_HOST_DIR` | Строка для **`MUSIC_HOST_DIR=...`** в удалённом `.env` (обязательна, если включена запись) |
+
+### `deploy:demo` (удалённый условный «прод»)
+
+Только **вручную** (кнопка Play у джобы в pipeline на ветке по умолчанию). Отдельный набор переменных, чтобы не путать с домашним сервером:
+
+| Переменная | Смысл |
+|------------|--------|
+| `DEMO_DEPLOY_HOST` | SSH-хост |
+| `DEMO_DEPLOY_USER` | SSH-пользователь |
+| `DEMO_DEPLOY_DIR` | Абсолютный путь к каталогу на demo-сервере |
+| `DEMO_DEPLOY_SSH_PRIVATE_KEY_B64` / `DEMO_DEPLOY_SSH_PRIVATE_KEY` | Ключ SSH (как для dev) |
+| `DEMO_DEPLOY_WRITE_ENV_FROM_CI` | Опционально: писать `.env` на demo |
+| `DEMO_MUSIC_HOST_DIR` | Путь библиотеки на demo-хосте для `MUSIC_HOST_DIR` |
+
+### Тесты в CI
+
+После **`deploy:dev`** на ветке по умолчанию выполняется **`test:web:post_dev_deploy`** (`cd web && npm ci && npm run test`). На остальных ветках и в MR — джоба **`test:web`** после **`build:image`**.
 
 ## Разработка (без Docker для Go/Node)
 
@@ -45,6 +79,8 @@ go run ./cmd/server
 # другой терминал
 cd web && npm install && npm run dev
 ```
+
+Тесты фронта: `cd web && npm run test` (Vitest + Testing Library).
 
 Vite проксирует `/api` на `http://127.0.0.1:8080` (см. `web/vite.config.js`).
 
