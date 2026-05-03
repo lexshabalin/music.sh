@@ -390,15 +390,18 @@ function Shell({ children }) {
     (rawValue) => {
       const el = p.ref.current;
       if (!el) return;
+      const fallbackCap = remotePlaybackActive
+        ? Math.max(1, dur || 0, curT + 120)
+        : Math.max(1, dur || 0);
       const cap =
-        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : Math.max(1, dur || 0);
+        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : fallbackCap;
       const v = Math.max(0, Math.min(cap, Number(rawValue)));
       try {
         el.currentTime = v;
       } catch (_) {}
       setCurT(v);
     },
-    [p.ref, dur]
+    [p.ref, dur, curT, remotePlaybackActive]
   );
 
   const suspendPlaybackPushRef = React.useRef(false);
@@ -515,8 +518,10 @@ function Shell({ children }) {
     } catch (_) {}
     // User may have changed track while awaiting (e.g. next/prev after `claimPlaybackServerSync`). Do not POST stale
     // state or seek the new track to the previous track's position.
-    if (String(trackIdAtStart ?? "") !== String(playerCurrentIdRef.current ?? "")) {
-      return;
+    if (trackIdAtStart != null && playerCurrentIdRef.current != null) {
+      if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(playerCurrentIdRef.current)) {
+        return;
+      }
     }
     const body = {
       trackIds: q.map((x) => x.id),
@@ -530,8 +535,10 @@ function Shell({ children }) {
       const r = await playback.takeover(body);
       ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : ownerEpochRef.current + 1;
       takeoverRequestedRef.current = false;
-      if (String(trackIdAtStart ?? "") !== String(playerCurrentIdRef.current ?? "")) {
-        return;
+      if (trackIdAtStart != null && playerCurrentIdRef.current != null) {
+        if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(playerCurrentIdRef.current)) {
+          return;
+        }
       }
       const epochAtSeek = playbackSwitchEpochRef.current;
       seekMediaWhenReady(p.ref, positionMs / 1000, () => playbackSwitchEpochRef.current === epochAtSeek);
@@ -703,12 +710,8 @@ function Shell({ children }) {
       takeoverRequestedRef.current = true;
       // Give explicit user takeover a short priority window.
       takeoverGuardUntilRef.current = Date.now() + 3000;
-      setRemotePlaybackActive(false);
-      remotePlaybackActiveRef.current = false;
-      remoteInactiveStreakRef.current = 0;
-      remoteOwnerLockRef.current = null;
-      lastRemotePlayingSeenAtRef.current = 0;
-      remoteServerPlayingRef.current = false;
+      // Keep remotePlaybackActive + progress refs until the server shows this client as owner.
+      // Clearing here stopped the remote progress ticker and let syncRemote re-pause every tick.
       // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
       // would send isPlaying:false and mute server state the user is about to resume.
       try {
@@ -773,6 +776,7 @@ function Shell({ children }) {
         const stEpoch = Number.isFinite(st?.ownerEpoch) ? Number(st.ownerEpoch) : 0;
         const stCid = (st?.clientId && String(st.clientId)) || "";
         const activeRemote = !!(st?.isPlaying && stCid && mine && stCid !== mine);
+        const inTakeoverGuard = Date.now() < takeoverGuardUntilRef.current;
 
         remoteProgressBaseMsRef.current = Math.max(0, Number(st.positionMs) || 0);
         remoteProgressUpdatedAtRef.current = Date.parse(st.updatedAt || "") || Date.now();
@@ -791,11 +795,16 @@ function Shell({ children }) {
         }
 
         if (activeRemote) {
-          remoteOwnerLockRef.current = { epoch: stEpoch, clientId: stCid };
-          lastRemotePlayingSeenAtRef.current = Date.now();
-          remoteInactiveStreakRef.current = 0;
-          suspendPlaybackForRemoteSession();
-          if (!remotePlaybackActiveRef.current) {
+          if (!inTakeoverGuard) {
+            remoteOwnerLockRef.current = { epoch: stEpoch, clientId: stCid };
+            lastRemotePlayingSeenAtRef.current = Date.now();
+            remoteInactiveStreakRef.current = 0;
+            suspendPlaybackForRemoteSession();
+            if (!remotePlaybackActiveRef.current) {
+              remotePlaybackActiveRef.current = true;
+              setRemotePlaybackActive(true);
+            }
+          } else if (!remotePlaybackActiveRef.current) {
             remotePlaybackActiveRef.current = true;
             setRemotePlaybackActive(true);
           }
@@ -818,6 +827,7 @@ function Shell({ children }) {
         }
 
         if (!activeRemote || !Array.isArray(st?.trackIds) || !st.trackIds.length) return;
+        if (inTakeoverGuard) return;
         const remoteTrackId = st.trackIds[st.currentIndex];
         if (!remoteTrackId) return;
         const q = Array.isArray(queueRef.current) ? queueRef.current : [];
@@ -1579,6 +1589,9 @@ function Shell({ children }) {
     return () => clearInterval(id);
   }, [p.current?.id, p.isPlaying, dur, p.ref]);
 
+  // Remote mirror often has no `<audio>` duration yet (paused); cap must grow with curT or the thumb stays at 0.
+  const progressSliderCap = Math.max(1, dur || 0, remotePlaybackActive ? curT + 120 : 0);
+
   return (
     <>
       <BackgroundLayer bg={bg} />
@@ -1788,9 +1801,9 @@ function Shell({ children }) {
               aria-label={t("player.seek")}
               type="range"
               min="0"
-              max={Math.max(1, dur || 0)}
+              max={progressSliderCap}
               step="0.25"
-              value={Math.min(curT, Math.max(1, dur || 0))}
+              value={Math.min(curT, progressSliderCap)}
               onPointerDown={() => {
                 progressScrubbingRef.current = true;
               }}
@@ -2115,17 +2128,17 @@ function Shell({ children }) {
                         aria-label={t("player.seek")}
                         type="range"
                         min="0"
-                        max={Math.max(1, dur || 0)}
+                        max={progressSliderCap}
                         step="0.25"
                         value={(() => {
-                          const cap = Math.max(1, dur || 0);
+                          const cap = progressSliderCap;
                           const base =
                             mobileExpandedSeekOverride != null ? mobileExpandedSeekOverride : curT;
                           return Math.min(base, cap);
                         })()}
                         onPointerDown={(e) => {
                           progressScrubbingRef.current = true;
-                          const cap = Math.max(1, dur || 0);
+                          const cap = progressSliderCap;
                           setMobileExpandedSeekOverride(Math.min(curT, cap));
                           e.currentTarget.closest(".mobile-player-progress")?.classList.add(
                             "mobile-player-progress--thumb-active"
@@ -2133,7 +2146,7 @@ function Shell({ children }) {
                         }}
                         onTouchStart={(e) => {
                           progressScrubbingRef.current = true;
-                          const cap = Math.max(1, dur || 0);
+                          const cap = progressSliderCap;
                           setMobileExpandedSeekOverride(Math.min(curT, cap));
                           e.currentTarget.closest(".mobile-player-progress")?.classList.add(
                             "mobile-player-progress--thumb-active"
