@@ -58,6 +58,8 @@ services:
       SCAN_PROGRESS_MIN_FILES: ${SCAN_PROGRESS_MIN_FILES:-25}
       # Directory symlinks under the library are scanned (filepath.Walk skipped them before).
       MUSICSH_SCAN_FOLLOW_SYMLINKS: ${MUSICSH_SCAN_FOLLOW_SYMLINKS:-1}
+      # Skip unreadable subdirs / bad files with a log line instead of aborting the whole scan (set 0 to fail fast).
+      MUSICSH_SCAN_CONTINUE_ON_ERROR: ${MUSICSH_SCAN_CONTINUE_ON_ERROR:-1}
       # Caps simultaneous ffprobe/ffmpeg/fpcalc (overlapping scan + background jobs).
       MUSICSH_MEDIA_PROC_SLOTS: ${MUSICSH_MEDIA_PROC_SLOTS:-3}
       ACOUSTID_KEY: ${ACOUSTID_KEY:-}

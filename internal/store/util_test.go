@@ -12,6 +12,7 @@ func TestIsAudioFilename(t *testing.T) {
 		{"  track.flac  ", true},
 		{"artist\uFF0Etrack.flac", true}, // fullwidth dot before basename still ends with .flac
 		{"album.flac", true},
+		{"song.m4a ", true},
 		{"x.mp3", true},
 		{"readme.txt", false},
 		{"noext", false},

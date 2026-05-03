@@ -3,14 +3,30 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"musicsh/internal/store"
 )
 
-const libraryWalkMaxDepth = 256
+func libraryWalkMaxDepth() int {
+	const def = 256
+	v := strings.TrimSpace(os.Getenv("MUSICSH_SCAN_MAX_DEPTH"))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return def
+	}
+	if n > 10000 {
+		return 10000
+	}
+	return n
+}
 
 // scanFollowSymlinks controls descending into directory symlinks (filepath.Walk does not).
 // Default on: typical libraries use symlinks to another disk or NAS. Set MUSICSH_SCAN_FOLLOW_SYMLINKS=0 to disable.
@@ -28,7 +44,10 @@ func scanFollowSymlinks() bool {
 }
 
 // walkLibraryAudio visits every audio file under musicDir (store.IsAudioFilename), depth-first.
-// When followSymlinks is true, directory symlinks are followed once per resolved real path (cycle-safe).
+// Directory symlinks are followed when followSymlinks is true (deduped by resolved real path).
+//
+// Classification uses os.Lstat/os.Stat per entry — not DirEntry.Type()/IsDir() alone: on NFS/SMB/FUSE,
+// d_type is often DT_UNKNOWN so ReadDir would not mark symlink-to-dir, and we would skip entire subtrees.
 func walkLibraryAudio(ctx context.Context, musicDir string, followSymlinks bool, visit func(path string) error) error {
 	musicDir = filepath.Clean(musicDir)
 	st, err := os.Stat(musicDir)
@@ -44,25 +63,38 @@ func walkLibraryAudio(ctx context.Context, musicDir string, followSymlinks bool,
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if depth > libraryWalkMaxDepth {
-			return fmt.Errorf("library walk: max depth %d exceeded at %s", libraryWalkMaxDepth, dir)
+		maxD := libraryWalkMaxDepth()
+		if depth > maxD {
+			return fmt.Errorf("library walk: max depth %d exceeded at %s", maxD, dir)
 		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return err
+			// One unreadable mount or permission error must not abort the entire library scan.
+			log.Printf("musicsh scanner: skipping unreadable directory %q: %v", dir, err)
+			return nil
 		}
 		for _, ent := range entries {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			full := filepath.Join(dir, ent.Name())
-			typ := ent.Type()
-			if typ&os.ModeSymlink != 0 {
-				st, err := os.Stat(full)
+			name := ent.Name()
+			full := filepath.Join(dir, name)
+
+			fi, err := os.Lstat(full)
+			if err != nil {
+				continue
+			}
+			mode := fi.Mode()
+
+			if mode&os.ModeSymlink != 0 {
+				dst, err := os.Stat(full)
 				if err != nil {
 					continue
 				}
-				if st.IsDir() && followSymlinks {
+				if dst.IsDir() {
+					if !followSymlinks {
+						continue
+					}
 					key, err := filepath.EvalSymlinks(full)
 					if err != nil {
 						key = filepath.Clean(full)
@@ -78,29 +110,29 @@ func walkLibraryAudio(ctx context.Context, musicDir string, followSymlinks bool,
 					}
 					continue
 				}
-				if st.IsDir() {
-					// Symlink to directory but follow disabled: skip (same as filepath.Walk).
-					continue
-				}
-				if !store.IsAudioFilename(ent.Name()) {
-					continue
-				}
-				if err := visit(full); err != nil {
-					return err
+				if store.IsAudioFilename(name) {
+					if err := visit(full); err != nil {
+						return err
+					}
 				}
 				continue
 			}
-			if ent.IsDir() {
+
+			if mode.IsDir() {
 				if err := walk(full, depth+1); err != nil {
 					return err
 				}
 				continue
 			}
-			if !store.IsAudioFilename(ent.Name()) {
+
+			// Do not require ModeRegular: some FUSE/SMB stacks report ModeIrregular for normal files.
+			if mode&(os.ModeNamedPipe|os.ModeSocket|os.ModeDevice|os.ModeCharDevice) != 0 {
 				continue
 			}
-			if err := visit(full); err != nil {
-				return err
+			if store.IsAudioFilename(name) {
+				if err := visit(full); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

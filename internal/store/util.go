@@ -41,15 +41,19 @@ func IsAudioFilename(name string) bool {
 	name = strings.ReplaceAll(name, "\uFF0E", ".")
 	name = strings.ReplaceAll(name, "\u3002", ".")
 	lower := strings.ToLower(name)
-	// Explicit suffix so odd punctuation in the stem does not steal the "last dot" from ".flac".
+	// Explicit suffix so odd punctuation in the stem does not steal the "last dot" from the extension.
 	if strings.HasSuffix(lower, ".flac") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".m4a") {
 		return true
 	}
 	dot := strings.LastIndexByte(lower, '.')
 	if dot < 0 {
 		return false
 	}
-	return isAudioExt(lower[dot:])
+	ext := strings.TrimSpace(lower[dot:])
+	return isAudioExt(ext)
 }
 
 // NormalizeAudioFileName trims trailing spaces and tabs in the filename stem (before the last extension).

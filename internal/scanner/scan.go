@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -50,6 +51,21 @@ func getenvScanYieldInt(key string, def int) int {
 		return def
 	}
 	return x
+}
+
+// scanContinueOnFileError: on per-file errors (rename, stat, DB), log and continue instead of aborting the whole walk.
+// Set MUSICSH_SCAN_CONTINUE_ON_ERROR=0 for strict mode (first error stops the scan).
+func scanContinueOnFileError() bool {
+	v := strings.TrimSpace(os.Getenv("MUSICSH_SCAN_CONTINUE_ON_ERROR"))
+	if v == "" {
+		return true
+	}
+	switch strings.ToLower(v) {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 func scanProgressMinInterval() time.Duration {
@@ -152,14 +168,24 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 	defer globalScanMu.Unlock()
 
 	var audioCount int
+	cont := scanContinueOnFileError()
 	err = walkLibraryAudio(ctx, musicDir, scanFollowSymlinks(), func(path string) error {
+		orig := path
 		var e error
 		path, e = normalizeAudioPathOnDisk(ctx, s, path)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (normalize): %v", orig, e)
+				return nil
+			}
 			return e
 		}
 		info, e := os.Stat(path)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (stat): %v", path, e)
+				return nil
+			}
 			return e
 		}
 		st := info.Size()
@@ -174,6 +200,10 @@ func Scan(ctx context.Context, s *store.DB, musicDir string) (changed int, err e
 		meta := readTrackMeta(path)
 		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, ns, meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (upsert): %v", path, e)
+				return nil
+			}
 			return e
 		}
 		// Always try to enqueue cover metadata; dedupe is handled in DB.
@@ -214,14 +244,24 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 	pg := newScanProgressGate(progress)
 	// Immediate tick so status polling sees Running + zero counts (avoids silent gap on huge dirs before first audio).
 	pg.emit(0, 0, 0, true)
+	cont := scanContinueOnFileError()
 	err := walkLibraryAudio(ctx, musicDir, scanFollowSymlinks(), func(path string) error {
+		orig := path
 		var e error
 		path, e = normalizeAudioPathOnDisk(ctx, s, path)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (normalize): %v", orig, e)
+				return nil
+			}
 			return e
 		}
 		info, e := os.Stat(path)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (stat): %v", path, e)
+				return nil
+			}
 			return e
 		}
 		st := info.Size()
@@ -238,6 +278,10 @@ func ScanWithProgress(ctx context.Context, s *store.DB, musicDir string, progres
 		meta := readTrackMeta(path)
 		trackID, albumID, ch, e := s.UpsertTrack(ctx, path, st, ns, meta.artist, meta.albumArtist, meta.album, meta.title, meta.track, meta.disc, meta.year, meta.durationMS, meta.format, meta.bitrateKbps, meta.tagAlbumArtist, meta.genre, meta.composer, meta.comment)
 		if e != nil {
+			if cont {
+				log.Printf("musicsh scanner: skip %q (upsert): %v", path, e)
+				return nil
+			}
 			return e
 		}
 		_ = enqueueMetaJob(ctx, s, albumID)
