@@ -5,8 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>music.sh</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <script type="module" crossorigin src="/assets/index-ow4wx6w_.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CBiLqa_i.css">
+    <script>
+      (function () {
+        // Prevent language "flash": decide UI language before React renders.
+        var key = "musicsh_ui_lang";
+        var lang = "";
+        try {
+          lang = (localStorage.getItem(key) || "").toLowerCase().trim();
+        } catch (e) {}
+        if (lang !== "en" && lang !== "ru") {
+          try {
+            var nav = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+            nav = String(nav || "").toLowerCase();
+            lang = nav.indexOf("ru") === 0 ? "ru" : "en";
+          } catch (e) {
+            lang = "en";
+          }
+        }
+        try {
+          document.documentElement.dataset.uiLang = lang;
+          document.documentElement.lang = lang;
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-C4UKo-hQ.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Di7O0NFO.css">
   </head>
   <body>
     <div id="root"></div>

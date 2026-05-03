@@ -7,10 +7,11 @@ test.beforeEach(async ({ page }) => {
 
 test("login reaches home dashboard", async ({ page }) => {
   await page.goto("/#/login");
-  await expect(page.getByTestId("login-form")).toBeVisible();
-  await page.getByTestId("login-username").fill("e2euser");
-  await page.getByTestId("login-password").fill("anything");
-  await page.getByTestId("login-submit").click();
+  const form = page.locator("form.card");
+  await expect(form).toBeVisible();
+  await form.locator("input:not([type=password])").fill("e2euser");
+  await form.locator("input[type=password]").fill("anything");
+  await form.locator("button[type=submit]").click();
   await expect(page).toHaveURL(/#\/$/);
   await expect(page.locator(".home-dashboard")).toBeVisible();
   await expect(page.locator(".home-greeting__name")).toHaveText("E2E User");

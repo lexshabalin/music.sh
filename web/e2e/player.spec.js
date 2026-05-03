@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { installApiMock, E2E_TOKEN } from "./install-api-mock.js";
+import { appAudio, desktopPlayerBar } from "./helpers.js";
 
 test.beforeEach(async ({ page }) => {
   await installApiMock(page);
@@ -13,58 +14,58 @@ test.beforeEach(async ({ page }) => {
 
 test("play album from home starts queue and desktop player", async ({ page }) => {
   await page.locator(".home-recent-section .tile-play-btn").first().click();
-  await expect(page.getByTestId("desktop-player")).toBeVisible();
+  await expect(desktopPlayerBar(page)).toBeVisible();
   await expect(page.locator(".nowplaying-line1")).toContainText("E2E Track One");
 });
 
 test("play / pause toggles audio element", async ({ page }) => {
   await page.locator(".home-recent-section .tile-play-btn").first().click();
-  await expect(page.getByTestId("desktop-player")).toBeVisible();
+  await expect(desktopPlayerBar(page)).toBeVisible();
 
   await page.waitForFunction(() => {
-    const a = document.querySelector('[data-testid="app-audio"]');
+    const a = document.querySelector("audio");
     return a && Number.isFinite(a.duration) && a.duration > 0;
   });
 
-  const audio = page.getByTestId("app-audio");
+  const audio = appAudio(page);
   const pausedBefore = await audio.evaluate((el) => el.paused);
-  await page.getByTestId("player-play-pause").click();
+  await desktopPlayerBar(page).locator("button.player-play").click();
   await expect(audio).toHaveJSProperty("paused", !pausedBefore);
-  await page.getByTestId("player-play-pause").click();
+  await desktopPlayerBar(page).locator("button.player-play").click();
   await expect(audio).toHaveJSProperty("paused", pausedBefore);
 });
 
 test("next track updates now playing", async ({ page }) => {
   await page.locator(".home-recent-section .tile-play-btn").first().click();
-  await expect(page.getByTestId("desktop-player")).toBeVisible();
+  await expect(desktopPlayerBar(page)).toBeVisible();
   await page.waitForFunction(() => {
-    const a = document.querySelector('[data-testid="app-audio"]');
+    const a = document.querySelector("audio");
     return a && Number.isFinite(a.duration) && a.duration > 0;
   });
 
-  await page.getByTestId("player-next").click();
+  // Order: rewind (skip), play, fast-forward (skip), mute (skip), …
+  await desktopPlayerBar(page).locator("button.player-skip").nth(1).click();
   await expect(page.locator(".nowplaying-line1")).toContainText("E2E Track Two");
 
-  await page.getByTestId("player-prev").click();
+  await desktopPlayerBar(page).locator("button.player-skip").nth(0).click();
   await expect(page.locator(".nowplaying-line1")).toContainText("E2E Track One");
 });
 
 test("seek slider changes currentTime", async ({ page }) => {
   await page.locator(".home-recent-section .tile-play-btn").first().click();
-  await expect(page.getByTestId("desktop-player")).toBeVisible();
+  await expect(desktopPlayerBar(page)).toBeVisible();
 
   await page.waitForFunction(() => {
-    const a = document.querySelector('[data-testid="app-audio"]');
+    const a = document.querySelector("audio");
     return a && Number.isFinite(a.duration) && a.duration > 0.05;
   });
 
-  const audio = page.getByTestId("app-audio");
+  const audio = appAudio(page);
   const dur = await audio.evaluate((el) => el.duration);
   expect(dur).toBeGreaterThan(0.05);
 
-  const seek = page.getByTestId("player-seek");
+  const seek = desktopPlayerBar(page).locator("input.range.mono.progress");
   const max = Number(await seek.getAttribute("max"));
-  // step="0.25" — pick a valid stepped value (e.g. half of max when max>=1).
   const target = max >= 1 ? Math.min(max, Math.floor((max / 2) / 0.25) * 0.25) : 0.25;
   await seek.fill(String(target));
 
@@ -75,9 +76,9 @@ test("seek slider changes currentTime", async ({ page }) => {
 
 test("volume slider updates audio volume", async ({ page }) => {
   await page.locator(".home-recent-section .tile-play-btn").first().click();
-  await expect(page.getByTestId("desktop-player")).toBeVisible();
+  await expect(desktopPlayerBar(page)).toBeVisible();
 
-  await page.getByTestId("player-volume").fill("0.25");
+  await desktopPlayerBar(page).locator("input.range.mono.vol").fill("0.25");
 
-  await expect(page.getByTestId("app-audio")).toHaveJSProperty("volume", 0.25);
+  await expect(appAudio(page)).toHaveJSProperty("volume", 0.25);
 });
