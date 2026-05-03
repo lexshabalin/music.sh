@@ -169,6 +169,7 @@ function Shell({ children }) {
   const ghostPlaybackTrackIdRef = React.useRef("");
   const [ghostPlaybackDlg, setGhostPlaybackDlg] = React.useState(false);
   const [ghostPlaybackBusy, setGhostPlaybackBusy] = React.useState(false);
+  const [playErr, setPlayErr] = React.useState("");
   const dismissPlaybackGhost = React.useCallback(() => {
     const sid = ghostPlaybackTrackIdRef.current;
     if (sid && typeof p.removeTrackFromQueueById === "function") {
@@ -179,6 +180,7 @@ function Shell({ children }) {
     ghostPlaybackBusyRef.current = false;
     setGhostPlaybackBusy(false);
     setGhostPlaybackDlg(false);
+    setPlayErr("");
   }, [p]);
   const confirmPlaybackGhostDelete = React.useCallback(async () => {
     const sid = ghostPlaybackTrackIdRef.current;
@@ -199,8 +201,13 @@ function Shell({ children }) {
       ghostPlaybackBusyRef.current = false;
       setGhostPlaybackBusy(false);
       setGhostPlaybackDlg(false);
+      setPlayErr("");
     }
   }, [p]);
+  React.useEffect(() => {
+    setPlayErr("");
+  }, [p.current?.id]);
+
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
   const [showQueue, setShowQueue] = React.useState(false);
@@ -1108,7 +1115,11 @@ function Shell({ children }) {
       let http = "";
       if (urlAtErr) {
         try {
-          const r = await fetch(urlAtErr, { headers: { Range: "bytes=0-0" } });
+          // Prefer HEAD: matches the stream handler without Range quirks that some proxies mishandle vs <audio>.
+          let r = await fetch(urlAtErr, { method: "HEAD", credentials: "same-origin" });
+          if (r.status === 405) {
+            r = await fetch(urlAtErr, { method: "GET", credentials: "same-origin", headers: { Range: "bytes=0-0" } });
+          }
           http = `http=${r.status}`;
         } catch (_) {
           http = "http=failed";
@@ -1139,12 +1150,14 @@ function Shell({ children }) {
         ghostPlaybackTrackIdRef.current = sid;
         setGhostPlaybackBusy(false);
         setGhostPlaybackDlg(true);
+        setPlayErr("");
         try {
           el.pause();
         } catch (_) {}
         /* Do not dequeue here — flaky probes/CDN sometimes look like 404; removal hid the footer. */
         return;
       }
+      setPlayErr(msg);
     };
     const onEnded = () => {
       // Guard: failed load / empty file — don't advance the queue blindly.
@@ -1180,6 +1193,7 @@ function Shell({ children }) {
     };
 
     const onPlaying = () => {
+      setPlayErr("");
       bindLockScreenMediaHandlers();
     };
     el.addEventListener("playing", onPlaying);
@@ -1554,6 +1568,7 @@ function Shell({ children }) {
                       tag: "playback",
                       message: "Playback blocked or failed.",
                     });
+                    setPlayErr("Playback blocked or failed.");
                   });
                 }
               }
@@ -1691,6 +1706,11 @@ function Shell({ children }) {
             {fmtTime(dur)}
           </div>
 
+          {playErr ? (
+            <div className="muted" style={{ color: "tomato", fontSize: 12, marginLeft: 8, maxWidth: 280 }}>
+              {playErr}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {p.current && getToken() && isMobile ? (
