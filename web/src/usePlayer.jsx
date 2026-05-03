@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
-import { releasePlaybackServerSync } from "./api";
+import { releasePlaybackServerSync, trackFormatForPlayback } from "./api";
 
 const Ctx = React.createContext(null);
 export function PlayerProvider({ children }) {
@@ -63,8 +63,12 @@ export function PlayerProvider({ children }) {
   }, []);
 
   const playOne = useCallback(
-    (id, label, url) => {
-      playQueue([{ id, label, url }], 0);
+    (id, label, url, trackOrExt) => {
+      const format =
+        trackOrExt && typeof trackOrExt === "object"
+          ? trackFormatForPlayback(trackOrExt)
+          : trackFormatForPlayback({ format: trackOrExt });
+      playQueue([{ id, label, url, ...(format ? { format } : {}) }], 0);
     },
     [playQueue]
   );

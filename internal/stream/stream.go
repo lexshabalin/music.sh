@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"musicsh/internal/store"
 )
 
 // ServeFileWithRange supports HTTP Range for audio; path must be absolute
@@ -27,9 +27,8 @@ func ServeFileWithRange(w http.ResponseWriter, r *http.Request, path string) err
 		return err
 	}
 	size := st.Size()
-	ct := mimeType(path)
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Type", store.AudioContentTypeForPath(path))
 
 	if r.Method == http.MethodHead {
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
@@ -124,30 +123,4 @@ func parseRange(ra string, size int64) (start, end int64, ok bool) {
 		e = size - 1
 	}
 	return s, e, true
-}
-
-func mimeType(p string) string {
-	ext := strings.ToLower(filepath.Ext(p))
-	ct := mime.TypeByExtension(ext)
-	if ct == "" {
-		switch ext {
-		case ".mp3":
-			return "audio/mpeg"
-		case ".flac":
-			return "audio/flac"
-		case ".m4a", ".mp4", ".aac":
-			return "audio/mp4"
-		case ".ogg", ".opus":
-			return "audio/ogg"
-		case ".wav":
-			return "audio/wav"
-		default:
-			return "application/octet-stream"
-		}
-	}
-	// trim charset for browser
-	if i := strings.IndexByte(ct, ';'); i >= 0 {
-		ct = strings.TrimSpace(ct[:i])
-	}
-	return ct
 }

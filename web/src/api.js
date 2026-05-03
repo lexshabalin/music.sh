@@ -232,6 +232,33 @@ export function effectiveTrackCoverUrl(t) {
   return "";
 }
 
+/** Normalized file extension (no dot), from API `format` or similar. */
+export function trackFormatForPlayback(t) {
+  if (!t || t.format == null || String(t.format).trim() === "") return "";
+  return String(t.format).trim().toLowerCase().replace(/^\./, "");
+}
+
+/**
+ * MIME hint for `<source type>` / MediaSource — matches extensions scanned by the library
+ * (`store.IsAudioFilename`) and server `AudioContentTypeForPath`.
+ */
+export function mimeHintForAudioFormat(extNorm) {
+  if (!extNorm || typeof extNorm !== "string") return "";
+  const m = {
+    mp3: "audio/mpeg",
+    flac: "audio/flac",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    ogg: "audio/ogg",
+    opus: "audio/ogg; codecs=opus",
+    wav: "audio/wav",
+    aiff: "audio/aiff",
+    aif: "audio/aiff",
+    weba: "audio/webm",
+  };
+  return m[extNorm] || "";
+}
+
 /** Player queue items from `/api/tracks` rows (same shape as playlist pages). */
 export function tracksToQueueItems(tracks) {
   if (!Array.isArray(tracks)) return [];
@@ -243,6 +270,7 @@ export function tracksToQueueItems(tracks) {
     title: t.title || "Track",
     album: t.album?.title || "",
     coverUrl: effectiveTrackCoverUrl(t),
+    format: trackFormatForPlayback(t),
   }));
 }
 

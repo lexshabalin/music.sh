@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { IPlay } from "./icons";
@@ -167,6 +167,7 @@ export function GlobalSearch() {
                             title: track.title || t("common.track"),
                             album: track.album?.title || "",
                             coverUrl: effectiveTrackCoverUrl(track),
+                            format: trackFormatForPlayback(track),
                           };
                           player.playQueue([item], 0);
                           // iOS Safari: call play() from the click handler to avoid "needs 2 taps".

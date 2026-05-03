@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { auth, effectiveTrackCoverUrl, getToken, lib } from "../api";
+import { auth, effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { AlbumTile } from "./Library";
@@ -119,6 +119,7 @@ export function Home() {
         title: t2.title || t("common.track"),
         album: t2.album?.title || a.title || "",
         coverUrl: effectiveTrackCoverUrl(t2) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
+        format: trackFormatForPlayback(t2),
       }));
       if (items.length) player.playQueue(items, 0);
     } catch (err) {

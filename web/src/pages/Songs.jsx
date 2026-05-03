@@ -1,5 +1,5 @@
 import React from "react";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
@@ -79,6 +79,7 @@ export function Songs() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     }));
   }, [tracks]);
 
@@ -109,6 +110,7 @@ export function Songs() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     };
     if (!p.current) p.playQueue([item], 0);
     else p.playNext(item);

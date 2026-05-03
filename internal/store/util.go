@@ -2,6 +2,8 @@ package store
 
 import (
 	"html"
+	"mime"
+	"path/filepath"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,7 +29,7 @@ func IsUniqueViolation(err error) bool {
 
 func isAudioExt(ext string) bool {
 	switch ext {
-	case ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav":
+	case ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".weba":
 		return true
 	default:
 		return false
@@ -46,6 +48,12 @@ func IsAudioFilename(name string) bool {
 		return true
 	}
 	if strings.HasSuffix(lower, ".m4a") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".aiff") || strings.HasSuffix(lower, ".aif") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".weba") {
 		return true
 	}
 	dot := strings.LastIndexByte(lower, '.')
@@ -80,4 +88,41 @@ func NormalizeAudioFileName(name string) string {
 // Used when renaming library files on scan and for consistent imprint labels.
 func SanitizeAudioFileBaseName(name string) string {
 	return NormalizeAudioFileName(html.UnescapeString(name))
+}
+
+// AudioContentTypeForPath returns an HTTP Content-Type suitable for streaming this file.
+// Values align with extensions accepted by IsAudioFilename and help browsers decode via <audio>.
+func AudioContentTypeForPath(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return "application/octet-stream"
+	}
+	switch ext {
+	case ".mp3":
+		return "audio/mpeg"
+	case ".flac":
+		return "audio/flac"
+	case ".m4a", ".mp4":
+		return "audio/mp4"
+	case ".aac":
+		return "audio/aac"
+	case ".ogg":
+		return "audio/ogg"
+	case ".opus":
+		return "audio/ogg; codecs=opus"
+	case ".wav":
+		return "audio/wav"
+	case ".aiff", ".aif":
+		return "audio/aiff"
+	case ".weba":
+		return "audio/webm"
+	default:
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			if i := strings.IndexByte(ct, ';'); i >= 0 {
+				ct = strings.TrimSpace(ct[:i])
+			}
+			return ct
+		}
+		return "application/octet-stream"
+	}
 }

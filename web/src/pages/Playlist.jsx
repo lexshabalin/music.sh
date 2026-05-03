@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
@@ -110,6 +110,7 @@ export function Playlist() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     }));
     const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
     const idx = Math.max(0, Math.min(items.length - 1, raw));
@@ -134,6 +135,7 @@ export function Playlist() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     }));
     const shuffled = shuffleCopy(items);
     if (shuffled.length) player.playQueue(shuffled, 0);
@@ -147,6 +149,7 @@ export function Playlist() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     };
     if (!player.current) player.playQueue([item], 0);
     else player.playNext(item);

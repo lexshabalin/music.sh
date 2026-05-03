@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { effectiveTrackCoverUrl, getToken, lib } from "../api";
+import { effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { MissingLibraryItemDialog } from "../components/MissingLibraryItemDialog";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
@@ -214,6 +214,7 @@ export function Artist() {
                         title: trk.title || t("common.track"),
                         album: trk.album?.title || a.title || "",
                         coverUrl: effectiveTrackCoverUrl(trk) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
+                        format: trackFormatForPlayback(trk),
                       }));
                       if (items.length) player.playQueue(items, 0);
                     } catch (x) {}

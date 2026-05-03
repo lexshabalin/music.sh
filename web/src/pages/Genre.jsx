@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
@@ -90,6 +90,7 @@ export function Genre() {
       title: tr.title || t("common.track"),
       album: tr.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(tr),
+      format: trackFormatForPlayback(tr),
     }));
   }, [tracks, t]);
 
@@ -118,6 +119,7 @@ export function Genre() {
       title: tr.title || t("common.track"),
       album: tr.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(tr),
+      format: trackFormatForPlayback(tr),
     };
     if (!p.current) p.playQueue([item], 0);
     else p.playNext(item);

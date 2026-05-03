@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { effectiveTrackCoverUrl, getToken, lib } from "../api";
+import { effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import GenreSuggestInput, {
@@ -787,6 +787,7 @@ export function Album() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     }));
     const raw = typeof startIdx === "number" && Number.isFinite(startIdx) ? startIdx : 0;
     const idx = Math.max(0, Math.min(items.length - 1, raw));
@@ -812,6 +813,7 @@ export function Album() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     }));
     const shuffled = shuffleCopy(items);
     if (shuffled.length) p.playQueue(shuffled, 0);
@@ -826,6 +828,7 @@ export function Album() {
       title: t.title || t("common.track"),
       album: t.album?.title || "",
       coverUrl: effectiveTrackCoverUrl(t),
+      format: trackFormatForPlayback(t),
     };
     if (!p.current) {
       p.playQueue([item], 0);

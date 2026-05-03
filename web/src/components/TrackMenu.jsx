@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { getToken, lib } from "../api";
+import { getToken, lib, mimeHintForAudioFormat, trackFormatForPlayback } from "../api";
 import GenreSuggestInput, {
   genresToInputValue,
   parseGenreInput,
@@ -25,7 +25,7 @@ function trackCoverImgSrc(trackId, cacheBust) {
 
 const durationCache = new Map();
 
-function useLazyDurationMs(trackId, knownDurationMs) {
+function useLazyDurationMs(trackId, knownDurationMs, formatNorm) {
   const rowRef = useRef(null);
   const [durMs, setDurMs] = useState(() => {
     if (typeof knownDurationMs === "number" && Number.isFinite(knownDurationMs) && knownDurationMs > 0) return knownDurationMs;
@@ -65,9 +65,19 @@ function useLazyDurationMs(trackId, knownDurationMs) {
 
       const a = document.createElement("audio");
       a.preload = "metadata";
-      a.src = lib.streamUrl(trackId);
+      const streamUrl = lib.streamUrl(trackId);
+      const hint = mimeHintForAudioFormat(formatNorm);
+      if (hint) {
+        const s = document.createElement("source");
+        s.src = streamUrl;
+        s.type = hint;
+        a.appendChild(s);
+      } else {
+        a.src = streamUrl;
+      }
       const cleanup = () => {
         try {
+          while (a.firstChild) a.removeChild(a.firstChild);
           a.removeAttribute("src");
           a.load();
         } catch (_) {}
@@ -111,7 +121,7 @@ function useLazyDurationMs(trackId, knownDurationMs) {
       cancelled = true;
       if (obs) obs.disconnect();
     };
-  }, [trackId, durMs, knownDurationMs]);
+  }, [trackId, durMs, knownDurationMs, formatNorm]);
 
   return { rowRef, durationMs: durMs };
 }
@@ -227,7 +237,11 @@ export function TrackRow({
 
   const artistName = track?.artist?.name || "";
   const albumTitle = track?.album?.title || "";
-  const { rowRef, durationMs } = useLazyDurationMs(track?.id, track?.durationMs);
+  const { rowRef, durationMs } = useLazyDurationMs(
+    track?.id,
+    track?.durationMs,
+    trackFormatForPlayback(track)
+  );
 
   return (
     <>

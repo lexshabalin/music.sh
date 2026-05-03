@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
 import { useI18n } from "../i18n";
@@ -272,6 +272,7 @@ export function Playlists() {
                         title: t2.title || t("common.track"),
                         album: t2.album?.title || "",
                         coverUrl: effectiveTrackCoverUrl(t2),
+                        format: trackFormatForPlayback(t2),
                       }));
                       if (items.length) player.playQueue(items, 0);
                     } catch (e2) {

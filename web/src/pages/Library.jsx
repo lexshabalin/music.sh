@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib } from "../api";
+import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { IPlay } from "../components/icons";
@@ -74,6 +74,7 @@ export function Library({ pageTitleKey }) {
                   title: t2.title || t("common.track"),
                   album: t2.album?.title || a.title || "",
                   coverUrl: effectiveTrackCoverUrl(t2) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
+                  format: trackFormatForPlayback(t2),
                 }));
                 if (items.length) player.playQueue(items, 0);
               } catch (err) {
