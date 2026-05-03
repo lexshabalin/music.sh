@@ -36,22 +36,24 @@ func playbackTranscodeDisabled() bool {
 // Uses file_path extension first; if missing or ambiguous, falls back on tracks.format from the DB
 // (e.g. path without ".flac" suffix but format = flac).
 // Ogg/WebM/Opus are often rejected by Safari as <audio> (NotSupportedError / mediaErr=4) even when HEAD succeeds.
+// .m4a/.mp4 often hold ALAC or AAC profiles Chrome refuses; transcoding to MP3 is the reliable <audio> path.
 func shouldTranscodeToMP3(filePath string, formatHint string) bool {
 	if playbackTranscodeDisabled() {
 		return false
 	}
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
-	case ".flac", ".aiff", ".aif", ".ogg", ".oga", ".opus", ".weba", ".webm":
+	case ".flac", ".aiff", ".aif", ".ogg", ".oga", ".opus", ".weba", ".webm",
+		".m4a", ".mp4":
 		return true
-	// Widely supported in desktop/mobile WebKit without remux.
-	case ".mp3", ".m4a", ".mp4", ".aac", ".wav":
+	// Assume already browser-friendly as raw stream.
+	case ".mp3", ".aac", ".wav":
 		return false
 	}
 	h := strings.TrimSpace(strings.ToLower(formatHint))
 	h = strings.TrimPrefix(h, ".")
 	switch h {
-	case "flac", "aiff", "aif", "ogg", "opus", "vorbis", "webm", "weba":
+	case "flac", "aiff", "aif", "ogg", "opus", "vorbis", "webm", "weba", "alac", "m4a", "mp4":
 		return true
 	default:
 		return false

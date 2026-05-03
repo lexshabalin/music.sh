@@ -14,6 +14,7 @@ func TestShouldTranscodeToMP3(t *testing.T) {
 	for _, ext := range []string{
 		".flac", ".FLAC", ".aiff", ".aif",
 		".ogg", ".Ogg", ".oga", ".opus", ".weba", ".webm",
+		".m4a", ".M4A", ".mp4",
 	} {
 		if !shouldTranscodeToMP3("/x"+ext, "") {
 			t.Errorf("path *%q: want true", ext)
@@ -23,6 +24,12 @@ func TestShouldTranscodeToMP3(t *testing.T) {
 	if !shouldTranscodeToMP3("/music/album/01 - Song", "flac") {
 		t.Fatal("want true when formatHint=flac and path has no ext")
 	}
+	if !shouldTranscodeToMP3("/music/album/track01", "m4a") {
+		t.Fatal("want true when formatHint=m4a and path has no ext")
+	}
+	if !shouldTranscodeToMP3("/music/x", "alac") {
+		t.Fatal("want true when formatHint=alac and path has no ext")
+	}
 	if !shouldTranscodeToMP3("/music/x", ".FLAC") {
 		t.Fatal("want true when formatHint has leading dot")
 	}
@@ -31,16 +38,15 @@ func TestShouldTranscodeToMP3(t *testing.T) {
 		hint string
 	}{
 		{"/a/x.mp3", "flac"},
-		{"/a/x.m4a", "flac"},
 		{"/a/x.wav", "flac"},
 		{"/a/x.mp3", "ogg"},
-		{"/a/x.m4a", "opus"},
+		{"/a/x.aac", "flac"},
 	} {
 		if shouldTranscodeToMP3(tc.path, tc.hint) {
 			t.Errorf("path=%q hint=%q: want false (trust file extension)", tc.path, tc.hint)
 		}
 	}
-	for _, ext := range []string{".mp3", ".m4a", ".mp4", ".wav", ""} {
+	for _, ext := range []string{".mp3", ".aac", ".wav", ""} {
 		if shouldTranscodeToMP3("/x"+ext, "") {
 			t.Errorf("path *%q hint empty: want false", ext)
 		}
