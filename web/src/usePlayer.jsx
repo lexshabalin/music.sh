@@ -53,12 +53,16 @@ export function PlayerProvider({ children }) {
     if (!skipRelease) releasePlaybackServerSync();
     const list = Array.isArray(items) ? items : [];
     if (!list.length) {
+      queueRef.current = [];
+      indexRef.current = -1;
       setQueue([]);
       setIdx(-1);
       return;
     }
     const si = typeof startIndex === "number" ? startIndex : 0;
     const clamped = Math.max(0, Math.min(list.length - 1, si));
+    queueRef.current = list;
+    indexRef.current = clamped;
     setQueue(list);
     setIdx(clamped);
   }, []);
@@ -91,23 +95,30 @@ export function PlayerProvider({ children }) {
     const q = queueRef.current;
     const len = Array.isArray(q) ? q.length : 0;
     if (!len) {
+      indexRef.current = -1;
       setIdx(-1);
       return;
     }
-    setIdx(Math.max(0, Math.min(len - 1, n)));
+    const ni = Math.max(0, Math.min(len - 1, n));
+    indexRef.current = ni;
+    setIdx(ni);
   }, []);
 
   const next = useCallback(() => {
     setIdx((i) => {
       const len = queueRef.current.length;
-      return len ? Math.min(len - 1, i + 1) : -1;
+      const ni = len ? Math.min(len - 1, i + 1) : -1;
+      indexRef.current = ni;
+      return ni;
     });
   }, []);
 
   const prev = useCallback(() => {
     setIdx((i) => {
       const len = queueRef.current.length;
-      return len ? Math.max(0, i - 1) : -1;
+      const ni = len ? Math.max(0, i - 1) : -1;
+      indexRef.current = ni;
+      return ni;
     });
   }, []);
 
@@ -173,6 +184,11 @@ export function PlayerProvider({ children }) {
     [applyMuted, applyVolume]
   );
 
+  /** Same-tick queue/index for playback takeover after jumpTo/playQueue (React state is async). */
+  const getQueueSnapshot = useCallback(() => {
+    return { queue: queueRef.current, index: indexRef.current };
+  }, []);
+
   const api = useMemo(
     () => ({
       ref,
@@ -193,6 +209,7 @@ export function PlayerProvider({ children }) {
       setVolume: setVol,
       toggleMute,
       setMute,
+      getQueueSnapshot,
     }),
     [
       isPlaying,
@@ -212,6 +229,7 @@ export function PlayerProvider({ children }) {
       setVol,
       toggleMute,
       setMute,
+      getQueueSnapshot,
     ]
   );
 

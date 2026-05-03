@@ -587,8 +587,10 @@ function Shell({ children }) {
 
   const pushTakeoverNow = React.useCallback(async () => {
     if (!getToken()) return;
-    const q = p.queue;
-    const idx = p.index;
+    const snap0 =
+      typeof p.getQueueSnapshot === "function" ? p.getQueueSnapshot() : { queue: p.queue, index: p.index };
+    let q = snap0.queue;
+    let idx = snap0.index;
     if (!Array.isArray(q) || !q.length || idx < 0 || idx >= q.length) {
       postTakeoverSeekSecRef.current = null;
       return;
@@ -650,10 +652,18 @@ function Shell({ children }) {
         }
       }
     } catch (_) {}
-    // User may have changed track while awaiting (e.g. next/prev after `claimPlaybackServerSync`). Do not POST stale
-    // state or seek the new track to the previous track's position.
-    if (trackIdAtStart != null && playerCurrentIdRef.current != null) {
-      if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(playerCurrentIdRef.current)) {
+    const snap =
+      typeof p.getQueueSnapshot === "function" ? p.getQueueSnapshot() : { queue: p.queue, index: p.index };
+    q = snap.queue;
+    idx = snap.index;
+    if (!Array.isArray(q) || !q.length || idx < 0 || idx >= q.length) {
+      postTakeoverSeekSecRef.current = null;
+      return;
+    }
+    const curIdNow = q[idx]?.id;
+    // User may have changed track while awaiting — do not POST stale state or seek the wrong row.
+    if (trackIdAtStart != null && curIdNow != null) {
+      if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(curIdNow)) {
         postTakeoverSeekSecRef.current = null;
         return;
       }
@@ -670,20 +680,23 @@ function Shell({ children }) {
       const r = await playback.takeover(body);
       ownerEpochRef.current = Number.isFinite(r?.ownerEpoch) ? Number(r.ownerEpoch) : ownerEpochRef.current + 1;
       takeoverRequestedRef.current = false;
-      if (trackIdAtStart != null && playerCurrentIdRef.current != null) {
-        if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(playerCurrentIdRef.current)) {
+      const snap2 =
+        typeof p.getQueueSnapshot === "function" ? p.getQueueSnapshot() : { queue: p.queue, index: p.index };
+      const q2 = snap2.queue;
+      const idx2 = snap2.index;
+      const curAfter = Array.isArray(q2) && idx2 >= 0 && idx2 < q2.length ? q2[idx2]?.id : null;
+      if (trackIdAtStart != null && curAfter != null) {
+        if (normPlaybackTrackId(trackIdAtStart) !== normPlaybackTrackId(curAfter)) {
           postTakeoverSeekSecRef.current = null;
           return;
         }
       }
-      const seekSec = Math.max(0, positionMs / 1000);
-      postTakeoverSeekSecRef.current = seekSec;
-      const epochAtSeek = playbackSwitchEpochRef.current;
-      await seekMediaWhenReadyAsync(p.ref, seekSec, () => playbackSwitchEpochRef.current === epochAtSeek);
+      // Defer actual seek until after `syncAudioAfterPlaybackClaim` may call `load()` (resets currentTime).
+      postTakeoverSeekSecRef.current = Math.max(0, positionMs / 1000);
     } catch (_) {
       postTakeoverSeekSecRef.current = null;
     }
-  }, [p.queue, p.index, p.ref]);
+  }, [p.queue, p.index, p.ref, p.getQueueSnapshot]);
 
   const pushTakeoverNowRef = React.useRef(pushTakeoverNow);
   React.useLayoutEffect(() => {
@@ -704,8 +717,11 @@ function Shell({ children }) {
     const rescue = postTakeoverSeekSecRef.current;
     postTakeoverSeekSecRef.current = null;
     if (rescue == null || !Number.isFinite(rescue)) return;
-    const epochR = playbackSwitchEpochRef.current;
-    await seekMediaWhenReadyAsync(p.ref, rescue, () => playbackSwitchEpochRef.current === epochR);
+    const wantKey = normPlaybackTrackId(playerCurrentIdRef.current);
+    await seekMediaWhenReadyAsync(p.ref, rescue, () => {
+      if (!wantKey) return true;
+      return normPlaybackTrackId(playerCurrentIdRef.current) === wantKey;
+    });
   }, [p.ref]);
 
   const claimPlaybackSync = React.useCallback(() => releasePlaybackServerSync(), []);
@@ -874,8 +890,8 @@ function Shell({ children }) {
       }
       suspendPlaybackPushRef.current = false;
       takeoverRequestedRef.current = true;
-      // Give explicit user takeover a short priority window.
-      takeoverGuardUntilRef.current = Date.now() + 3000;
+      // Give explicit user takeover a priority window (slow networks + takeover POST chain).
+      takeoverGuardUntilRef.current = Date.now() + 5000;
       // Keep remotePlaybackActive + progress refs until the server shows this client as owner.
       // Clearing here stopped the remote progress ticker and let syncRemote re-pause every tick.
       // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
@@ -1298,12 +1314,6 @@ function Shell({ children }) {
       try {
         ms.setActionHandler("play", async () => {
           releasePlaybackServerSync();
-          const tp = takeoverFromReleasePromiseRef.current;
-          if (tp) {
-            try {
-              await tp;
-            } catch (_) {}
-          }
           try {
             ms.playbackState = "playing";
           } catch (_) {}
@@ -1311,6 +1321,7 @@ function Shell({ children }) {
           if (!a) return;
           const want = p.current?.url || "";
           syncAudioAfterPlaybackClaim(a, want);
+          await awaitPlaybackTakeoverAfterRelease();
           await applyPostTakeoverSeekRescue();
           const pr = a.play();
           if (pr && typeof pr.catch === "function") pr.catch(() => {});
@@ -1553,7 +1564,7 @@ function Shell({ children }) {
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
     };
-  }, [p.current?.id, syncAudioAfterPlaybackClaim, applyPostTakeoverSeekRescue]);
+  }, [p.current?.id, syncAudioAfterPlaybackClaim, awaitPlaybackTakeoverAfterRelease, applyPostTakeoverSeekRescue]);
 
   // After each track (or queue index) change: start at 0 unless we have a valid reload/cross-device restore pending.
   // Also gates late metadata/takeover seeks via playbackSwitchEpochRef.
@@ -1878,9 +1889,9 @@ function Shell({ children }) {
               if (!el) return;
               if (el.paused) {
                 claimPlaybackSync();
-                await awaitPlaybackTakeoverAfterRelease();
                 const want = p.current?.url || "";
                 syncAudioAfterPlaybackClaim(el, want);
+                await awaitPlaybackTakeoverAfterRelease();
                 await applyPostTakeoverSeekRescue();
                 const pr = el.play();
                 if (pr && typeof pr.catch === "function") {
@@ -2108,9 +2119,9 @@ function Shell({ children }) {
                   if (!el) return;
                   if (el.paused) {
                     claimPlaybackSync();
-                    await awaitPlaybackTakeoverAfterRelease();
                     const want = p.current?.url || "";
                     syncAudioAfterPlaybackClaim(el, want);
+                    await awaitPlaybackTakeoverAfterRelease();
                     await applyPostTakeoverSeekRescue();
                     const pr = el.play();
                     if (pr && typeof pr.catch === "function") {
@@ -2401,9 +2412,9 @@ function Shell({ children }) {
                           if (!el) return;
                           if (el.paused) {
                             claimPlaybackSync();
-                            await awaitPlaybackTakeoverAfterRelease();
                             const want = p.current?.url || "";
                             syncAudioAfterPlaybackClaim(el, want);
+                            await awaitPlaybackTakeoverAfterRelease();
                             await applyPostTakeoverSeekRescue();
                             const pr = el.play();
                             if (pr && typeof pr.catch === "function") {
@@ -2508,12 +2519,13 @@ function Shell({ children }) {
                                 if (mobileQueueTapRef.current.moved) return;
                                 if (e.cancelable) e.preventDefault();
                                 e.stopPropagation();
-                                claimPlaybackSync();
                                 p.jumpTo(i);
+                                claimPlaybackSync();
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
                                     syncAudioAfterPlaybackClaim(el, it.url);
+                                    await awaitPlaybackTakeoverAfterRelease();
                                     await applyPostTakeoverSeekRescue();
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
@@ -2524,12 +2536,13 @@ function Shell({ children }) {
                               }}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                claimPlaybackSync();
                                 p.jumpTo(i);
+                                claimPlaybackSync();
                                 try {
                                   const el = p.ref.current;
                                   if (el && it?.url) {
                                     syncAudioAfterPlaybackClaim(el, it.url);
+                                    await awaitPlaybackTakeoverAfterRelease();
                                     await applyPostTakeoverSeekRescue();
                                     const pr = el.play?.();
                                     if (pr && typeof pr.catch === "function") {
