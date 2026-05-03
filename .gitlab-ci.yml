@@ -86,9 +86,13 @@ deploy:demo:
   variables:
     CI: "true"
   script:
-    - cd web && npm ci
-    - cd web && npx playwright install --with-deps chromium
-    - cd web && npm run test:ci
+    # One shell session: after `cd web` the cwd stays in web/ (do not repeat `cd web`).
+    - |
+      set -e
+      cd web
+      npm ci
+      npx playwright install --with-deps chromium
+      npm run test:ci
 
 # Branches and MRs: run unit tests after build (no deploy on this path).
 test:web:
