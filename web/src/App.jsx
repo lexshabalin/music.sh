@@ -599,10 +599,22 @@ function Shell({ children }) {
       const stCid = (st?.clientId && String(st.clientId)) || "";
       const otherOwns = !!(stCid && cid && stCid !== cid);
       const otherPlaying = !!(otherOwns && st?.isPlaying);
+      const myKey = trackIdAtStart ? normPlaybackTrackId(trackIdAtStart) : "";
+      const si =
+        Array.isArray(st.trackIds) && myKey ? st.trackIds.findIndex((id) => normPlaybackTrackId(id) === myKey) : -1;
+      const sameTrackAsServer = si >= 0;
+
       if (otherPlaying) {
         const fromServer = interpolatePlaybackPositionMsFromServer(st);
-        if (fromServer != null && Number.isFinite(fromServer)) positionMs = Math.max(0, fromServer);
+        if (fromServer != null && Number.isFinite(fromServer)) positionMs = Math.max(positionMs, fromServer);
       } else if (otherOwns) {
+        positionMs = Math.max(positionMs, Math.round(Math.max(0, Number(st.positionMs) || 0)));
+      } else if (sameTrackAsServer && positionMs < 500) {
+        // Server may already list this tab as owner (heartbeat race) while `<audio>` is still at 0 — still merge row position.
+        if (st?.isPlaying) {
+          const fromServer = interpolatePlaybackPositionMsFromServer(st);
+          if (fromServer != null && Number.isFinite(fromServer)) positionMs = Math.max(positionMs, fromServer);
+        }
         positionMs = Math.max(positionMs, Math.round(Math.max(0, Number(st.positionMs) || 0)));
       }
       if (positionMs < 500 && remotePlaybackActiveRef.current) {
@@ -656,8 +668,6 @@ function Shell({ children }) {
   }, [pushTakeoverNow]);
   /** Set synchronously in PLAYBACK_SYNC_RELEASE handler so play() can await takeover+seek before starting audio. */
   const takeoverFromReleasePromiseRef = React.useRef(null);
-  /** Serializes overlapping takeover pushes so a later run does not clear `postTakeoverSeekSecRef` while an earlier one is still in flight. */
-  const takeoverReleaseChainRef = React.useRef(Promise.resolve());
   const awaitPlaybackTakeoverAfterRelease = React.useCallback(async () => {
     const tp = takeoverFromReleasePromiseRef.current;
     if (!tp) return;
@@ -848,13 +858,10 @@ function Shell({ children }) {
       // Do not PUT immediately after POST /takeover: local `<audio>` is still paused here, and a heartbeat
       // would send isPlaying:false and mute server state the user is about to resume.
       try {
-        const next = takeoverReleaseChainRef.current
-          .catch(() => {})
-          .then(() => pushTakeoverNowRef.current());
-        takeoverReleaseChainRef.current = next.catch(() => {});
-        takeoverFromReleasePromiseRef.current = next;
-        void next.finally(() => {
-          if (takeoverFromReleasePromiseRef.current === next) takeoverFromReleasePromiseRef.current = null;
+        const p = pushTakeoverNowRef.current();
+        takeoverFromReleasePromiseRef.current = p;
+        void p.finally(() => {
+          if (takeoverFromReleasePromiseRef.current === p) takeoverFromReleasePromiseRef.current = null;
         });
       } catch (_) {}
     };
