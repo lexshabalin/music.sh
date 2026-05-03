@@ -659,7 +659,7 @@ func (a *App) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	// ServeFileWithRange may return nil even if the client cancels mid-stream (seek/buffer),
 	// which is expected for <audio>. Only errors before headers are meaningful here.
-	if err := stream.ServeFileWithRange(tw, r, abs); err != nil {
+	if err := stream.ServePlayback(tw, r, abs); err != nil {
 		// If headers/body already started, do NOT write JSON (it would corrupt the media stream).
 		if tw.wroteHeader {
 			return
