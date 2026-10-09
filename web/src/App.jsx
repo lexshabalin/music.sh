@@ -2095,7 +2095,17 @@ function Shell({ children }) {
                 ) : null}
                 {p.current.title || p.current.label}
               </div>
-              <div className="nowplaying-line2">{p.current.album || ""}</div>
+              <div className="nowplaying-line2">
+                {p.current.album ? (
+                  <button
+                    type="button"
+                    className="nowplaying-artist-link"
+                    onClick={() => void goToNowPlayingAlbum()}
+                  >
+                    {p.current.album}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -2255,9 +2265,18 @@ function Shell({ children }) {
                     >
                       {p.current.artist}
                     </button>
-                  ) : (
-                    p.current.album || ""
-                  )}
+                  ) : p.current.album ? (
+                    <button
+                      type="button"
+                      className="nowplaying-artist-link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void goToNowPlayingAlbum();
+                      }}
+                    >
+                      {p.current.album}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
