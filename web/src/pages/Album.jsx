@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
@@ -720,7 +720,10 @@ function sortTracks(list, key, dir) {
 export function Album() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+  const fromArtistId = typeof location.state?.fromArtistId === "string" ? location.state.fromArtistId : "";
+  const fromArtistName = typeof location.state?.fromArtistName === "string" ? location.state.fromArtistName : "";
   const [tr, setTr] = useState([]);
   const [a, setA] = useState(null);
   const [missingIds, setMissingIds] = useState([]);
@@ -847,9 +850,15 @@ export function Album() {
   return (
     <div>
       <p>
-        <Link to="/albums" className="muted">
-          ← {t("nav.albums")}
-        </Link>
+        {fromArtistId ? (
+          <Link to={"/artist/" + fromArtistId} className="muted">
+            ← {fromArtistName || a?.artistName || t("nav.artists")}
+          </Link>
+        ) : (
+          <Link to="/albums" className="muted">
+            ← {t("nav.albums")}
+          </Link>
+        )}
       </p>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "1rem" }}>
         <div style={{ display: "flex", gap: "1rem", minWidth: 0 }}>

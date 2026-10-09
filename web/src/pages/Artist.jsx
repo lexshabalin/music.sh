@@ -182,7 +182,12 @@ export function Artist() {
         : null}
       <div className="grid">
         {albums.map((a) => (
-          <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
+          <Link
+            key={a.id}
+            to={"/album/" + a.id}
+            state={{ fromArtistId: id, fromArtistName: a.artistName || "" }}
+            style={{ textDecoration: "none", color: "inherit" }}
+          >
             <div className="card album-tile">
               <div className="tile-media">
                 <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
