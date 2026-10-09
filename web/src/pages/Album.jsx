@@ -863,7 +863,7 @@ export function Album() {
           ) : (
             <div className="muted album-page-artist">{a?.artistName}</div>
           )}
-          {a?.year != null ? <div className="muted album-page-year">({a.year})</div> : null}
+          {a?.year != null ? <div className="muted album-page-year">{a.year}</div> : null}
           {Array.isArray(a?.genres) && a.genres.length ? (
             <div className="muted album-page-genres">{a.genres.join(" · ")}</div>
           ) : null}

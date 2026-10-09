@@ -674,7 +674,7 @@ select.lang-select {
 .album-page-artist {
   display: block;
   margin-top: 0.15em;
-  font-size: calc(var(--album-title-size) * 0.7);
+  font-size: calc(var(--album-title-size) * 0.91);
   line-height: 1.25;
 }
 .album-page-year {
