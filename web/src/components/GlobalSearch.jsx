@@ -164,8 +164,10 @@ export function GlobalSearch() {
                               (track.title || t("common.track")),
                             url: lib.streamUrl(track.id),
                             artist: track.artist?.name || "",
+                            artistId: track.artist?.id || "",
                             title: track.title || t("common.track"),
                             album: track.album?.title || "",
+                            albumId: track.album?.id || "",
                             coverUrl: effectiveTrackCoverUrl(track),
                             format: trackFormatForPlayback(track),
                           };

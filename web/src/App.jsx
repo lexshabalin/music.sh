@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { Routes, Route, Link, NavLink, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { I18nContext, I18nProvider, LANGS, normalizeLang, useI18n } from "./i18n";
 import {
   auth,
@@ -337,6 +337,7 @@ const SECTION_HAS_LOCAL_SEARCH = new Set(["/songs", "/artists", "/albums", "/gen
 
 function Shell({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const p = usePlayer();
   const { t, lang, setLang } = useI18n();
   const [curT, setCurT] = React.useState(0);
@@ -387,8 +388,13 @@ function Shell({ children }) {
   const [liked, setLiked] = React.useState(false);
   const [showPlModal, setShowPlModal] = React.useState(false);
   const [showQueue, setShowQueue] = React.useState(false);
+  const [showNowplayingArtMenu, setShowNowplayingArtMenu] = React.useState(false);
   const queueBtnRef = React.useRef(null);
   const mobileQueueBtnRef = React.useRef(null);
+  const nowplayingArtBtnRef = React.useRef(null);
+  const mobileMiniArtBtnRef = React.useRef(null);
+  const mobileFsArtBtnRef = React.useRef(null);
+  const nowplayingArtMenuAnchorRef = React.useRef(null);
   const [me, setMe] = React.useState(null);
   const [avatarUrl, setAvatarUrl] = React.useState("");
   const [showProfile, setShowProfile] = React.useState(false);
@@ -810,6 +816,43 @@ function Shell({ children }) {
     el.style.transform = "";
     el.style.transition = "";
   }, [p.current?.id]);
+
+  React.useEffect(() => {
+    setShowNowplayingArtMenu(false);
+  }, [p.current?.id]);
+
+  const resolveNowPlayingNav = React.useCallback(async () => {
+    const cur = p.current;
+    if (!cur?.id) return { artistId: "", albumId: "" };
+    let artistId = cur.artistId || "";
+    let albumId = cur.albumId || "";
+    if (artistId && albumId) return { artistId, albumId };
+    try {
+      const tr = await lib.track(cur.id);
+      artistId = artistId || tr?.artist?.id || "";
+      albumId = albumId || tr?.album?.id || "";
+    } catch (_) {}
+    return { artistId, albumId };
+  }, [p]);
+
+  const openNowplayingArtMenu = React.useCallback((anchorRef) => {
+    nowplayingArtMenuAnchorRef.current = anchorRef?.current || null;
+    setShowNowplayingArtMenu(true);
+  }, []);
+
+  const goToNowPlayingArtist = React.useCallback(async () => {
+    setShowNowplayingArtMenu(false);
+    setShowMobilePlayer(false);
+    const { artistId } = await resolveNowPlayingNav();
+    if (artistId) navigate("/artist/" + artistId);
+  }, [navigate, resolveNowPlayingNav]);
+
+  const goToNowPlayingAlbum = React.useCallback(async () => {
+    setShowNowplayingArtMenu(false);
+    setShowMobilePlayer(false);
+    const { albumId } = await resolveNowPlayingNav();
+    if (albumId) navigate("/album/" + albumId);
+  }, [navigate, resolveNowPlayingNav]);
 
   const doLogout = React.useCallback(async () => {
     try {
@@ -2018,10 +2061,30 @@ function Shell({ children }) {
             onMouseEnter={onDesktopNowplayingDiscEnter}
             onMouseLeave={onDesktopNowplayingDiscLeave}
           >
-            <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
+            <button
+              type="button"
+              ref={nowplayingArtBtnRef}
+              className="nowplaying-art-btn"
+              title={t("player.nowPlayingMenu")}
+              aria-label={t("player.nowPlayingMenu")}
+              onClick={() => openNowplayingArtMenu(nowplayingArtBtnRef)}
+            >
+              <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
+            </button>
             <div className="nowplaying-text">
               <div className="nowplaying-line1">
-                {p.current.artist ? `${p.current.artist} — ` : ""}
+                {p.current.artist ? (
+                  <>
+                    <button
+                      type="button"
+                      className="nowplaying-artist-link"
+                      onClick={() => void goToNowPlayingArtist()}
+                    >
+                      {p.current.artist}
+                    </button>
+                    <span className="nowplaying-sep"> — </span>
+                  </>
+                ) : null}
                 {p.current.title || p.current.label}
               </div>
               <div className="nowplaying-line2">{p.current.album || ""}</div>
@@ -2155,12 +2218,39 @@ function Shell({ children }) {
               <div className="mobile-mini-progress-fill" style={{ width: `${mobileMiniProgressPct}%` }} />
             </div>
             <div className="nowplaying">
-              <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
+              <button
+                type="button"
+                ref={mobileMiniArtBtnRef}
+                className="nowplaying-art-btn"
+                title={t("player.nowPlayingMenu")}
+                aria-label={t("player.nowPlayingMenu")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openNowplayingArtMenu(mobileMiniArtBtnRef);
+                }}
+              >
+                <MediaCover src={p.current.coverUrl || ""} className="nowplaying-art" alt="" />
+              </button>
               <div className="nowplaying-text">
                 <div className="nowplaying-line1">
                   {p.current.title || p.current.label}
                 </div>
-                <div className="nowplaying-line2">{p.current.artist || p.current.album || ""}</div>
+                <div className="nowplaying-line2">
+                  {p.current.artist ? (
+                    <button
+                      type="button"
+                      className="nowplaying-artist-link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void goToNowPlayingArtist();
+                      }}
+                    >
+                      {p.current.artist}
+                    </button>
+                  ) : (
+                    p.current.album || ""
+                  )}
+                </div>
               </div>
             </div>
             <div className="player-mini-controls">
@@ -2369,11 +2459,30 @@ function Shell({ children }) {
                 >
                   <section className="mobile-player-page mobile-player-page--main" aria-label="Player">
                     <div className="mobile-player-cover-wrap">
-                      <MediaCover src={p.current.coverUrl || ""} className="mobile-player-cover" alt="" />
+                      <button
+                        type="button"
+                        ref={mobileFsArtBtnRef}
+                        className="nowplaying-art-btn mobile-player-cover-btn"
+                        title={t("player.nowPlayingMenu")}
+                        aria-label={t("player.nowPlayingMenu")}
+                        onClick={() => openNowplayingArtMenu(mobileFsArtBtnRef)}
+                      >
+                        <MediaCover src={p.current.coverUrl || ""} className="mobile-player-cover" alt="" />
+                      </button>
                     </div>
                     <div className="mobile-player-meta mobile-player-meta--center">
                       <div className="mobile-player-title">{p.current.title || p.current.label}</div>
-                      <div className="mobile-player-artist muted">{p.current.artist || "\u00a0"}</div>
+                      {p.current.artist ? (
+                        <button
+                          type="button"
+                          className="mobile-player-artist muted nowplaying-artist-link"
+                          onClick={() => void goToNowPlayingArtist()}
+                        >
+                          {p.current.artist}
+                        </button>
+                      ) : (
+                        <div className="mobile-player-artist muted">{"\u00a0"}</div>
+                      )}
                     </div>
                     <div className="mobile-player-actions-row">
                       <button
@@ -2803,6 +2912,14 @@ function Shell({ children }) {
           onClose={() => setShowQueue(false)}
         />
       ) : null}
+      {showNowplayingArtMenu && p.current && getToken() ? (
+        <NowPlayingArtMenu
+          anchorRef={nowplayingArtMenuAnchorRef}
+          onClose={() => setShowNowplayingArtMenu(false)}
+          onGoToArtist={() => void goToNowPlayingArtist()}
+          onGoToAlbum={() => void goToNowPlayingAlbum()}
+        />
+      ) : null}
       {showPlModal && p.current?.id ? (
         <PlayerPlaylistModal trackId={p.current.id} onClose={() => setShowPlModal(false)} />
       ) : null}
@@ -2876,6 +2993,63 @@ function BackgroundLayer({ bg }) {
     return <div className="bg-layer bg-custom" aria-hidden="true" style={{ backgroundImage: `url(${bg.url})` }} />;
   }
   return null;
+}
+
+function NowPlayingArtMenu({ anchorRef, onClose, onGoToArtist, onGoToAlbum }) {
+  const { t } = useI18n();
+  const menuRef = React.useRef(null);
+  React.useEffect(() => {
+    const onDoc = (e) => {
+      const el = anchorRef.current;
+      if (el && el.contains?.(e.target)) return;
+      const menuEl = menuRef.current;
+      if (menuEl && menuEl.contains(e.target)) return;
+      onClose();
+    };
+    const timer = setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [onClose, anchorRef]);
+
+  const r = anchorRef.current?.getBoundingClientRect?.();
+  const width = 280;
+  const pad = 8;
+  const menuH = 96;
+  let top = pad;
+  let left = pad;
+  if (r) {
+    top = r.top - 8 - menuH;
+    if (top < pad) top = Math.min(window.innerHeight - menuH - pad, r.bottom + 8);
+    left = Math.min(window.innerWidth - width - pad, Math.max(pad, r.left));
+  }
+  const style = r
+    ? {
+        position: "fixed",
+        top,
+        left,
+        width,
+        background: "#111119",
+        border: "1px solid #2a2a33",
+        borderRadius: 12,
+        padding: 8,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+        zIndex: 5000,
+      }
+    : { display: "none" };
+
+  return createPortal(
+    <div ref={menuRef} style={style} role="menu" aria-label={t("player.nowPlayingMenu")}>
+      <button type="button" className="ghost menu-btn" onClick={onGoToArtist}>
+        {t("player.goToArtist")}
+      </button>
+      <button type="button" className="ghost menu-btn" onClick={onGoToAlbum}>
+        {t("player.goToAlbum")}
+      </button>
+    </div>,
+    document.body
+  );
 }
 
 function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {

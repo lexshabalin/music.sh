@@ -155,6 +155,9 @@ const dict = {
     "player.collapseNowPlaying": "Свернуть плеер",
     "player.lyrics": "Текст песни",
     "player.sleepTimer": "Таймер сна",
+    "player.nowPlayingMenu": "Меню текущего трека",
+    "player.goToArtist": "Перейти к проигрываемому исполнителю",
+    "player.goToAlbum": "Перейти к проигрываемому альбому",
 
     "missingFile.title": "Упс!",
     "missingFile.trackBody":
@@ -455,6 +458,9 @@ const dict = {
     "player.collapseNowPlaying": "Minimize now playing",
     "player.lyrics": "Lyrics",
     "player.sleepTimer": "Sleep timer",
+    "player.nowPlayingMenu": "Now playing menu",
+    "player.goToArtist": "Go to playing artist",
+    "player.goToAlbum": "Go to playing album",
 
     "missingFile.title": "Whoops!",
     "missingFile.trackBody":

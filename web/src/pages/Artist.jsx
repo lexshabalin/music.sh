@@ -207,8 +207,10 @@ export function Artist() {
                           (trk.artist ? trk.artist.name + " — " : "") + (trk.title || t("common.track")),
                         url: lib.streamUrl(trk.id),
                         artist: trk.artist?.name || "",
+                        artistId: trk.artist?.id || id || "",
                         title: trk.title || t("common.track"),
                         album: trk.album?.title || a.title || "",
+                        albumId: trk.album?.id || a.id || "",
                         coverUrl: effectiveTrackCoverUrl(trk) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
                         format: trackFormatForPlayback(trk),
                       }));

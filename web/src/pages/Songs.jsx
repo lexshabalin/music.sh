@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
+import { effectiveTrackCoverUrl, lib, trackToQueueItem } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
 import { useI18n } from "../i18n";
@@ -203,16 +203,7 @@ export function Songs() {
   const sortedTracks = React.useMemo(() => sortTracks(tracks, sortKey, sortDir), [tracks, sortKey, sortDir]);
 
   const buildQueueItem = React.useCallback(
-    (trk) => ({
-      id: trk.id,
-      label: (trk.artist ? trk.artist.name + " — " : "") + (trk.title || t("common.track")),
-      url: lib.streamUrl(trk.id),
-      artist: trk.artist?.name || "",
-      title: trk.title || t("common.track"),
-      album: trk.album?.title || "",
-      coverUrl: effectiveTrackCoverUrl(trk),
-      format: trackFormatForPlayback(trk),
-    }),
+    (trk) => trackToQueueItem(trk, { title: trk?.title || t("common.track") }),
     [t]
   );
 

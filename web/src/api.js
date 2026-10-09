@@ -310,19 +310,29 @@ export function mimeHintForAudioFormat(extNorm) {
   return m[extNorm] || "";
 }
 
+/** One player queue row from a `/api/tracks` object. Optional `o` fills gaps (album cover/id from parent). */
+export function trackToQueueItem(t, o = {}) {
+  const title = t?.title || o.title || "Track";
+  const artist = t?.artist?.name || o.artist || "";
+  const album = t?.album?.title || o.album || "";
+  return {
+    id: t.id,
+    label: (artist ? artist + " — " : "") + title,
+    url: lib.streamUrl(t.id),
+    artist,
+    artistId: t?.artist?.id || o.artistId || "",
+    title,
+    album,
+    albumId: t?.album?.id || o.albumId || "",
+    coverUrl: effectiveTrackCoverUrl(t) || o.coverUrl || "",
+    format: trackFormatForPlayback(t),
+  };
+}
+
 /** Player queue items from `/api/tracks` rows (same shape as playlist pages). */
 export function tracksToQueueItems(tracks) {
   if (!Array.isArray(tracks)) return [];
-  return tracks.map((t) => ({
-    id: t.id,
-    label: (t.artist ? t.artist.name + " — " : "") + (t.title || "Track"),
-    url: lib.streamUrl(t.id),
-    artist: t.artist?.name || "",
-    title: t.title || "Track",
-    album: t.album?.title || "",
-    coverUrl: effectiveTrackCoverUrl(t),
-    format: trackFormatForPlayback(t),
-  }));
+  return tracks.map((t) => trackToQueueItem(t));
 }
 
 /** Dispatched when the user explicitly takes control (play / new queue / skip). */

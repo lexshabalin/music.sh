@@ -107,8 +107,10 @@ export function Playlist() {
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
+      artistId: t.artist?.id || "",
       title: t.title || t("common.track"),
       album: t.album?.title || "",
+      albumId: t.album?.id || "",
       coverUrl: effectiveTrackCoverUrl(t),
       format: trackFormatForPlayback(t),
     }));
@@ -132,8 +134,10 @@ export function Playlist() {
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
+      artistId: t.artist?.id || "",
       title: t.title || t("common.track"),
       album: t.album?.title || "",
+      albumId: t.album?.id || "",
       coverUrl: effectiveTrackCoverUrl(t),
       format: trackFormatForPlayback(t),
     }));
@@ -146,8 +150,10 @@ export function Playlist() {
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
       artist: t.artist?.name || "",
+      artistId: t.artist?.id || "",
       title: t.title || t("common.track"),
       album: t.album?.title || "",
+      albumId: t.album?.id || "",
       coverUrl: effectiveTrackCoverUrl(t),
       format: trackFormatForPlayback(t),
     };

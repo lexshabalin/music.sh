@@ -87,8 +87,10 @@ export function Genre() {
       label: (tr.artist ? tr.artist.name + " — " : "") + (tr.title || t("common.track")),
       url: lib.streamUrl(tr.id),
       artist: tr.artist?.name || "",
+      artistId: tr.artist?.id || "",
       title: tr.title || t("common.track"),
       album: tr.album?.title || "",
+      albumId: tr.album?.id || "",
       coverUrl: effectiveTrackCoverUrl(tr),
       format: trackFormatForPlayback(tr),
     }));
@@ -116,8 +118,10 @@ export function Genre() {
       label: (tr.artist ? tr.artist.name + " — " : "") + (tr.title || t("common.track")),
       url: lib.streamUrl(tr.id),
       artist: tr.artist?.name || "",
+      artistId: tr.artist?.id || "",
       title: tr.title || t("common.track"),
       album: tr.album?.title || "",
+      albumId: tr.album?.id || "",
       coverUrl: effectiveTrackCoverUrl(tr),
       format: trackFormatForPlayback(tr),
     };

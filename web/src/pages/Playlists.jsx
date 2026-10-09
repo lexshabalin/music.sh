@@ -252,8 +252,10 @@ export function Playlists() {
         label: (t2.artist ? t2.artist.name + " — " : "") + (t2.title || t("common.track")),
         url: lib.streamUrl(t2.id),
         artist: t2.artist?.name || "",
+        artistId: t2.artist?.id || "",
         title: t2.title || t("common.track"),
         album: t2.album?.title || "",
+        albumId: t2.album?.id || "",
         coverUrl: effectiveTrackCoverUrl(t2),
         format: trackFormatForPlayback(t2),
       }));
