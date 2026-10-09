@@ -2564,39 +2564,10 @@ select.lang-select {
 .home-stats-banner {
   margin-bottom: 1.5rem;
 }
-.home-stats-banner__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 0.75rem;
-}
 .home-stats-banner__title {
-  margin: 0;
+  margin: 0 0 0.75rem 0;
   font-size: 1.05rem;
   font-weight: 700;
-}
-.home-period-btn .viewmode-label {
-  font-weight: 700;
-}
-.home-period-custom {
-  display: grid;
-  gap: 8px;
-  padding: 10px 10px 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  margin-top: 4px;
-}
-.home-period-custom__field {
-  display: grid;
-  gap: 4px;
-  font-size: 0.8rem;
-}
-.home-period-custom__field input[type="date"] {
-  width: 100%;
-}
-.home-period-apply {
-  justify-self: end;
-  margin-top: 2px;
 }
 .home-stats-grid {
   display: grid;
@@ -2605,11 +2576,23 @@ select.lang-select {
   margin-bottom: 1.25rem;
 }
 .home-stat-card {
+  display: block;
   padding: 10px 12px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
   min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.home-stat-card:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+}
+.home-stat-card:focus-visible {
+  outline: 2px solid rgba(255, 99, 71, 0.65);
+  outline-offset: 2px;
 }
 .home-stat-value {
   font-size: 1.25rem;

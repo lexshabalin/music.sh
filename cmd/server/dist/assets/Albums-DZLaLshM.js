@@ -1,1 +1,0 @@
-import{j as r}from"./index-Cyxlv08N.js";import{Library as t}from"./Library-B6ql8Jm_.js";import"./ViewModeControl-UvIeR4lr.js";function e(){return r.jsx(t,{pageTitleKey:"nav.albums"})}export{e as Albums};

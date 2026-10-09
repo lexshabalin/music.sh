@@ -28,6 +28,7 @@ const Playlist = React.lazy(() => import("./pages/Playlist").then((m) => ({ defa
 const Songs = React.lazy(() => import("./pages/Songs").then((m) => ({ default: m.Songs })));
 const Genres = React.lazy(() => import("./pages/Genres").then((m) => ({ default: m.Genres })));
 const Genre = React.lazy(() => import("./pages/Genre").then((m) => ({ default: m.Genre })));
+const Stats = React.lazy(() => import("./pages/Stats").then((m) => ({ default: m.Stats })));
 import { PlayerPlaylistModal } from "./components/PlayerPlaylistModal";
 import { MissingLibraryItemDialog } from "./components/MissingLibraryItemDialog";
 import { GlobalSearch } from "./components/GlobalSearch";
@@ -3407,6 +3408,10 @@ export function App() {
             <Route
               path="/likes"
               element={!getToken() ? <Navigate to="/login" replace /> : <Likes />}
+            />
+            <Route
+              path="/stats"
+              element={!getToken() ? <Navigate to="/login" replace /> : <Stats />}
             />
           </Routes>
           </React.Suspense>

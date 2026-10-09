@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { auth, effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { useI18n } from "../i18n";
 import { AlbumTile } from "./Library";
-import { formatLocalYMD, homeStatsPeriodRange } from "./homeStatsPeriod";
 
 function fmtListenMs(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return "—";
@@ -25,16 +24,6 @@ const GENRE_COLORS = [
   "#ff8abf",
   "#c9c94a",
 ];
-
-const PERIODS = ["day", "week", "month", "custom"];
-
-function periodLabel(t, period) {
-  if (period === "day") return t("home.period.day");
-  if (period === "week") return t("home.period.week");
-  if (period === "month") return t("home.period.month");
-  if (period === "custom") return t("home.period.custom");
-  return period;
-}
 
 function GenreDonut({ genres, labels }) {
   const total = genres.reduce((s, g) => s + Math.max(0, g.listenMs || 0), 0);
@@ -64,146 +53,12 @@ function GenreDonut({ genres, labels }) {
   );
 }
 
-function StatsPeriodControl({ period, onPeriodChange, customFrom, customTo, onCustomChange }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [draftFrom, setDraftFrom] = useState(customFrom);
-  const [draftTo, setDraftTo] = useState(customTo);
-  const btnRef = React.useRef(null);
-  const panelRef = React.useRef(null);
-  const [pos, setPos] = useState(null);
-
-  useEffect(() => {
-    setDraftFrom(customFrom);
-    setDraftTo(customTo);
-  }, [customFrom, customTo]);
-
-  useEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const r = btnRef.current?.getBoundingClientRect?.();
-      if (!r) {
-        setPos(null);
-        return;
-      }
-      const w = 260;
-      const pad = 8;
-      const left = Math.min(window.innerWidth - w - pad, Math.max(pad, r.right - w));
-      const top = r.bottom + 8;
-      setPos({ left, top, width: w });
-    };
-    place();
-    const onDoc = (e) => {
-      if (btnRef.current?.contains(e.target)) return;
-      if (panelRef.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    const onEsc = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
-
-  return (
-    <div className="home-period">
-      <button
-        ref={btnRef}
-        type="button"
-        className="ghost viewmode-btn home-period-btn"
-        aria-label={t("home.period.aria")}
-        title={t("home.period.title")}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="viewmode-label">{periodLabel(t, period)}</span>
-      </button>
-      {open && pos
-        ? createPortal(
-            <div
-              ref={panelRef}
-              className="viewmode-menu home-period-menu"
-              role="menu"
-              aria-label={t("home.period.title")}
-              style={{
-                position: "fixed",
-                left: pos.left,
-                top: pos.top,
-                width: pos.width,
-                zIndex: 20000,
-              }}
-            >
-              {PERIODS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={p === period}
-                  className={`ghost viewmode-item${p === period ? " is-active" : ""}`}
-                  onClick={() => {
-                    if (p !== "custom") {
-                      onPeriodChange?.(p);
-                      setOpen(false);
-                      return;
-                    }
-                    onPeriodChange?.("custom");
-                  }}
-                >
-                  <span style={{ flex: 1, textAlign: "left" }}>{periodLabel(t, p)}</span>
-                </button>
-              ))}
-              {period === "custom" ? (
-                <div className="home-period-custom" onMouseDown={(e) => e.stopPropagation()}>
-                  <label className="home-period-custom__field">
-                    <span className="muted">{t("home.period.from")}</span>
-                    <input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-                  </label>
-                  <label className="home-period-custom__field">
-                    <span className="muted">{t("home.period.to")}</span>
-                    <input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost home-period-apply"
-                    onClick={() => {
-                      onCustomChange?.({ from: draftFrom, to: draftTo });
-                      onPeriodChange?.("custom");
-                      setOpen(false);
-                    }}
-                  >
-                    {t("home.period.apply")}
-                  </button>
-                </div>
-              ) : null}
-            </div>,
-            document.body
-          )
-        : null}
-    </div>
-  );
-}
-
 export function Home() {
   const { t } = useI18n();
   const player = usePlayer();
   const [me, setMe] = useState(null);
   const [dash, setDash] = useState(null);
   const [msg, setMsg] = useState("");
-  const [period, setPeriod] = useState("week");
-  const [customFrom, setCustomFrom] = useState(() => {
-    const r = homeStatsPeriodRange("week");
-    return r.from;
-  });
-  const [customTo, setCustomTo] = useState(() => formatLocalYMD(new Date()));
 
   useEffect(() => {
     if (!getToken()) return;
@@ -221,21 +76,16 @@ export function Home() {
     };
   }, []);
 
-  const range = useMemo(() => {
-    if (period === "custom") return homeStatsPeriodRange("custom", new Date(), { from: customFrom, to: customTo });
-    return homeStatsPeriodRange(period);
-  }, [period, customFrom, customTo]);
-
   const loadDash = React.useCallback(() => {
     if (!getToken()) return;
     auth
-      .home({ period, from: range.from, to: range.to })
+      .home()
       .then((d) => {
         setDash(d);
         setMsg("");
       })
       .catch((e) => setMsg(e?.message || "error"));
-  }, [period, range.from, range.to]);
+  }, []);
 
   useEffect(() => {
     loadDash();
@@ -300,36 +150,24 @@ export function Home() {
       {msg ? <p className="muted">{msg}</p> : null}
 
       <section className="card home-stats-banner">
-        <div className="home-stats-banner__head">
-          <h2 className="home-stats-banner__title">{t("home.statsTitle")}</h2>
-          <StatsPeriodControl
-            period={period}
-            onPeriodChange={setPeriod}
-            customFrom={customFrom}
-            customTo={customTo}
-            onCustomChange={({ from, to }) => {
-              setCustomFrom(from);
-              setCustomTo(to);
-            }}
-          />
-        </div>
+        <h2 className="home-stats-banner__title">{t("home.statsTitle")}</h2>
         <div className="home-stats-grid">
-          <div className="home-stat-card">
+          <Link to="/stats" className="home-stat-card">
             <div className="home-stat-value">{fmtListenMs(dash?.listenMsTotal ?? 0)}</div>
             <div className="home-stat-label muted">{t("home.statListen")}</div>
-          </div>
-          <div className="home-stat-card">
+          </Link>
+          <Link to="/albums" className="home-stat-card">
             <div className="home-stat-value">{dash?.libraryAlbums ?? "—"}</div>
             <div className="home-stat-label muted">{t("home.statAlbums")}</div>
-          </div>
-          <div className="home-stat-card">
+          </Link>
+          <Link to="/artists" className="home-stat-card">
             <div className="home-stat-value">{dash?.libraryArtists ?? "—"}</div>
             <div className="home-stat-label muted">{t("home.statArtists")}</div>
-          </div>
-          <div className="home-stat-card">
+          </Link>
+          <Link to="/songs" className="home-stat-card">
             <div className="home-stat-value">{dash?.libraryTracks ?? "—"}</div>
             <div className="home-stat-label muted">{t("home.statTracks")}</div>
-          </div>
+          </Link>
         </div>
 
         <h3 className="home-stats-sub">{t("home.genresTitle")}</h3>
