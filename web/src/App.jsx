@@ -1894,8 +1894,10 @@ function Shell({ children }) {
         {getToken() ? (
           <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
             <div className="brand">
-              <BrandIcon />
-              <span>music.sh</span>
+              <Link to="/" className="brand-home" onClick={() => setMobileNavOpen(false)}>
+                <BrandIcon />
+                <span>music.sh</span>
+              </Link>
               <button
                 ref={userBtnRef}
                 type="button"
