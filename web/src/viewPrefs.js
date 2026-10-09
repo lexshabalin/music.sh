@@ -1,6 +1,18 @@
 import React from "react";
 
-const LS_KEY = "musicsh_view_prefs_v1";
+const LS_KEY_BASE = "musicsh_view_prefs_v1";
+/** Legacy single-browser key (pre per-user). Migrated once into the current user's bucket. */
+const LS_KEY_LEGACY = LS_KEY_BASE;
+// Same key as api.js `LS` — read here so this module stays free of api import cycles.
+const TOKEN_LS = "musicsh_token";
+
+function readAccessToken() {
+  try {
+    return localStorage.getItem(TOKEN_LS) || "";
+  } catch (_) {
+    return "";
+  }
+}
 
 export const SECTIONS = /** @type {const} */ ([
   "home",
@@ -27,6 +39,28 @@ export const DEFAULT_VIEW_BY_SECTION = {
   likes: "table",
 };
 
+/** Decode JWT payload `userId` without verifying signature — only for localStorage scoping. */
+export function userIdFromAccessToken(token) {
+  const t = String(token || "").trim();
+  if (!t) return "";
+  try {
+    const part = t.split(".")[1];
+    if (!part) return "";
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+    const json = JSON.parse(atob(b64 + pad));
+    const id = json?.userId ?? json?.sub ?? "";
+    return id ? String(id) : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function prefsStorageKey() {
+  const id = userIdFromAccessToken(readAccessToken());
+  return id ? `${LS_KEY_BASE}:${id}` : `${LS_KEY_BASE}:anon`;
+}
+
 function normalizeSection(s) {
   const x = String(s || "").trim().toLowerCase();
   return SECTIONS.includes(x) ? x : "home";
@@ -39,7 +73,9 @@ function normalizeMode(m) {
 
 export function allowedModesForSection(section) {
   const s = normalizeSection(section);
-  if (s === "songs" || s === "likes") return ["table", "grid"];
+  if (s === "songs" || s === "artists" || s === "albums" || s === "playlists" || s === "likes") {
+    return ["table", "grid"];
+  }
   return ["grid"];
 }
 
@@ -52,29 +88,44 @@ function coerceModeForSection(section, mode) {
   return DEFAULT_VIEW_BY_SECTION[s] || allowed[0] || "grid";
 }
 
+function normalizePrefsObject(obj) {
+  const out = { ...DEFAULT_VIEW_BY_SECTION };
+  for (const s of SECTIONS) {
+    out[s] = coerceModeForSection(s, obj?.[s]);
+  }
+  return out;
+}
+
 export function readViewPrefs() {
+  const key = prefsStorageKey();
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    let raw = localStorage.getItem(key);
+    // One-time migrate pre-user global prefs into this user's bucket.
+    if (!raw && key !== LS_KEY_LEGACY) {
+      const legacy = localStorage.getItem(LS_KEY_LEGACY);
+      if (legacy) {
+        raw = legacy;
+        try {
+          localStorage.setItem(key, legacy);
+        } catch (_) {}
+      }
+    }
     if (!raw) {
       const def = { ...DEFAULT_VIEW_BY_SECTION };
-      // Write defaults once so Profile can show consistent persisted state.
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify(def));
+        localStorage.setItem(key, JSON.stringify(def));
       } catch (_) {}
       return def;
     }
     const obj = JSON.parse(raw);
-    const out = { ...DEFAULT_VIEW_BY_SECTION };
+    const out = normalizePrefsObject(obj);
     let changed = false;
     for (const s of SECTIONS) {
-      const v = coerceModeForSection(s, obj?.[s]);
-      if (out[s] !== v) changed = true;
-      out[s] = v;
+      if (obj?.[s] !== out[s]) changed = true;
     }
-    // Persist migration (removes split/list from old installs).
     if (changed) {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify(out));
+        localStorage.setItem(key, JSON.stringify(out));
       } catch (_) {}
     }
     return out;
@@ -86,12 +137,8 @@ export function readViewPrefs() {
 export function writeViewPrefs(next) {
   try {
     const cur = readViewPrefs();
-    const out = { ...cur };
-    for (const s of SECTIONS) {
-      const v = coerceModeForSection(s, next?.[s]);
-      out[s] = v;
-    }
-    localStorage.setItem(LS_KEY, JSON.stringify(out));
+    const out = normalizePrefsObject({ ...cur, ...(next || {}) });
+    localStorage.setItem(prefsStorageKey(), JSON.stringify(out));
     try {
       window.dispatchEvent(new CustomEvent("musicsh:viewprefs", { detail: out }));
     } catch (_) {}
@@ -114,10 +161,11 @@ export function getSectionViewMode(section) {
 export function useSectionViewMode(section) {
   const s = normalizeSection(section);
   const [mode, setMode] = React.useState(() => getSectionViewMode(s));
+  const userKey = userIdFromAccessToken(readAccessToken()) || "anon";
 
   React.useEffect(() => {
     setMode(getSectionViewMode(s));
-  }, [s]);
+  }, [s, userKey]);
 
   React.useEffect(() => {
     const on = () => setMode(getSectionViewMode(s));
@@ -139,4 +187,3 @@ export function useSectionViewMode(section) {
 
   return { mode, setMode: set };
 }
-

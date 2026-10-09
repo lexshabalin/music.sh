@@ -872,6 +872,58 @@ select.lang-select {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+.entity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+.entity-row-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.entity-row-art.cover-art-placeholder {
+  display: flex;
+}
+.entity-row-art .pl-collage {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.entity-row-meta {
+  min-width: 0;
+  flex: 1;
+}
+.entity-row-title {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entity-row-sub {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plain-list li.entity-list-row {
+  gap: 10px;
+}
+.plain-list li.entity-list-row .tile-play-btn {
+  position: static;
+  width: 34px;
+  height: 34px;
+  opacity: 1;
+  transform: none;
+}
 .plain-list li.track-row,
 .plain-list li.track-header {
   justify-content: normal; /* override space-between for column alignment */

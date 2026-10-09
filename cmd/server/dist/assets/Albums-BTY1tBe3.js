@@ -1,0 +1,1 @@
+import{j as r}from"./index-CmJCFMFu.js";import{Library as t}from"./Library-Dtj3MiLc.js";import"./ViewModeControl-hmvPeIN8.js";function e(){return r.jsx(t,{pageTitleKey:"nav.albums"})}export{e as Albums};
