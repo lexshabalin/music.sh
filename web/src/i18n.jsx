@@ -227,6 +227,12 @@ const dict = {
     "playlist.deleteConfirm": "Удалить плейлист? Это действие нельзя отменить.",
 
     "likes.title": "Любимое",
+    "likes.searchLikes": "Искать в любимом…",
+
+    "tracks.searchSongs": "Искать треки…",
+    "albums.searchAlbums": "Искать альбомы…",
+    "genres.searchGenres": "Искать жанры…",
+    "playlist.searchPlaylists": "Искать плейлисты…",
 
     "artists.searchArtists": "Искать артистов…",
     "artists.back": "← Артисты",
@@ -503,6 +509,12 @@ const dict = {
     "playlist.deleteConfirm": "Delete this playlist? This cannot be undone.",
 
     "likes.title": "Likes",
+    "likes.searchLikes": "Search likes…",
+
+    "tracks.searchSongs": "Search songs…",
+    "albums.searchAlbums": "Search albums…",
+    "genres.searchGenres": "Search genres…",
+    "playlist.searchPlaylists": "Search playlists…",
 
     "artists.searchArtists": "Search artists…",
     "artists.back": "← Artists",

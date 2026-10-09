@@ -187,22 +187,32 @@ function CreatePlaylistModal({ onClose, onCreated }) {
 
 export function Playlists() {
   const { t } = useI18n();
+  const [q, setQ] = useState("");
   const [list, setList] = useState([]);
   const [err, setErr] = useState("");
   const [covers, setCovers] = useState({});
   const [showCreate, setShowCreate] = useState(false);
   const player = usePlayer();
+  useEffect(() => {
+    const id = setTimeout(() => {
+      lib
+        .playlists(q)
+        .then((x) => {
+          setErr("");
+          setList(Array.isArray(x) ? x : []);
+        })
+        .catch((e) => setErr(e.message || "error"));
+    }, 150);
+    return () => clearTimeout(id);
+  }, [q]);
   const load = () =>
     lib
-      .playlists("")
+      .playlists(q)
       .then((x) => {
         setErr("");
         setList(Array.isArray(x) ? x : []);
       })
       .catch((e) => setErr(e.message || "error"));
-  useEffect(() => {
-    load();
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,8 +240,10 @@ export function Playlists() {
 
   return (
     <div>
-      {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div className="search-row">
+        <div className="search" style={{ flex: 1, margin: 0 }}>
+          <input placeholder={t("playlist.searchPlaylists")} value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <button
           type="button"
           className="ghost icon-btn"
@@ -242,6 +254,7 @@ export function Playlists() {
           +
         </button>
       </div>
+      {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       <div className="grid">
         {list.map((p) => (
           <Link key={p.id} to={"/playlist/" + p.id} style={{ textDecoration: "none", color: "inherit" }}>

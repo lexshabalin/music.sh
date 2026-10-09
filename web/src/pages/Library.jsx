@@ -36,18 +36,24 @@ export function AlbumTile({ a, onPlay, playTitle }) {
 
 export function Library({ pageTitleKey }) {
   const { t } = useI18n();
-  // Global search + rescan live in the app shell now.
-  // Home page only shows the album grid.
+  // Rescan + omnibar live in the shell (Home). Albums page filters via local search.
+  const [q, setQ] = React.useState("");
   const [albums, setA] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const player = usePlayer();
 
   React.useEffect(() => {
-    lib
-      .albums("")
-      .then((x) => setA(Array.isArray(x) ? x : []))
-      .catch((e) => setMsg(e.message));
-  }, []);
+    const id = setTimeout(() => {
+      lib
+        .albums(q)
+        .then((x) => {
+          setMsg("");
+          setA(Array.isArray(x) ? x : []);
+        })
+        .catch((e) => setMsg(e.message));
+    }, 150);
+    return () => clearTimeout(id);
+  }, [q]);
   return (
     <div>
       {pageTitleKey ? (
@@ -55,6 +61,9 @@ export function Library({ pageTitleKey }) {
           {t(pageTitleKey)}
         </h2>
       ) : null}
+      <div className="search">
+        <input placeholder={t("albums.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
       {msg ? <p className="muted">{msg}</p> : null}
       <div className="grid">
         {albums.map((a) => (

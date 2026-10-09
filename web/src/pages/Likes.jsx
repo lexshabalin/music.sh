@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackRow } from "../components/TrackMenu";
@@ -11,9 +11,18 @@ import { MediaCover } from "../components/MediaCover";
 export function Likes() {
   const { t } = useI18n();
   const { mode, setMode } = useSectionViewMode("likes");
+  const [q, setQ] = useState("");
   const [tracks, setT] = useState([]);
   const p = usePlayer();
   const likedSet = new Set(tracks.map((t) => t.id));
+  const filtered = useMemo(() => {
+    const qq = (q || "").trim().toLowerCase();
+    if (!qq) return tracks;
+    return tracks.filter((tr) => {
+      const hay = [tr?.title, tr?.artist?.name, tr?.album?.title].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(qq);
+    });
+  }, [tracks, q]);
   const load = async () => {
     const res = await lib.likeIds();
     const trackIds = Array.isArray(res?.trackIds) ? res.trackIds : [];
@@ -24,8 +33,8 @@ export function Likes() {
     load();
   }, []);
 
-  const playAt = (startIdx) => {
-    const items = tracks.map((t) => ({
+  const playAt = (startIdx, list = filtered) => {
+    const items = list.map((t) => ({
       id: t.id,
       label: (t.artist ? t.artist.name + " — " : "") + (t.title || t("common.track")),
       url: lib.streamUrl(t.id),
@@ -63,12 +72,15 @@ export function Likes() {
 
   return (
     <div>
+      <div className="search">
+        <input placeholder={t("likes.searchLikes")} value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
         <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
       </div>
       {mode === "grid" ? (
         <div className="grid">
-          {tracks.map((tr, i) => {
+          {filtered.map((tr, i) => {
             const title = tr?.title || t("common.untitled");
             const artist = tr?.artist?.name || t("common.unknownArtist");
             const cover = effectiveTrackCoverUrl(tr);
@@ -92,7 +104,7 @@ export function Likes() {
         </div>
       ) : (
         <ul className="plain-list">
-          {tracks.map((t2, i) => (
+          {filtered.map((t2, i) => (
             <TrackRow
               key={t2.id}
               track={t2}

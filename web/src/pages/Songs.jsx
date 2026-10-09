@@ -75,6 +75,7 @@ function sortTracks(list, key, dir) {
 export function Songs() {
   const { t } = useI18n();
   const { mode, setMode } = useSectionViewMode("songs");
+  const [q, setQ] = React.useState("");
   const [tracks, setTracks] = React.useState([]);
   const [err, setErr] = React.useState("");
   const [liked, setLiked] = React.useState(new Set());
@@ -105,7 +106,7 @@ export function Songs() {
     setLoadingInitial(true);
     setErr("");
     try {
-      const x = await lib.tracks("", {}, { limit: SONGS_PAGE_SIZE, offset: 0 });
+      const x = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset: 0 });
       const safe = Array.isArray(x) ? x : [];
       setTracks(safe);
       const more = safe.length >= SONGS_PAGE_SIZE;
@@ -127,7 +128,7 @@ export function Songs() {
     } catch (_) {
       setLiked(new Set());
     }
-  }, []);
+  }, [q]);
 
   const loadMore = React.useCallback(async () => {
     if (!hasMoreRef.current || loadingMoreRef.current || loadingInitialRef.current) return;
@@ -137,7 +138,7 @@ export function Songs() {
 
     try {
       const offset = tracksLenRef.current;
-      const batch = await lib.tracks("", {}, { limit: SONGS_PAGE_SIZE, offset });
+      const batch = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset });
       const list = Array.isArray(batch) ? batch : [];
 
       if (!list.length) {
@@ -170,13 +171,16 @@ export function Songs() {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, []);
+  }, [q]);
 
   const loadMoreRef = React.useRef(loadMore);
   loadMoreRef.current = loadMore;
 
   React.useEffect(() => {
-    void reload();
+    const id = setTimeout(() => {
+      void reload();
+    }, 150);
+    return () => clearTimeout(id);
   }, [reload]);
 
   React.useEffect(() => {
@@ -254,7 +258,7 @@ export function Songs() {
     setShuffleBusy(true);
     setErr("");
     try {
-      const ids = await lib.trackIdsOnly("", {});
+      const ids = await lib.trackIdsOnly(q, {});
       if (!ids.length) return;
       const shuffledIds = shuffleCopy(ids);
       const rows = await lib.tracksByIds(shuffledIds, { concurrency: 8 });
@@ -287,6 +291,9 @@ export function Songs() {
 
   return (
     <div>
+      <div className="search">
+        <input placeholder={t("tracks.searchSongs")} value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
         <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
         <button

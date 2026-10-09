@@ -331,6 +331,9 @@ function BrandIcon() {
   );
 }
 
+// List routes that own an in-page search; hide the global omnibar there.
+const SECTION_HAS_LOCAL_SEARCH = new Set(["/songs", "/artists", "/albums", "/genres", "/playlists", "/likes"]);
+
 function Shell({ children }) {
   const location = useLocation();
   const p = usePlayer();
@@ -1929,7 +1932,7 @@ function Shell({ children }) {
           </aside>
         ) : null}
         <main className="main">
-          {getToken() ? <GlobalSearch /> : null}
+          {getToken() && !SECTION_HAS_LOCAL_SEARCH.has(location.pathname) ? <GlobalSearch /> : null}
           {children}
         </main>
       </div>
