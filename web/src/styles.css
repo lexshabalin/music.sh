@@ -2564,10 +2564,39 @@ select.lang-select {
 .home-stats-banner {
   margin-bottom: 1.5rem;
 }
+.home-stats-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0.75rem;
+}
 .home-stats-banner__title {
-  margin: 0 0 0.75rem 0;
+  margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
+}
+.home-period-btn .viewmode-label {
+  font-weight: 700;
+}
+.home-period-custom {
+  display: grid;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+}
+.home-period-custom__field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+.home-period-custom__field input[type="date"] {
+  width: 100%;
+}
+.home-period-apply {
+  justify-self: end;
+  margin-top: 2px;
 }
 .home-stats-grid {
   display: grid;

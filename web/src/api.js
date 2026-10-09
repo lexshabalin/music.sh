@@ -53,8 +53,17 @@ export const auth = {
     }),
   login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
-  /** Aggregated home dashboard: listen time, library counts, genre breakdown, recent albums. */
-  home: () => req("/api/me/home"),
+  /** Aggregated home dashboard: listen time, library counts, genre breakdown, recent albums.
+   * Optional `{ period, from, to }` (YYYY-MM-DD) filters listen + genre + recent by day rollups. */
+  home: (opts = {}) => {
+    const o = opts && typeof opts === "object" ? opts : {};
+    const params = new URLSearchParams();
+    if (o.period) params.set("period", String(o.period));
+    if (o.from) params.set("from", String(o.from));
+    if (o.to) params.set("to", String(o.to));
+    const q = params.toString();
+    return req("/api/me/home" + (q ? "?" + q : ""));
+  },
   setUILang: (lang) => req("/api/me/ui/lang", { method: "POST", body: JSON.stringify({ lang }) }),
   changePassword: (currentPassword, newPassword) =>
     req("/api/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),

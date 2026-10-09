@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"strings"
+	"time"
 )
 
 type homeGenreJSON struct {
@@ -10,12 +12,27 @@ type homeGenreJSON struct {
 }
 
 type homeOut struct {
-	ListenMsTotalMs  int64            `json:"listenMsTotal"`
-	LibraryAlbums    int64            `json:"libraryAlbums"`
-	LibraryArtists   int64            `json:"libraryArtists"`
-	LibraryTracks    int64            `json:"libraryTracks"`
-	ListeningByGenre []homeGenreJSON  `json:"listeningByGenre"`
-	RecentlyPlayed   []albumOut       `json:"recentlyPlayedAlbums"`
+	ListenMsTotalMs  int64           `json:"listenMsTotal"`
+	LibraryAlbums    int64           `json:"libraryAlbums"`
+	LibraryArtists   int64           `json:"libraryArtists"`
+	LibraryTracks    int64           `json:"libraryTracks"`
+	ListeningByGenre []homeGenreJSON `json:"listeningByGenre"`
+	RecentlyPlayed   []albumOut      `json:"recentlyPlayedAlbums"`
+	Period           string          `json:"period,omitempty"`
+	From             string          `json:"from,omitempty"`
+	To               string          `json:"to,omitempty"`
+}
+
+func parseHomeDay(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, time.UTC)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 func (a *App) homeDashboard(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +43,35 @@ func (a *App) homeDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	totalMs, genres, albumIDs, err := a.DB.GetHomeListeningStats(ctx, uid)
+	period := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("period")))
+	fromStr := strings.TrimSpace(r.URL.Query().Get("from"))
+	toStr := strings.TrimSpace(r.URL.Query().Get("to"))
+
+	var fromDay, toDay *time.Time
+	if fromStr != "" || toStr != "" || period == "day" || period == "week" || period == "month" || period == "custom" {
+		if fromStr == "" || toStr == "" {
+			JSONError(w, 400, "from and to required")
+			return
+		}
+		f, ok1 := parseHomeDay(fromStr)
+		t, ok2 := parseHomeDay(toStr)
+		if !ok1 || !ok2 {
+			JSONError(w, 400, "invalid from/to")
+			return
+		}
+		if t.Before(f) {
+			JSONError(w, 400, "to before from")
+			return
+		}
+		// Cap custom ranges so a bad client cannot scan forever.
+		if t.Sub(f) > 366*24*time.Hour {
+			JSONError(w, 400, "range too large")
+			return
+		}
+		fromDay, toDay = &f, &t
+	}
+
+	totalMs, genres, albumIDs, err := a.DB.GetHomeListeningStats(ctx, uid, fromDay, toDay)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return
@@ -50,12 +95,18 @@ func (a *App) homeDashboard(w http.ResponseWriter, r *http.Request) {
 		ao.CoverURL = a.albumCoverURLForAPI(alb)
 		recent = append(recent, ao)
 	}
-	JSON(w, 200, homeOut{
-		ListenMsTotalMs: totalMs,
-		LibraryAlbums:   nAlb,
-		LibraryArtists: nArt,
-		LibraryTracks:   nTr,
+	out := homeOut{
+		ListenMsTotalMs:  totalMs,
+		LibraryAlbums:    nAlb,
+		LibraryArtists:   nArt,
+		LibraryTracks:    nTr,
 		ListeningByGenre: gOut,
-		RecentlyPlayed: recent,
-	})
+		RecentlyPlayed:   recent,
+	}
+	if fromDay != nil && toDay != nil {
+		out.Period = period
+		out.From = fromDay.Format("2006-01-02")
+		out.To = toDay.Format("2006-01-02")
+	}
+	JSON(w, 200, out)
 }

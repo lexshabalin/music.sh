@@ -2622,12 +2622,23 @@ func (d *DB) AccumulateListeningFromPlayback(ctx context.Context, userID uuid.UU
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	day := now.UTC().Truncate(24 * time.Hour)
+
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO user_listen_stats (user_id, total_listen_ms)
 		VALUES ($1, $2::bigint)
 		ON CONFLICT (user_id) DO UPDATE SET
 			total_listen_ms = user_listen_stats.total_listen_ms + EXCLUDED.total_listen_ms
 	`, userID, wall); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO user_listen_day (user_id, day, listen_ms)
+		VALUES ($1, $2::date, $3::bigint)
+		ON CONFLICT (user_id, day) DO UPDATE SET
+			listen_ms = user_listen_day.listen_ms + EXCLUDED.listen_ms
+	`, userID, day, wall); err != nil {
 		return err
 	}
 
@@ -2663,6 +2674,14 @@ func (d *DB) AccumulateListeningFromPlayback(ctx context.Context, userID uuid.UU
 			ON CONFLICT (user_id, genre_id) DO UPDATE SET
 				listen_ms = user_listen_genre.listen_ms + EXCLUDED.listen_ms
 		`, userID, gid, ms); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO user_listen_genre_day (user_id, day, genre_id, listen_ms)
+			VALUES ($1, $2::date, $3, $4::bigint)
+			ON CONFLICT (user_id, day, genre_id) DO UPDATE SET
+				listen_ms = user_listen_genre_day.listen_ms + EXCLUDED.listen_ms
+		`, userID, day, gid, ms); err != nil {
 			return err
 		}
 	}
@@ -2717,42 +2736,92 @@ type HomeGenreListen struct {
 }
 
 // GetHomeListeningStats returns aggregates for the dashboard.
-func (d *DB) GetHomeListeningStats(ctx context.Context, userID uuid.UUID) (totalListenMs int64, genres []HomeGenreListen, recentAlbumIDs []uuid.UUID, err error) {
-	err = d.Pool.QueryRow(ctx, `SELECT total_listen_ms FROM user_listen_stats WHERE user_id = $1`, userID).Scan(&totalListenMs)
-	if err == pgx.ErrNoRows {
-		totalListenMs = 0
-		err = nil
-	}
-	if err != nil {
-		return 0, nil, nil, err
-	}
+// When fromDay and toDay are both set (inclusive calendar dates in UTC), listen time and
+// genre breakdown come from daily rollups; otherwise lifetime totals are used.
+// recentlyPlayedAlbums always uses last_listened_at (optionally filtered when a range is set).
+func (d *DB) GetHomeListeningStats(ctx context.Context, userID uuid.UUID, fromDay, toDay *time.Time) (totalListenMs int64, genres []HomeGenreListen, recentAlbumIDs []uuid.UUID, err error) {
+	ranged := fromDay != nil && toDay != nil && !fromDay.IsZero() && !toDay.IsZero()
 
-	rows, err := d.Pool.Query(ctx, `
-		SELECT lg.label, g.listen_ms::bigint
-		FROM user_listen_genre g
-		JOIN library_genres lg ON lg.id = g.genre_id
-		WHERE g.user_id = $1 AND g.listen_ms > 0
-		ORDER BY g.listen_ms DESC
-		LIMIT 24
-	`, userID)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var h HomeGenreListen
-		if err := rows.Scan(&h.Label, &h.ListenMs); err != nil {
+	if ranged {
+		err = d.Pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(listen_ms), 0)::bigint
+			FROM user_listen_day
+			WHERE user_id = $1 AND day >= $2::date AND day <= $3::date
+		`, userID, fromDay.UTC(), toDay.UTC()).Scan(&totalListenMs)
+		if err != nil {
 			return 0, nil, nil, err
 		}
-		genres = append(genres, h)
-	}
-	if err := rows.Err(); err != nil {
-		return 0, nil, nil, err
+		rows, qerr := d.Pool.Query(ctx, `
+			SELECT lg.label, SUM(g.listen_ms)::bigint
+			FROM user_listen_genre_day g
+			JOIN library_genres lg ON lg.id = g.genre_id
+			WHERE g.user_id = $1 AND g.day >= $2::date AND g.day <= $3::date AND g.listen_ms > 0
+			GROUP BY lg.label
+			ORDER BY SUM(g.listen_ms) DESC
+			LIMIT 24
+		`, userID, fromDay.UTC(), toDay.UTC())
+		if qerr != nil {
+			return 0, nil, nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var h HomeGenreListen
+			if err := rows.Scan(&h.Label, &h.ListenMs); err != nil {
+				return 0, nil, nil, err
+			}
+			genres = append(genres, h)
+		}
+		if err := rows.Err(); err != nil {
+			return 0, nil, nil, err
+		}
+	} else {
+		err = d.Pool.QueryRow(ctx, `SELECT total_listen_ms FROM user_listen_stats WHERE user_id = $1`, userID).Scan(&totalListenMs)
+		if err == pgx.ErrNoRows {
+			totalListenMs = 0
+			err = nil
+		}
+		if err != nil {
+			return 0, nil, nil, err
+		}
+
+		rows, qerr := d.Pool.Query(ctx, `
+			SELECT lg.label, g.listen_ms::bigint
+			FROM user_listen_genre g
+			JOIN library_genres lg ON lg.id = g.genre_id
+			WHERE g.user_id = $1 AND g.listen_ms > 0
+			ORDER BY g.listen_ms DESC
+			LIMIT 24
+		`, userID)
+		if qerr != nil {
+			return 0, nil, nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var h HomeGenreListen
+			if err := rows.Scan(&h.Label, &h.ListenMs); err != nil {
+				return 0, nil, nil, err
+			}
+			genres = append(genres, h)
+		}
+		if err := rows.Err(); err != nil {
+			return 0, nil, nil, err
+		}
 	}
 
-	r2, err := d.Pool.Query(ctx, `
-		SELECT album_id FROM user_listen_album WHERE user_id = $1 ORDER BY last_listened_at DESC LIMIT 10
-	`, userID)
+	var r2 pgx.Rows
+	if ranged {
+		// Inclusive end day → exclusive upper bound next UTC midnight.
+		endExclusive := toDay.UTC().Add(24 * time.Hour)
+		r2, err = d.Pool.Query(ctx, `
+			SELECT album_id FROM user_listen_album
+			WHERE user_id = $1 AND last_listened_at >= $2 AND last_listened_at < $3
+			ORDER BY last_listened_at DESC LIMIT 10
+		`, userID, fromDay.UTC(), endExclusive)
+	} else {
+		r2, err = d.Pool.Query(ctx, `
+			SELECT album_id FROM user_listen_album WHERE user_id = $1 ORDER BY last_listened_at DESC LIMIT 10
+		`, userID)
+	}
 	if err != nil {
 		return 0, genres, nil, err
 	}
