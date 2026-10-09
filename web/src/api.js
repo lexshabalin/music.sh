@@ -162,7 +162,9 @@ export const lib = {
    * Track list. Filters: `{ albumId, artistId, genreId }` (omit unused).
    * @param {string} [query]
    * @param {{ albumId?: string; artistId?: string; genreId?: string }} [filters]
-   * @param {{ limit?: number; offset?: number; only?: "ids" }} [opts] `only: "ids"` → `{ trackIds: string[] }` (lightweight; same filters).
+   * @param {{ limit?: number; offset?: number; only?: "ids"; sort?: "title"|"artist"|"album"; dir?: "asc"|"desc" }} [opts]
+   *   `only: "ids"` → `{ trackIds: string[] }` (lightweight; same filters).
+   *   `sort`/`dir` apply server-side across the full result (needed for paginated Songs).
    */
   tracks: (query = "", filters = {}, opts = {}) => {
     const o = opts && typeof opts === "object" ? opts : {};
@@ -173,6 +175,8 @@ export const lib = {
     if (o.only === "ids") params.set("only", "ids");
     if (Number.isFinite(o.limit) && o.limit > 0) params.set("limit", String(o.limit));
     if (Number.isFinite(o.offset) && o.offset > 0) params.set("offset", String(o.offset));
+    if (o.sort === "title" || o.sort === "artist" || o.sort === "album") params.set("sort", o.sort);
+    if (o.dir === "asc" || o.dir === "desc") params.set("dir", o.dir);
     return req("/api/tracks?" + params);
   },
   /** All matching track ids (strings); same filters as `tracks()`; for shuffle / bulk without loading full rows. */

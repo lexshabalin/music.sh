@@ -1145,9 +1145,31 @@ func scanAlbums(rows pgx.Rows) ([]Album, error) {
 	return out, rows.Err()
 }
 
-func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID, limit, offset int) ([]Track, error) {
+// trackListOrderBy returns a whitelist-only ORDER BY clause (sortBy/sortDir never concatenated raw).
+func trackListOrderBy(sortBy, sortDir string) string {
+	dir := "ASC"
+	if strings.EqualFold(strings.TrimSpace(sortDir), "desc") {
+		dir = "DESC"
+	}
+	titleExpr := `COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title)`
+	albumExpr := `COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title)`
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "title":
+		return `lower(` + titleExpr + `) ` + dir + ` NULLS LAST, t.id ASC`
+	case "artist":
+		return `lower(` + sqlDispTrackPerformer + `) ` + dir + ` NULLS LAST, lower(` + titleExpr + `) ASC NULLS LAST, t.id ASC`
+	case "album":
+		return `lower(` + albumExpr + `) ` + dir + ` NULLS LAST, lower(` + titleExpr + `) ASC NULLS LAST, t.id ASC`
+	default:
+		// Library / album browse: group by performer → album → disc/track.
+		return sqlDispTrackPerformer + ` NULLS LAST, ` + albumExpr + ` NULLS LAST, COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST, COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST, ` + titleExpr + ` NULLS FIRST, t.id ASC`
+	}
+}
+
+func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, genreID *uuid.UUID, limit, offset int, sortBy, sortDir string) ([]Track, error) {
 	qs := strings.TrimSpace(query)
 	like := "%" + qs + "%"
+	orderBy := trackListOrderBy(sortBy, sortDir)
 	baseSQL := `
 		SELECT
 			t.id,
@@ -1187,13 +1209,7 @@ func (d *DB) ListTracks(ctx context.Context, query string, albumID, artistID, ge
 				AND EXISTS (SELECT 1 FROM album_genres ag WHERE ag.album_id = t.album_id AND ag.genre_id = $5)
 			)
 		))
-		ORDER BY
-			`+sqlDispTrackPerformer+` NULLS LAST,
-			COALESCE(NULLIF(BTRIM(t.meta_user_album), ''), NULLIF(BTRIM(al.meta_user_title), ''), al.title) NULLS LAST,
-			COALESCE(t.meta_user_disc_no, t.disc_no) NULLS FIRST,
-			COALESCE(t.meta_user_track_no, t.track_no) NULLS FIRST,
-			COALESCE(NULLIF(BTRIM(t.meta_user_title), ''), t.title) NULLS FIRST,
-			t.id ASC`
+		ORDER BY ` + orderBy
 	var (
 		rows pgx.Rows
 		err  error

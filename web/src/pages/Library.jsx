@@ -46,7 +46,7 @@ export function AlbumTile({ a, onPlay, playTitle }) {
   );
 }
 
-export function Library({ pageTitleKey }) {
+export function Library() {
   const { t } = useI18n();
   const { mode, setMode } = useSectionViewMode("albums");
   // Rescan + omnibar live in the shell (Home). Albums page filters via local search.
@@ -91,11 +91,6 @@ export function Library({ pageTitleKey }) {
 
   return (
     <div>
-      {pageTitleKey ? (
-        <h2 className="home-page-title" style={{ marginTop: 0 }}>
-          {t(pageTitleKey)}
-        </h2>
-      ) : null}
       <div className="search-row">
         <div className="search" style={{ flex: 1, margin: 0 }}>
           <input placeholder={t("albums.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />

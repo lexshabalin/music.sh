@@ -72,10 +72,10 @@ export function Likes() {
 
   return (
     <div>
-      <div className="search">
-        <input placeholder={t("likes.searchLikes")} value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+      <div className="search-row">
+        <div className="search" style={{ flex: 1, margin: 0 }}>
+          <input placeholder={t("likes.searchLikes")} value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
       </div>
       {mode === "grid" ? (

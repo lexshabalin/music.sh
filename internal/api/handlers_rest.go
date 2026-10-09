@@ -553,7 +553,9 @@ func (a *App) listTracks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID, genreID, limit, offset)
+	sortBy := strings.TrimSpace(r.URL.Query().Get("sort"))
+	sortDir := strings.TrimSpace(r.URL.Query().Get("dir"))
+	list, err := a.DB.ListTracks(r.Context(), q, albumID, artistID, genreID, limit, offset, sortBy, sortDir)
 	if err != nil {
 		JSONError(w, 500, "db")
 		return

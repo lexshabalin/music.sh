@@ -107,7 +107,7 @@ export function Songs() {
     setLoadingInitial(true);
     setErr("");
     try {
-      const x = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset: 0 });
+      const x = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset: 0, sort: sortKey, dir: sortDir });
       const safe = Array.isArray(x) ? x : [];
       setTracks(safe);
       const more = safe.length >= SONGS_PAGE_SIZE;
@@ -129,7 +129,7 @@ export function Songs() {
     } catch (_) {
       setLiked(new Set());
     }
-  }, [q]);
+  }, [q, sortKey, sortDir]);
 
   const loadMore = React.useCallback(async () => {
     if (!hasMoreRef.current || loadingMoreRef.current || loadingInitialRef.current) return;
@@ -139,7 +139,7 @@ export function Songs() {
 
     try {
       const offset = tracksLenRef.current;
-      const batch = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset });
+      const batch = await lib.tracks(q, {}, { limit: SONGS_PAGE_SIZE, offset, sort: sortKey, dir: sortDir });
       const list = Array.isArray(batch) ? batch : [];
 
       if (!list.length) {
@@ -172,7 +172,7 @@ export function Songs() {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [q]);
+  }, [q, sortKey, sortDir]);
 
   const loadMoreRef = React.useRef(loadMore);
   loadMoreRef.current = loadMore;
