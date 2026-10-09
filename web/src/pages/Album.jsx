@@ -847,8 +847,8 @@ export function Album() {
   return (
     <div>
       <p>
-        <Link to="/" className="muted">
-          ← {t("nav.home")}
+        <Link to="/albums" className="muted">
+          ← {t("nav.albums")}
         </Link>
       </p>
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "1rem" }}>
