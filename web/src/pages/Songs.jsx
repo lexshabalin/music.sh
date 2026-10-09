@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { effectiveTrackCoverUrl, lib, trackFormatForPlayback } from "../api";
 import { usePlayer } from "../usePlayer";
 import { TrackHeader, TrackRow } from "../components/TrackMenu";
@@ -291,10 +292,10 @@ export function Songs() {
 
   return (
     <div>
-      <div className="search">
-        <input placeholder={t("tracks.searchSongs")} value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+      <div className="search-row">
+        <div className="search" style={{ flex: 1, margin: 0 }}>
+          <input placeholder={t("tracks.searchSongs")} value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
         <button
           type="button"
@@ -320,6 +321,7 @@ export function Songs() {
               const cover = effectiveTrackCoverUrl(tr);
               const title = tr?.title || t("common.untitled");
               const artist = tr?.artist?.name || t("common.unknownArtist");
+              const artistId = tr?.artist?.id;
               const album = tr?.album?.title || "";
               return (
                 <div
@@ -353,7 +355,17 @@ export function Songs() {
                   <div className="album-meta" style={{ minHeight: 90 }}>
                     <div className="album-title">{title}</div>
                     <div className="album-sub" style={{ justifyContent: "flex-start" }}>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{artist}</span>
+                      {artistId ? (
+                        <Link
+                          to={"/artist/" + artistId}
+                          className="album-artist-link"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {artist}
+                        </Link>
+                      ) : (
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{artist}</span>
+                      )}
                     </div>
                     {album ? (
                       <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

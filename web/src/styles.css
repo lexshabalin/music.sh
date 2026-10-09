@@ -905,6 +905,12 @@ select.lang-select {
   text-decoration: none;
   color: inherit;
 }
+.entity-row-art-link {
+  flex-shrink: 0;
+  line-height: 0;
+  text-decoration: none;
+  color: inherit;
+}
 .entity-row-art {
   width: 44px;
   height: 44px;
@@ -912,6 +918,9 @@ select.lang-select {
   object-fit: cover;
   flex-shrink: 0;
   overflow: hidden;
+}
+.entity-row-title.album-title-link {
+  display: block;
 }
 .entity-row-art.cover-art-placeholder {
   display: flex;
@@ -1122,6 +1131,10 @@ select.lang-select {
   font-size: 18px;
   line-height: 1;
 }
+.track-title-block {
+  min-width: 0;
+  overflow: hidden;
+}
 .track-title {
   cursor: pointer;
   user-select: none;
@@ -1131,6 +1144,7 @@ select.lang-select {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+  max-width: 100%;
 }
 .track-title-btn {
   /* When .track-title is used on a <button> (mobile tap), remove native button chrome */

@@ -210,7 +210,7 @@ export function TrackRow({
     const target = e.target;
     const moreBtn = target?.closest?.('button[data-action="more"]');
     const likeBtn = target?.closest?.('button[data-action="like"]');
-    if (moreBtn || likeBtn) return;
+    if (moreBtn || likeBtn || target?.closest?.("a")) return;
 
     suppressClickRef.current = true;
     onPlayAt(index);
@@ -262,35 +262,43 @@ export function TrackRow({
                 : "—"}
             </div>
           ) : null}
-          <button
-            type="button"
-            className="track-title track-title-btn"
-            onClick={() => {
-              if (suppressClickRef.current) {
-                suppressClickRef.current = false;
-                return;
-              }
-              onPlayAt(index);
-            }}
-            aria-label={`${t("tracks.playAria")} ${label}`}
-          >
-            {columns === "album" && titleText != null ? (
-              <>
-                <span className="track-title-text track-title-text--album-desktop">{titleText}</span>
-                <span className="track-title-text track-title-text--album-mobile">{label}</span>
-              </>
-            ) : (
-              <span className="track-title-text">{label}</span>
-            )}
-            <span className="track-mobile-sub muted">
-              {artistName || t("common.unknownArtist")}
+          <div className="track-title-block">
+            <button
+              type="button"
+              className="track-title track-title-btn"
+              onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
+                onPlayAt(index);
+              }}
+              aria-label={`${t("tracks.playAria")} ${label}`}
+            >
+              {columns === "album" && titleText != null ? (
+                <>
+                  <span className="track-title-text track-title-text--album-desktop">{titleText}</span>
+                  <span className="track-title-text track-title-text--album-mobile">{label}</span>
+                </>
+              ) : (
+                <span className="track-title-text">{label}</span>
+              )}
+            </button>
+            <div className="track-mobile-sub muted">
+              {track?.artist?.id ? (
+                <Link to={"/artist/" + track.artist.id} className="album-artist-link">
+                  {artistName || t("common.unknownArtist")}
+                </Link>
+              ) : (
+                <span>{artistName || t("common.unknownArtist")}</span>
+              )}
               {albumTitle ? ` • ${albumTitle}` : ""}
-            </span>
-          </button>
+            </div>
+          </div>
 
           <div className="track-col track-artist">
             {track?.artist?.id ? (
-              <Link to={"/artist/" + track.artist.id} className="muted" style={{ textDecoration: "none" }}>
+              <Link to={"/artist/" + track.artist.id} className="muted album-artist-link">
                 {artistName || t("common.unknownArtist")}
               </Link>
             ) : (

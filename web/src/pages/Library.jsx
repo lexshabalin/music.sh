@@ -107,15 +107,26 @@ export function Library({ pageTitleKey }) {
         <ul className="plain-list">
           {albums.map((a) => (
             <li key={a.id} className="entity-list-row">
-              <Link to={"/album/" + a.id} className="entity-row">
-                <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="entity-row-art" alt="" />
+              <div className="entity-row">
+                <Link to={"/album/" + a.id} className="entity-row-art-link" aria-label={a.title || ""}>
+                  <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="entity-row-art" alt="" />
+                </Link>
                 <div className="entity-row-meta">
-                  <div className="entity-row-title">{a.title}</div>
+                  <Link to={"/album/" + a.id} className="entity-row-title album-title-link">
+                    {a.title}
+                  </Link>
                   <div className="entity-row-sub muted">
-                    {[a.artistName || "—", a.year].filter(Boolean).join(" • ")}
+                    {a.artistId ? (
+                      <Link to={"/artist/" + a.artistId} className="album-artist-link">
+                        {a.artistName || "—"}
+                      </Link>
+                    ) : (
+                      <span>{a.artistName || "—"}</span>
+                    )}
+                    {a.year != null && a.year !== "" ? ` • ${a.year}` : ""}
                   </div>
                 </div>
-              </Link>
+              </div>
               <button
                 type="button"
                 className="tile-play-btn"
