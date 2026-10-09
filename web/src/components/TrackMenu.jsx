@@ -292,7 +292,18 @@ export function TrackRow({
               ) : (
                 <span>{artistName || t("common.unknownArtist")}</span>
               )}
-              {albumTitle ? ` • ${albumTitle}` : ""}
+              {albumTitle ? (
+                <>
+                  {" • "}
+                  {track?.album?.id ? (
+                    <Link to={"/album/" + track.album.id} className="album-artist-link">
+                      {albumTitle}
+                    </Link>
+                  ) : (
+                    albumTitle
+                  )}
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -308,7 +319,13 @@ export function TrackRow({
 
           {columns === "full" ? (
             <div className="track-col track-album">
-              <span className="muted">{albumTitle || t("common.unknown")}</span>
+              {track?.album?.id ? (
+                <Link to={"/album/" + track.album.id} className="muted album-artist-link">
+                  {albumTitle || t("common.unknown")}
+                </Link>
+              ) : (
+                <span className="muted">{albumTitle || t("common.unknown")}</span>
+              )}
             </div>
           ) : (
             <div className="track-col track-album track-album--hidden" aria-hidden="true" />
