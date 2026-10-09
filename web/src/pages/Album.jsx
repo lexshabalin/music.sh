@@ -854,27 +854,18 @@ export function Album() {
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "1rem" }}>
         <div style={{ display: "flex", gap: "1rem", minWidth: 0 }}>
         <MediaCover src={a?.coverUrl ? lib.coverUrl(a.id) : ""} className="cover-thumb-header" alt="" />
-        <div style={{ minWidth: 0 }}>
-          <h2 style={{ margin: 0 }}>
-            {a?.title || t("album.editTitle")}
-            {a?.year != null ? (
-              <span className="muted" style={{ fontWeight: 400 }}>
-                {" "}
-                ({a.year})
-              </span>
-            ) : null}
-          </h2>
+        <div className="album-page-meta">
+          <h2 className="album-page-title">{a?.title || t("album.editTitle")}</h2>
           {a?.artistId ? (
-            <Link to={"/artist/" + a.artistId} className="muted album-artist-link">
+            <Link to={"/artist/" + a.artistId} className="muted album-artist-link album-page-artist">
               {a.artistName}
             </Link>
           ) : (
-            <div className="muted">{a?.artistName}</div>
+            <div className="muted album-page-artist">{a?.artistName}</div>
           )}
+          {a?.year != null ? <div className="muted album-page-year">({a.year})</div> : null}
           {Array.isArray(a?.genres) && a.genres.length ? (
-            <div className="muted" style={{ marginTop: 4 }}>
-              {a.genres.join(" · ")}
-            </div>
+            <div className="muted album-page-genres">{a.genres.join(" · ")}</div>
           ) : null}
         </div>
         </div>
