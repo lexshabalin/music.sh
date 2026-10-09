@@ -625,6 +625,30 @@ select.lang-select {
   color: var(--muted);
   font-size: 0.8rem;
 }
+.album-tile-cover {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.album-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.album-title-link:hover {
+  text-decoration: underline;
+}
+.album-artist-link {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-artist-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
 .album-year {
   flex: 0 0 auto;
 }

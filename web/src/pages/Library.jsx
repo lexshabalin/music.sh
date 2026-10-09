@@ -9,30 +9,40 @@ import { ViewModeControl } from "../components/ViewModeControl";
 import { useSectionViewMode } from "../viewPrefs";
 
 export function AlbumTile({ a, onPlay, playTitle }) {
+  const artistId = a?.artistId;
+  const artistName = a?.artistName || "—";
   return (
-    <Link key={a.id} to={"/album/" + a.id} style={{ textDecoration: "none", color: "inherit" }}>
-      <div className="card album-tile">
-        <div className="tile-media">
+    <div className="card album-tile">
+      <div className="tile-media">
+        <Link to={"/album/" + a.id} className="album-tile-cover" aria-label={a.title || ""}>
           <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
-          <button
-            type="button"
-            className="tile-play-btn"
-            title={playTitle}
-            aria-label={playTitle}
-            onClick={onPlay}
-          >
-            <IPlay size={16} />
-          </button>
-        </div>
-        <div className="album-meta">
-          <div className="album-title">{a.title}</div>
-          <div className="album-sub">
-            <span>{a.artistName || "—"}</span>
-            {a.year ? <span className="album-year">{a.year}</span> : null}
-          </div>
+        </Link>
+        <button
+          type="button"
+          className="tile-play-btn"
+          title={playTitle}
+          aria-label={playTitle}
+          onClick={onPlay}
+        >
+          <IPlay size={16} />
+        </button>
+      </div>
+      <div className="album-meta">
+        <Link to={"/album/" + a.id} className="album-title album-title-link">
+          {a.title}
+        </Link>
+        <div className="album-sub">
+          {artistId ? (
+            <Link to={"/artist/" + artistId} className="album-artist-link">
+              {artistName}
+            </Link>
+          ) : (
+            <span>{artistName}</span>
+          )}
+          {a.year ? <span className="album-year">{a.year}</span> : null}
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

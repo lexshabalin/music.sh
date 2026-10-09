@@ -864,7 +864,13 @@ export function Album() {
               </span>
             ) : null}
           </h2>
-          <div className="muted">{a?.artistName}</div>
+          {a?.artistId ? (
+            <Link to={"/artist/" + a.artistId} className="muted album-artist-link">
+              {a.artistName}
+            </Link>
+          ) : (
+            <div className="muted">{a?.artistName}</div>
+          )}
           {Array.isArray(a?.genres) && a.genres.length ? (
             <div className="muted" style={{ marginTop: 4 }}>
               {a.genres.join(" · ")}
