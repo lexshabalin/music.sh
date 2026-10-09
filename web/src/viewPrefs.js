@@ -18,6 +18,7 @@ export const SECTIONS = /** @type {const} */ ([
   "home",
   "songs",
   "artists",
+  "artist",
   "albums",
   "genres",
   "playlists",
@@ -33,6 +34,7 @@ export const DEFAULT_VIEW_BY_SECTION = {
   home: "grid",
   songs: "table",
   artists: "grid",
+  artist: "grid",
   albums: "grid",
   genres: "grid",
   playlists: "grid",
@@ -73,7 +75,7 @@ function normalizeMode(m) {
 
 export function allowedModesForSection(section) {
   const s = normalizeSection(section);
-  if (s === "songs" || s === "artists" || s === "albums" || s === "playlists" || s === "likes") {
+  if (s === "songs" || s === "artists" || s === "artist" || s === "albums" || s === "playlists" || s === "likes") {
     return ["table", "grid"];
   }
   return ["grid"];

@@ -335,6 +335,14 @@ function BrandIcon() {
 // List routes that own an in-page search; hide the global omnibar there.
 const SECTION_HAS_LOCAL_SEARCH = new Set(["/songs", "/artists", "/albums", "/genres", "/playlists", "/likes"]);
 
+function hideShellGlobalSearch(pathname) {
+  const p = String(pathname || "");
+  if (SECTION_HAS_LOCAL_SEARCH.has(p)) return true;
+  // Artist albums page has its own album filter; hide omnibar + rescan pulse.
+  if (p.startsWith("/artist/")) return true;
+  return false;
+}
+
 function Shell({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -1978,7 +1986,7 @@ function Shell({ children }) {
           </aside>
         ) : null}
         <main className="main">
-          {getToken() && !SECTION_HAS_LOCAL_SEARCH.has(location.pathname) ? <GlobalSearch /> : null}
+          {getToken() && !hideShellGlobalSearch(location.pathname) ? <GlobalSearch /> : null}
           {children}
         </main>
       </div>

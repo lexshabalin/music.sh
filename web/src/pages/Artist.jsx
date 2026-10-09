@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { effectiveTrackCoverUrl, getToken, lib, trackFormatForPlayback } from "../api";
 import { MissingLibraryItemDialog } from "../components/MissingLibraryItemDialog";
@@ -7,16 +7,16 @@ import { usePlayer } from "../usePlayer";
 import { IPlay } from "../components/icons";
 import { MediaCover } from "../components/MediaCover";
 import { useI18n } from "../i18n";
-
-function ArtistPagePortrait({ artistId }) {
-  const src = artistId ? lib.artistImageUrl(artistId) : "";
-  return <MediaCover src={src} className="artist-page-portrait" alt="" loading="lazy" decoding="async" />;
-}
+import { ViewModeControl } from "../components/ViewModeControl";
+import { useSectionViewMode } from "../viewPrefs";
+import { AlbumTile } from "./Library";
+import { sortAlbumsByYearAsc } from "./artistAlbumsSort";
 
 export function Artist() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { mode, setMode } = useSectionViewMode("artist");
   const [q, setQ] = useState("");
   const [albums, setAlbums] = useState([]);
   const [err, setErr] = useState("");
@@ -29,7 +29,7 @@ export function Artist() {
   const player = usePlayer();
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       lib
         .albums(q, id)
         .then((x) => {
@@ -38,7 +38,7 @@ export function Artist() {
         })
         .catch((e) => setErr(e.message || "error"));
     }, 150);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q, id]);
 
   useEffect(() => {
@@ -79,18 +79,43 @@ export function Artist() {
     };
   }, [id, missingRefresh]);
 
+  const sortedAlbums = useMemo(() => sortAlbumsByYearAsc(albums), [albums]);
+
+  const albumLinkState = (a) => ({ fromArtistId: id, fromArtistName: a.artistName || "" });
+
+  const playAlbum = async (e, a) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const tr = await lib.tracks("", { albumId: a.id });
+      const items = (Array.isArray(tr) ? tr : []).map((trk) => ({
+        id: trk.id,
+        label: (trk.artist ? trk.artist.name + " — " : "") + (trk.title || t("common.track")),
+        url: lib.streamUrl(trk.id),
+        artist: trk.artist?.name || "",
+        artistId: trk.artist?.id || id || "",
+        title: trk.title || t("common.track"),
+        album: trk.album?.title || a.title || "",
+        albumId: trk.album?.id || a.id || "",
+        coverUrl: effectiveTrackCoverUrl(trk) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
+        format: trackFormatForPlayback(trk),
+      }));
+      if (items.length) player.playQueue(items, 0);
+    } catch (_) {}
+  };
+
   return (
     <div>
-      <div className="artist-page-head">
-        <ArtistPagePortrait artistId={id} />
-        <p className="artist-page-back">
-          <Link to="/artists" className="muted">
-            {t("artists.back")}
-          </Link>
-        </p>
-      </div>
-      <div className="search">
-        <input placeholder={t("artists.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />
+      <p className="artist-page-back">
+        <Link to="/artists" className="muted">
+          {t("artists.back")}
+        </Link>
+      </p>
+      <div className="search-row">
+        <div className="search" style={{ flex: 1, margin: 0 }}>
+          <input placeholder={t("artists.searchAlbums")} value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       {getToken() && missingIds.length > 0 ? (
@@ -180,59 +205,54 @@ export function Artist() {
             document.body,
           )
         : null}
-      <div className="grid">
-        {albums.map((a) => (
-          <Link
-            key={a.id}
-            to={"/album/" + a.id}
-            state={{ fromArtistId: id, fromArtistName: a.artistName || "" }}
-            style={{ textDecoration: "none", color: "inherit" }}
-          >
-            <div className="card album-tile">
-              <div className="tile-media">
-                <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
-                <button
-                  type="button"
-                  className="tile-play-btn"
-                  title={t("library.playAlbum")}
-                  aria-label={t("library.playAlbum")}
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    try {
-                      const tr = await lib.tracks("", { albumId: a.id });
-                      const items = (Array.isArray(tr) ? tr : []).map((trk) => ({
-                        id: trk.id,
-                        label:
-                          (trk.artist ? trk.artist.name + " — " : "") + (trk.title || t("common.track")),
-                        url: lib.streamUrl(trk.id),
-                        artist: trk.artist?.name || "",
-                        artistId: trk.artist?.id || id || "",
-                        title: trk.title || t("common.track"),
-                        album: trk.album?.title || a.title || "",
-                        albumId: trk.album?.id || a.id || "",
-                        coverUrl: effectiveTrackCoverUrl(trk) || (a.coverUrl ? lib.coverUrl(a.id) : ""),
-                        format: trackFormatForPlayback(trk),
-                      }));
-                      if (items.length) player.playQueue(items, 0);
-                    } catch (x) {}
-                  }}
+      {mode === "table" ? (
+        <ul className="plain-list">
+          {sortedAlbums.map((a) => (
+            <li key={a.id} className="entity-list-row">
+              <div className="entity-row">
+                <Link
+                  to={"/album/" + a.id}
+                  state={albumLinkState(a)}
+                  className="entity-row-art-link"
+                  aria-label={a.title || ""}
                 >
-                  <IPlay size={16} />
-                </button>
-              </div>
-              <div className="album-meta">
-                <div className="album-title">{a.title}</div>
-                <div className="album-sub">
-                  <span>{a.artistName || t("common.unknown")}</span>
-                  {a.year ? <span className="album-year">{a.year}</span> : null}
+                  <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="entity-row-art" alt="" />
+                </Link>
+                <div className="entity-row-meta">
+                  <Link to={"/album/" + a.id} state={albumLinkState(a)} className="entity-row-title album-title-link">
+                    {a.title}
+                  </Link>
+                  <div className="entity-row-sub muted">
+                    <span>{a.artistName || "—"}</span>
+                    {a.year != null && a.year !== "" ? ` • ${a.year}` : ""}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+              <button
+                type="button"
+                className="tile-play-btn"
+                title={t("library.playAlbum")}
+                aria-label={t("library.playAlbum")}
+                onClick={(e) => playAlbum(e, a)}
+              >
+                <IPlay size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="grid">
+          {sortedAlbums.map((a) => (
+            <AlbumTile
+              key={a.id}
+              a={a}
+              playTitle={t("library.playAlbum")}
+              onPlay={(e) => playAlbum(e, a)}
+              linkState={albumLinkState(a)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-

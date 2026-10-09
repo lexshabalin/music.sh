@@ -8,13 +8,13 @@ import { MediaCover } from "../components/MediaCover";
 import { ViewModeControl } from "../components/ViewModeControl";
 import { useSectionViewMode } from "../viewPrefs";
 
-export function AlbumTile({ a, onPlay, playTitle }) {
+export function AlbumTile({ a, onPlay, playTitle, linkState }) {
   const artistId = a?.artistId;
   const artistName = a?.artistName || "—";
   return (
     <div className="card album-tile">
       <div className="tile-media">
-        <Link to={"/album/" + a.id} className="album-tile-cover" aria-label={a.title || ""}>
+        <Link to={"/album/" + a.id} state={linkState} className="album-tile-cover" aria-label={a.title || ""}>
           <MediaCover src={a.coverUrl ? lib.coverUrl(a.id) : ""} className="album-art" alt="" />
         </Link>
         <button
@@ -28,7 +28,7 @@ export function AlbumTile({ a, onPlay, playTitle }) {
         </button>
       </div>
       <div className="album-meta">
-        <Link to={"/album/" + a.id} className="album-title album-title-link">
+        <Link to={"/album/" + a.id} state={linkState} className="album-title album-title-link">
           {a.title}
         </Link>
         <div className="album-sub">
