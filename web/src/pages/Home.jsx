@@ -150,7 +150,6 @@ export function Home() {
       {msg ? <p className="muted">{msg}</p> : null}
 
       <section className="card home-stats-banner">
-        <h2 className="home-stats-banner__title">{t("home.statsTitle")}</h2>
         <div className="home-stats-grid">
           <Link to="/stats" className="home-stat-card">
             <div className="home-stat-value">{fmtListenMs(dash?.listenMsTotal ?? 0)}</div>
