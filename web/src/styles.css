@@ -2682,6 +2682,115 @@ select.lang-select {
   }
 }
 
+.home-period-btn .viewmode-label {
+  font-weight: 700;
+}
+.home-period-custom {
+  display: grid;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+}
+.home-period-custom__field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+.home-period-custom__field input[type="date"] {
+  width: 100%;
+}
+.home-period-apply {
+  justify-self: end;
+  margin-top: 2px;
+}
+
+.stats-page__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+.stats-kpi {
+  padding: 14px 16px;
+  margin-bottom: 1rem;
+}
+.stats-kpi__value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.stats-kpi__label {
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+.stats-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.stats-panel {
+  padding: 14px 16px;
+  min-width: 0;
+}
+.stats-panel__title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.stats-genre-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.25rem;
+}
+.stats-bars {
+  display: grid;
+  gap: 10px;
+}
+.stats-bars__row {
+  display: grid !important;
+  gap: 6px;
+  padding: 0 !important;
+  border: none !important;
+}
+.stats-bars__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.stats-bars__name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stats-bars__ms {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.stats-bars__track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.stats-bars__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 99, 71, 0.85);
+}
+@media (max-width: 820px) {
+  .stats-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Songs: infinite-scroll loader — monochrome dotted ring like classic GIF throbbers */
 .songs-infinite-sentinel {
   width: 100%;

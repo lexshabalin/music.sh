@@ -64,6 +64,16 @@ export const auth = {
     const q = params.toString();
     return req("/api/me/home" + (q ? "?" + q : ""));
   },
+  /** Listening stats page: total + genre/artist breakdown for an inclusive date range. */
+  stats: (opts = {}) => {
+    const o = opts && typeof opts === "object" ? opts : {};
+    const params = new URLSearchParams();
+    if (o.period) params.set("period", String(o.period));
+    if (o.from) params.set("from", String(o.from));
+    if (o.to) params.set("to", String(o.to));
+    const q = params.toString();
+    return req("/api/me/stats" + (q ? "?" + q : ""));
+  },
   setUILang: (lang) => req("/api/me/ui/lang", { method: "POST", body: JSON.stringify({ lang }) }),
   changePassword: (currentPassword, newPassword) =>
     req("/api/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),

@@ -2611,7 +2611,7 @@ func (d *DB) AccumulateListeningFromPlayback(ctx context.Context, userID uuid.UU
 		return nil
 	}
 	trackID := prev.TrackIDs[prev.CurrentIndex]
-	albumID, genreIDs, err := d.trackAlbumAndGenreIDs(ctx, trackID)
+	albumID, artistID, genreIDs, err := d.trackAlbumArtistAndGenreIDs(ctx, trackID)
 	if err != nil {
 		return err
 	}
@@ -2652,82 +2652,108 @@ func (d *DB) AccumulateListeningFromPlayback(ctx context.Context, userID uuid.UU
 		return err
 	}
 
-	if len(genreIDs) == 0 {
-		if err := tx.Commit(ctx); err != nil {
-			return err
-		}
-		return nil
-	}
-	each := wall / len(genreIDs)
-	rem := wall - each*len(genreIDs)
-	for i, gid := range genreIDs {
-		ms := each
-		if i == 0 {
-			ms += rem
-		}
-		if ms <= 0 {
-			continue
-		}
+	if artistID != uuid.Nil {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO user_listen_genre (user_id, genre_id, listen_ms)
-			VALUES ($1, $2, $3::bigint)
-			ON CONFLICT (user_id, genre_id) DO UPDATE SET
-				listen_ms = user_listen_genre.listen_ms + EXCLUDED.listen_ms
-		`, userID, gid, ms); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO user_listen_genre_day (user_id, day, genre_id, listen_ms)
+			INSERT INTO user_listen_artist_day (user_id, day, artist_id, listen_ms)
 			VALUES ($1, $2::date, $3, $4::bigint)
-			ON CONFLICT (user_id, day, genre_id) DO UPDATE SET
-				listen_ms = user_listen_genre_day.listen_ms + EXCLUDED.listen_ms
-		`, userID, day, gid, ms); err != nil {
+			ON CONFLICT (user_id, day, artist_id) DO UPDATE SET
+				listen_ms = user_listen_artist_day.listen_ms + EXCLUDED.listen_ms
+		`, userID, day, artistID, wall); err != nil {
 			return err
+		}
+	}
+
+	if len(genreIDs) > 0 {
+		each := wall / len(genreIDs)
+		rem := wall - each*len(genreIDs)
+		for i, gid := range genreIDs {
+			ms := each
+			if i == 0 {
+				ms += rem
+			}
+			if ms <= 0 {
+				continue
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO user_listen_genre (user_id, genre_id, listen_ms)
+				VALUES ($1, $2, $3::bigint)
+				ON CONFLICT (user_id, genre_id) DO UPDATE SET
+					listen_ms = user_listen_genre.listen_ms + EXCLUDED.listen_ms
+			`, userID, gid, ms); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO user_listen_genre_day (user_id, day, genre_id, listen_ms)
+				VALUES ($1, $2::date, $3, $4::bigint)
+				ON CONFLICT (user_id, day, genre_id) DO UPDATE SET
+					listen_ms = user_listen_genre_day.listen_ms + EXCLUDED.listen_ms
+			`, userID, day, gid, ms); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit(ctx)
 }
 
 func (d *DB) trackAlbumAndGenreIDs(ctx context.Context, trackID uuid.UUID) (uuid.UUID, []uuid.UUID, error) {
+	albumID, _, genreIDs, err := d.trackAlbumArtistAndGenreIDs(ctx, trackID)
+	return albumID, genreIDs, err
+}
+
+func (d *DB) trackAlbumArtistAndGenreIDs(ctx context.Context, trackID uuid.UUID) (uuid.UUID, uuid.UUID, []uuid.UUID, error) {
 	var albumID uuid.UUID
-	err := d.Pool.QueryRow(ctx, `SELECT album_id FROM tracks WHERE id = $1`, trackID).Scan(&albumID)
+	var artistText sql.NullString
+	err := d.Pool.QueryRow(ctx, `
+		SELECT t.album_id,
+			COALESCE(
+				t.artist_id::text,
+				(SELECT ta.artist_id::text FROM track_artists ta WHERE ta.track_id = t.id ORDER BY ta.position ASC LIMIT 1)
+			)
+		FROM tracks t WHERE t.id = $1
+	`, trackID).Scan(&albumID, &artistText)
 	if err != nil {
-		return uuid.Nil, nil, err
+		return uuid.Nil, uuid.Nil, nil, err
+	}
+	artistID := uuid.Nil
+	if artistText.Valid && artistText.String != "" {
+		if id, perr := uuid.Parse(artistText.String); perr == nil {
+			artistID = id
+		}
 	}
 	var gids []uuid.UUID
 	rows, err := d.Pool.Query(ctx, `SELECT genre_id FROM track_genres WHERE track_id = $1 ORDER BY position`, trackID)
 	if err != nil {
-		return uuid.Nil, nil, err
+		return uuid.Nil, uuid.Nil, nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g uuid.UUID
 		if err := rows.Scan(&g); err != nil {
-			return uuid.Nil, nil, err
+			return uuid.Nil, uuid.Nil, nil, err
 		}
 		gids = append(gids, g)
 	}
 	if err := rows.Err(); err != nil {
-		return uuid.Nil, nil, err
+		return uuid.Nil, uuid.Nil, nil, err
 	}
 	if len(gids) == 0 {
 		ar, err := d.Pool.Query(ctx, `SELECT genre_id FROM album_genres WHERE album_id = $1 ORDER BY position`, albumID)
 		if err != nil {
-			return uuid.Nil, nil, err
+			return uuid.Nil, uuid.Nil, nil, err
 		}
 		defer ar.Close()
 		for ar.Next() {
 			var g uuid.UUID
 			if err := ar.Scan(&g); err != nil {
-				return uuid.Nil, nil, err
+				return uuid.Nil, uuid.Nil, nil, err
 			}
 			gids = append(gids, g)
 		}
 		if err := ar.Err(); err != nil {
-			return uuid.Nil, nil, err
+			return uuid.Nil, uuid.Nil, nil, err
 		}
 	}
-	return albumID, gids, nil
+	return albumID, artistID, gids, nil
 }
 
 type HomeGenreListen struct {
@@ -2837,6 +2863,75 @@ func (d *DB) GetHomeListeningStats(ctx context.Context, userID uuid.UUID, fromDa
 		return 0, genres, nil, err
 	}
 	return totalListenMs, genres, recentAlbumIDs, nil
+}
+
+type StatsArtistListen struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	ListenMs int64     `json:"listenMs"`
+}
+
+// GetStatsListening returns period-scoped listen total, genre and artist breakdowns (daily rollups).
+func (d *DB) GetStatsListening(ctx context.Context, userID uuid.UUID, fromDay, toDay time.Time) (totalListenMs int64, genres []HomeGenreListen, artists []StatsArtistListen, err error) {
+	from := fromDay.UTC()
+	to := toDay.UTC()
+	err = d.Pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(listen_ms), 0)::bigint
+		FROM user_listen_day
+		WHERE user_id = $1 AND day >= $2::date AND day <= $3::date
+	`, userID, from, to).Scan(&totalListenMs)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	gRows, err := d.Pool.Query(ctx, `
+		SELECT lg.label, SUM(g.listen_ms)::bigint
+		FROM user_listen_genre_day g
+		JOIN library_genres lg ON lg.id = g.genre_id
+		WHERE g.user_id = $1 AND g.day >= $2::date AND g.day <= $3::date AND g.listen_ms > 0
+		GROUP BY lg.label
+		ORDER BY SUM(g.listen_ms) DESC
+		LIMIT 24
+	`, userID, from, to)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer gRows.Close()
+	for gRows.Next() {
+		var h HomeGenreListen
+		if err := gRows.Scan(&h.Label, &h.ListenMs); err != nil {
+			return 0, nil, nil, err
+		}
+		genres = append(genres, h)
+	}
+	if err := gRows.Err(); err != nil {
+		return 0, nil, nil, err
+	}
+
+	aRows, err := d.Pool.Query(ctx, `
+		SELECT a.id, a.name, SUM(d.listen_ms)::bigint
+		FROM user_listen_artist_day d
+		JOIN artists a ON a.id = d.artist_id
+		WHERE d.user_id = $1 AND d.day >= $2::date AND d.day <= $3::date AND d.listen_ms > 0
+		GROUP BY a.id, a.name
+		ORDER BY SUM(d.listen_ms) DESC
+		LIMIT 40
+	`, userID, from, to)
+	if err != nil {
+		return 0, genres, nil, err
+	}
+	defer aRows.Close()
+	for aRows.Next() {
+		var h StatsArtistListen
+		if err := aRows.Scan(&h.ID, &h.Name, &h.ListenMs); err != nil {
+			return 0, genres, nil, err
+		}
+		artists = append(artists, h)
+	}
+	if err := aRows.Err(); err != nil {
+		return 0, genres, nil, err
+	}
+	return totalListenMs, genres, artists, nil
 }
 
 // LibraryTotals returns coarse inventory counts seen on the home dashboard.

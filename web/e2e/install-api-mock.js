@@ -95,6 +95,17 @@ export async function installApiMock(page) {
       return json(homeJson);
     }
 
+    if (path === "/api/me/stats" && method === "GET") {
+      return json({
+        listenMsTotal: 0,
+        listeningByGenre: [],
+        listeningByArtist: [],
+        period: url.searchParams.get("period") || "week",
+        from: url.searchParams.get("from") || "",
+        to: url.searchParams.get("to") || "",
+      });
+    }
+
     if (path === "/api/me/avatar" && method === "GET") {
       return empty(204);
     }
