@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Push a semver tag to GitHub and create a release when one is missing.
-# ponytail: tag-only push of one repo. Upgrade path is a GitLab push mirror plus a GitHub Action.
+# Push a semver tag and that commit as main on GitHub, then create a release when one is missing.
+# ponytail: one repo, no force-push. A tag behind GitHub main fails the push; move the tag forward instead.
 set -euo pipefail
 
 REPO="${GITHUB_REPOSITORY:-lexshabalin/music.sh}"
@@ -30,9 +30,11 @@ tag_ok "$CI_COMMIT_TAG" || {
   echo "tag must match vMAJOR.MINOR.PATCH" >&2
   exit 1
 }
-git rev-parse --verify "refs/tags/${CI_COMMIT_TAG}^{commit}" >/dev/null
+sha="$(git rev-parse --verify "refs/tags/${CI_COMMIT_TAG}^{commit}")"
 
-git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" "refs/tags/${CI_COMMIT_TAG}"
+git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" \
+  "refs/tags/${CI_COMMIT_TAG}" \
+  "${sha}:refs/heads/main"
 
 code="$(curl -sS -o /tmp/gh-release.json -w "%{http_code}" \
   -H "Authorization: Bearer ${GITHUB_TOKEN}" \

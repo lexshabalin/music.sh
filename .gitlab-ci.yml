@@ -79,7 +79,30 @@ deploy:demo:
     - export GITLAB_CI_MUSIC_HOST_DIR="${DEMO_MUSIC_HOST_DIR:-}"
     - bash scripts/gitlab_rsync_deploy.sh
 
-# Version tag on GitLab -> tag + release on github.com/lexshabalin/music.sh.
+# Version tag -> Docker Hub as $DOCKERHUB_USERNAME/music.sh:<tag> and :latest.
+# CI/CD variables: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (access token, Mask).
+# Same protected-variable rule as GITHUB_TOKEN.
+publish:dockerhub:
+  stage: deploy
+  image: docker:27
+  tags:
+    - docker
+  variables:
+    DOCKER_HOST: "unix:///var/run/docker.sock"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  before_script:
+    - unset DOCKER_TLS_VERIFY || true
+    - unset DOCKER_CERT_PATH || true
+  script:
+    - export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:?Set CI/CD variable DOCKERHUB_USERNAME}"
+    - export DOCKERHUB_TOKEN="${DOCKERHUB_TOKEN:?Set CI/CD variable DOCKERHUB_TOKEN}"
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build --pull -t "$DOCKERHUB_USERNAME/music.sh:$CI_COMMIT_TAG" -t "$DOCKERHUB_USERNAME/music.sh:latest" .
+    - docker push "$DOCKERHUB_USERNAME/music.sh:$CI_COMMIT_TAG"
+    - docker push "$DOCKERHUB_USERNAME/music.sh:latest"
+
+# Version tag on GitLab -> main, tag, and release on github.com/lexshabalin/music.sh.
 # Needs CI/CD variable GITHUB_TOKEN (fine-grained PAT, Contents: Read and write). Mask it.
 # Leave it unprotected, or also protect v* tags — protected variables are hidden on unprotected tags.
 release:github:
