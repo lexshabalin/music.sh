@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Push a semver tag and that commit as main on GitHub, then create a release when one is missing.
-# ponytail: one repo, no force-push. A tag behind GitHub main fails the push; move the tag forward instead.
+# ponytail: --force replaces GitHub main (it often starts from an unrelated README commit).
+# An older tag rewinds main. Upgrade path: fast-forward only, after histories match.
 set -euo pipefail
 
 REPO="${GITHUB_REPOSITORY:-lexshabalin/music.sh}"
@@ -33,7 +34,9 @@ tag_ok "$CI_COMMIT_TAG" || {
 sha="$(git rev-parse --verify "refs/tags/${CI_COMMIT_TAG}^{commit}")"
 
 git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" \
-  "refs/tags/${CI_COMMIT_TAG}" \
+  "refs/tags/${CI_COMMIT_TAG}"
+# GitHub main is a different history (repo created with its own commit), so a fast-forward never lands.
+git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" \
   "${sha}:refs/heads/main"
 
 code="$(curl -sS -o /tmp/gh-release.json -w "%{http_code}" \
