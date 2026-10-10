@@ -13,4 +13,3 @@ docker-compose.yml
 web/test-results/
 web/playwright-report/
 web/blob-report/
-.gitlab-ci.yml
