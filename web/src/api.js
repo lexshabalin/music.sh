@@ -248,12 +248,14 @@ export const lib = {
   unlike: (trackId) => req("/api/likes/" + trackId, { method: "DELETE" }),
   /**
    * Ordered tracks matching `ids` (skips missing). Chunks long lists for URL limits.
+   * Chunk stays small: each uuid+comma ≈ 37 bytes; many reverse proxies reject request lines ≥8KB (414 → generic "error").
    * @param {string[]} orderedIds
    * @param {{ concurrency?: number }} [opts] parallel chunk fetches (default 1); use 6–8 for large shuffle queues.
    */
   tracksByIds: async (orderedIds, opts = {}) => {
     if (!Array.isArray(orderedIds) || !orderedIds.length) return [];
-    const chunk = 350;
+    // ponytail: GET ?ids=… — ceiling is proxy URI size; upgrade path is POST /api/tracks with JSON body.
+    const chunk = 80;
     const maxParallel = Math.max(1, Math.min(8, Number(opts.concurrency) || 1));
     const parts = [];
     for (let i = 0; i < orderedIds.length; i += chunk) parts.push(orderedIds.slice(i, i + chunk));
@@ -263,6 +265,7 @@ export const lib = {
       const batchResults = await Promise.all(
         batch.map(async (part) => {
           const list = await req("/api/tracks?ids=" + part.join(","));
+          if (!Array.isArray(list)) return [];
           const m = new Map(list.map((t) => [t.id, t]));
           const row = [];
           for (const id of part) {

@@ -252,8 +252,9 @@ export function Songs() {
     try {
       const ids = await lib.trackIdsOnly(q, {});
       if (!ids.length) return;
-      const shuffledIds = shuffleCopy(ids);
-      const rows = await lib.tracksByIds(shuffledIds, { concurrency: 8 });
+      // Match server maxPlaybackQueueTracks (5000); load only what we can put in the queue.
+      const shuffledIds = shuffleCopy(ids).slice(0, 5000);
+      const rows = await lib.tracksByIds(shuffledIds, { concurrency: 6 });
       const queue = rows.map((trk) => buildQueueItem(trk));
       if (queue.length) p.playQueue(queue, 0);
     } catch (e) {
