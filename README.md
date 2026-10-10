@@ -1,143 +1,75 @@
 # MusicSH
 
-Self‑hosted веб‑приложение для прослушивания музыки из **локальной папки** на сервере: пользователи, плейлисты, лайки, плейлист‑как, скан библиотеки, **MusicBrainz + Cover Art Archive** для метаданных и обложек (без алгоритмов рекомендаций, как план).
+Self-hosted веб-плеер: читает аудио из папки на сервере, сканирует теги, стримит треки, хранит пользователей, плейлисты и лайки. Метаданные и обложки подтягиваются из MusicBrainz и Cover Art Archive. Если задан ключ AcoustID, треки можно опознать по отпечатку (`fpcalc`).
 
-## Возможности (MVP)
+Веб-интерфейс вшит в тот же бинарник. База — PostgreSQL.
 
-- Регистрация / логин (JWT)
-- Сканирование каталога с аудиофайлами (теги через `dhowden/tag`, MP3/FLAC/…)
-- Список артистов / альбомов / треков, поиск, стрим **с поддержкой HTTP Range** (`/api/tracks/{id}/stream?token=…` для тега `<audio>`)
-- Плейлисты (создать, добавить треки, удалить)
-- Лайки
-- Очередь джобов: `scan` и `fetch_album` (подтягивание release MB + обложка в `/data/covers/…`)
+## Docker Compose
 
-## Запуск Docker Compose
-
-1. Скопируйте `cp .env.example .env` и задайте **`MUSIC_HOST_DIR`** (абсолютный путь к каталогу с музыкой на хосте, доступный Docker). По желанию смените **`POSTGRES_PASSWORD`**. Секрет JWT создаётся сам при первом запуске и хранится в томе данных как **`DATA_DIR/.jwt_secret`** — задавать **`JWT_SECRET`** не нужно, если только вы не хотите явный ключ (например, несколько реплик с общим ключом).
-
-2. Запуск (поднимается Postgres 16 и приложение). Первый раз соберите образ отдельно — так проще держать хост живым на слабом железе, чем `up --build` за один шаг:
-   ```bash
-   docker compose build
-   docker compose up -d --no-build
-   ```
-
-3. Веб-интерфейс: [http://localhost:8180](http://localhost:8180)
-4. Создайте учётку через **Register**, затем **Scan library** на главной (автоскан при старте **не** включён в compose по умолчанию — см. **`SCAN_ON_START`**).
-
-Если нужен только образ без compose: см. **`Dockerfile`**. Для публичного сервера усильте **`POSTGRES_PASSWORD`** и настройте резервное копирование тома с **`/data`** (там же лежит **`.jwt_secret`**).
-
-## Деплой через GitLab CI
-
-Репозиторий **не заливает `.env`**. На сервере нужен хотя бы **`MUSIC_HOST_DIR`** в каталоге деплоя в **`.env`** (или экспорт переменной окружения перед `docker compose`).
-
-### `deploy:dev` (домашний dev-сервер, ветка по умолчанию)
-
-Запускается автоматически после успешной сборки образа. В GitLab CI/CD задайте:
-
-| Переменная | Смысл |
-|------------|--------|
-| `DEV_DEPLOY_HOST` | SSH-хост |
-| `DEV_DEPLOY_USER` | SSH-пользователь |
-| `DEV_DEPLOY_DIR` | Абсолютный путь к каталогу с клоном на сервере (куда rsync и откуда `scripts/deploy_remote.sh`) |
-| `DEV_DEPLOY_SSH_PRIVATE_KEY_B64` | Приватный ключ в base64 (предпочтительно, одна строка, можно mask) |
-| `DEV_DEPLOY_SSH_PRIVATE_KEY` | Либо сырой ключ / base64, если не используете `*_B64` |
-
-Опционально запись **`MUSIC_HOST_DIR`** на сервер при каждом деплое:
-
-| Переменная | Смысл |
-|------------|--------|
-| `DEV_DEPLOY_WRITE_ENV_FROM_CI` | Любое непустое значение — включить запись `.env` на сервере |
-| `DEV_MUSIC_HOST_DIR` | Строка для **`MUSIC_HOST_DIR=...`** в удалённом `.env` (обязательна, если включена запись) |
-
-### `deploy:demo` (удалённый условный «прод»)
-
-Только **вручную** (кнопка Play у джобы в pipeline на ветке по умолчанию). Отдельный набор переменных, чтобы не путать с домашним сервером:
-
-| Переменная | Смысл |
-|------------|--------|
-| `DEMO_DEPLOY_HOST` | SSH-хост |
-| `DEMO_DEPLOY_USER` | SSH-пользователь |
-| `DEMO_DEPLOY_DIR` | Абсолютный путь к каталогу на demo-сервере |
-| `DEMO_DEPLOY_SSH_PRIVATE_KEY_B64` / `DEMO_DEPLOY_SSH_PRIVATE_KEY` | Ключ SSH (как для dev) |
-| `DEMO_DEPLOY_WRITE_ENV_FROM_CI` | Опционально: писать `.env` на demo |
-| `DEMO_MUSIC_HOST_DIR` | Путь библиотеки на demo-хосте для `MUSIC_HOST_DIR` |
-
-### Релиз на GitHub (`release:github`)
-
-Тег `vMAJOR.MINOR.PATCH` (например `v1.2.3`) запускает отдельный пайплайн: тег пушится в [github.com/lexshabalin/music.sh](https://github.com/lexshabalin/music.sh) и создаётся GitHub Release с заметками по коммитам. Повторный запуск джобы не создаёт второй релиз.
-
-| Переменная | Смысл |
-|------------|--------|
-| `GITHUB_TOKEN` | Fine-grained PAT, **Contents: Read and write** на этот репозиторий. Включите Mask. Protected — только если теги `v*` тоже protected |
-
-### Тесты в CI
-
-После **`deploy:dev`** на ветке по умолчанию выполняется **`test:web:post_dev_deploy`** (`cd web && npm ci`, установка Chromium для Playwright, `npm run test:ci`). На остальных ветках и в MR — джоба **`test:web`** после **`build:image`**.
-
-## Разработка (без Docker для Go/Node)
-
-Нужен Go 1.22+, Node 20+, PostgreSQL 16+.
+Рядом с `docker-compose.yml` нужен файл `.env`. Обязательна только `MUSIC_HOST_DIR` — абсолютный путь к каталогу с музыкой на хосте. Compose монтирует его в контейнер как `/music` только для чтения.
 
 ```bash
-createdb musicsh
-export DATABASE_URL=postgres://...
-export MUSIC_DIR=./music
-# optional: JWT_SECRET=...  (omit to auto-write ./data/.jwt_secret)
-go run ./cmd/server
-# другой терминал
-cd web && npm install && npm run dev
+docker compose build
+docker compose up -d --no-build
 ```
 
-Тесты фронта:
+Интерфейс: [http://localhost:8180](http://localhost:8180). Учётку создайте через Register, затем Scan library. Автоскан при старте выключен.
 
-- **Юнит / компоненты:** `cd web && npm run test` (Vitest + Testing Library).
-- **E2E по UI:** `cd web && npx playwright install chromium` (один раз после `npm install`), затем `cd web && npm run test:e2e` или всё вместе как в CI: `cd web && npm run test:ci`. Playwright поднимает Vite (`npm run dev`) и подменяет `/api/*` моками (без Go-сервера).
+Postgres 16 поднимается тем же compose. Пароль по умолчанию `musicsh`; для сервера вне localhost задайте `POSTGRES_PASSWORD`. JWT-ключ при первом старте пишется в том данных (`/data/.jwt_secret`) и переживает перезапуск.
 
-Vite проксирует `/api` на `http://127.0.0.1:8080` (см. `web/vite.config.js`).
+Запись тегов в файлы (imprint) требует каталог библиотеки без `:ro`. В репозиторном compose библиотека смонтирована только для чтения.
 
-## Переменные среды
+### Переменные `.env` для compose
+
+Compose подставляет их в сервисы. Незаданные необязательные берут значение из колонки «по умолчанию».
+
+| Переменная | Обязательна | По умолчанию | Смысл |
+|------------|-------------|--------------|--------|
+| `MUSIC_HOST_DIR` | да | — | Каталог с музыкой на хосте, монтируется в `/music:ro` |
+| `POSTGRES_PASSWORD` | нет | `musicsh` | Пароль пользователя `musicsh` в Postgres и в `DATABASE_URL` приложения |
+| `MUSICSH_PORT` | нет | `8180` | Порт на хосте; внутри контейнера приложение слушает `8080` |
+| `ACOUSTID_KEY` | нет | пусто | Ключ [AcoustID](https://acoustid.org/new-application). Без него опознание по отпечатку не работает |
+| `WORKER_CONCURRENCY` | нет | `1` | Параллельных фоновых джобов, от 1 до 8 |
+| `WORKER_POLL_SECONDS` | нет | `8` | Пауза между опросами очереди джобов, 1–60 с |
+| `MUSICSH_MEDIA_PROC_SLOTS` | нет | `2` | Сколько `ffprobe` / `ffmpeg` / `fpcalc` могут работать одновременно. `0` — без лимита |
+| `LIBRARY_SCAN_YIELD_EVERY` | нет | `12` | Пауза скана каждые N аудиофайлов. `0` вместе с `LIBRARY_SCAN_YIELD_MS` отключает паузы |
+| `LIBRARY_SCAN_YIELD_MS` | нет | `60` | Длительность этой паузы, мс |
+| `LIBRARY_SCAN_DIR_YIELD_EVERY` | нет | `6` | Пауза каждые N открытых каталогов при обходе дерева. `0` отключает |
+| `LIBRARY_SCAN_DIR_YIELD_MS` | нет | `35` | Длительность паузы по каталогам, мс |
+| `SCAN_PROGRESS_INTERVAL_MS` | нет | `1000` | Минимальный интервал обновления прогресса скана |
+| `SCAN_PROGRESS_MIN_FILES` | нет | `40` | Сколько новых файлов нужно, чтобы обновить прогресс раньше интервала |
+| `MUSICSH_SCAN_FOLLOW_SYMLINKS` | нет | `1` | Заходить в каталоги-симлинки. `0` или `false` — не заходить |
+| `MUSICSH_SCAN_CONTINUE_ON_ERROR` | нет | `1` | Ошибка одного файла пишется в лог, скан идёт дальше. `0` или `false` — остановиться на первой ошибке |
+
+Compose сам выставляет приложению `DATABASE_URL`, `MUSIC_DIR=/music`, `DATA_DIR=/data` и `HTTP_ADDR=0.0.0.0:8080`. Их в `.env` писать не нужно.
+
+## Образ без Compose
+
+Нужен уже запущенный PostgreSQL и собранный образ.
+
+```bash
+docker build -t musicsh .
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL='postgres://musicsh:musicsh@host.docker.internal:5432/musicsh?sslmode=disable' \
+  -e MUSIC_DIR=/music \
+  -e DATA_DIR=/data \
+  -v /absolute/path/to/music:/music:ro \
+  -v musicsh_data:/data \
+  musicsh
+```
+
+`DATABASE_URL` обязательна: без неё процесс не стартует. `MUSIC_DIR` по умолчанию `/music`, `DATA_DIR` — `/data`, `HTTP_ADDR` — `0.0.0.0:8080`.
+
+Остальные переменные те же, что в таблице выше, кроме `MUSIC_HOST_DIR`, `POSTGRES_PASSWORD` и `MUSICSH_PORT`: это подстановки compose, внутрь контейнера они не попадают. Без явных значений код берёт свои дефолты: `WORKER_CONCURRENCY=3`, `WORKER_POLL_SECONDS=4`, `MUSICSH_MEDIA_PROC_SLOTS=4`, паузы скана `20` файлов / `45` мс и `8` каталогов / `25` мс.
+
+Дополнительно, если запускаете образ сами:
 
 | Переменная | Смысл |
 |------------|--------|
-| `DATABASE_URL` | PostgreSQL |
-| `JWT_SECRET` | Необязательно; если не задан — генерируется и сохраняется в **`$DATA_DIR/.jwt_secret`** (путь по умолчанию в контейнере `/data/.jwt_secret`) |
-| `MUSIC_DIR` | Папка с музыкой (только чтение в prod) |
-| `DATA_DIR` | Кэш (обложки) и файл **`.jwt_secret`**, если не используете **`JWT_SECRET`** |
-| `CORS_ORIGIN` | Список origin через запятую, по умолчанию `*` в конфиге |
-| `SCAN_ON_START` | `1` = полный скан библиотеки при каждом старте процесса (осторожно при частых деплоях и больших коллекциях) |
-| `WORKER_CONCURRENCY` | Параллельных обработчиков фоновых джобов (1–8, по умолчанию без env: **3**) |
-| `WORKER_POLL_SECONDS` | Пауза между попытками взять джоб (по умолчанию **4** с; в **`docker-compose.yml`** — **8**) |
-| `LIBRARY_SCAN_YIELD_EVERY`, `LIBRARY_SCAN_YIELD_MS` | Пауза `…_MS` мс каждые `…_EVERY` аудиофайлов при скане; в коде без env по умолчанию **20** / **45** мс. В **`docker-compose.yml`** — **12** / **60**. Если **любая** из двух равна **0**, паузы отключены (удобно на быстром SSD) |
-| `LIBRARY_SCAN_DIR_YIELD_EVERY`, `LIBRARY_SCAN_DIR_YIELD_MS` | Пауза каждые `…_EVERY` **открытых каталогов** при обходе дерева (меньше пиков metadata I/O); в коде по умолчанию **8** / **25** мс, в compose — **6** / **35**. Любая **0** — выключено |
-| `MUSICSH_DISABLE_DISK_IO_PRIORITY` | **`1`** — не оборачивать `ffprobe` / `ffmpeg` / `fpcalc` в `ionice`/`nice` (только Linux; для отладки) |
-| `MUSICSH_MEDIA_PROC_SLOTS` | Одновременных процессов **`ffprobe`/`ffmpeg`/`fpcalc`** по всему процессу (скан + воркеры); по умолчанию **4**, **`0`** — без лимита. В репозиторном **`docker-compose.yml`** по умолчанию **3** |
-| `SCAN_PROGRESS_INTERVAL_MS` | Минимальный интервал между колбэками прогресса скана (по умолчанию **500** мс) — меньше нагрузки на mutex/UI |
-| `SCAN_PROGRESS_MIN_FILES` | Минимум новых аудиофайлов с последнего прогресса для внеочередного колбэка (по умолчанию **25**, макс. 500) |
-| `MUSICSH_SCAN_FOLLOW_SYMLINKS` | При скане заходить в **каталоги‑симлинки** (по умолчанию **включено**; **`0`/`false`** — как старый `filepath.Walk`, без обхода symlink‑папок). Дубликаты дерева по одному и тому же `realpath` не обходятся повторно. Обход каталога использует **`Lstat`/`Stat` по каждой записи** (а не только `ReadDir`+`d_type`), иначе на **NFS/SMB/FUSE** часть подкаталогов и симлинков не распознаётся |
-| `MUSICSH_SCAN_MAX_DEPTH` | Максимальная **вложенность каталогов** при скане (по умолчанию **256**, верхняя граница **10000**). При превышении скан завершается ошибкой |
-| `MUSICSH_SCAN_CONTINUE_ON_ERROR` | При ошибке **одного файла** (rename, `stat`, БД) **логировать и продолжать** (по умолчанию **включено**). **`0`/`false`** — остановить скан на первой ошибке. Каталог, который **нельзя прочитать** (`ReadDir`), всегда пропускается с записью в лог, без остановки всего скана |
-| `HTTP_ADDR` | Адрес прослушивания (по умолчанию `0.0.0.0:8080`) |
-
-Дополнительно при использовании репозиторного **`docker-compose.yml`**: `MUSIC_HOST_DIR`, `POSTGRES_PASSWORD`, опционально `MUSICSH_PORT`.
-
-**Большая библиотека на HDD/SMR или диск, проброшенный в VM.** Скан даёт тысячи мелких чтений и часто **`ffprobe`** по файлам — на медленном диске это даёт долгий высокий **iowait**; гипервизор и гости «замирают», в логах Proxmox при этом может не быть ошибок. Имеет смысл держать **диск VM и `pgdata` на SSD**, а HDD отдавать приложению **только под музыку** (`:ro`); первый **`Scan library`** — в спокойное время. В приложении по умолчанию включены **паузы скана по файлам** (`LIBRARY_SCAN_YIELD_*`) и **паузы по каталогам** при обходе дерева (`LIBRARY_SCAN_DIR_YIELD_*`), **`ffprobe`/`fpcalc`/`ffmpeg` на Linux** запускаются с **`ionice`/`nice`** (в Docker-образе установлен `util-linux`), воркер реже опрашивает очередь (`WORKER_POLL_SECONDS`). Скан библиотеки **глобально один за раз** (HTTP и джоб `scan` в воркере не идут параллельно), прогресс в UI **прореживается** по времени и числу файлов (`SCAN_PROGRESS_*`), внешние утилиты **`ffprobe`/`ffmpeg`/`fpcalc`** дополнительно ограничиваются **`MUSICSH_MEDIA_PROC_SLOTS`**, чтобы при скане и фоне не копить одновременные чтения с диска. Это **снижает** нагрузку на шину и диск, но **не устраняет** аппаратные или гипервизорные сбои.
-
-**Если после деплоя «падает» Proxmox или зависает сеть хранилища:** сборка образа на той же VM (`docker compose build`) может на минуты загрузить **все ядра и диск** — лимиты `cpus` / `mem_limit` в compose на это не действуют (они только на **запущенные** контейнеры). Скрипт **`scripts/deploy_remote.sh`** уже собирает образ с **`nice`/ionice** и ограничениями Node/Go в **`Dockerfile`**. Не совмещайте тяжёлый **`docker compose build`**, полный **`Scan library`** и копирование по **SMB/NFS** в один момент; при слабом железе перенесите сборку в registry (push в CI, на сервере **`pull`** + **`up`**).
-
-## API (кратко)
-
-- `POST /api/auth/register` `{ "email", "password", "displayName?" }`
-- `POST /api/auth/login`
-- `GET /api/artists`, `GET /api/albums`, `GET /api/tracks?query&albumId=`
-- `GET /api/tracks/{id}/stream` — `Authorization: Bearer` или `?token=`
-- `GET /api/albums/{id}/cover` — то же для картинки
-- `POST /api/library/scan` — поставить скан в очередь
-- Плейлисты и лайки — под `/api/playlists` и `/api/likes`
-
-## Музыка
-
-Поддержка расширений (через скан): `.mp3` `.flac` `.m4a` `.aac` `.ogg` `.opus` `.wav`.
-
-## Лицензия
-
-MIT (по желанию; проект-шаблон self-hosted).
+| `JWT_SECRET` | Ключ подписи сессий, минимум 16 символов. Если не задан, создаётся файл `$DATA_DIR/.jwt_secret` |
+| `CORS_ORIGIN` | Разрешённые origin через запятую. Пусто — `*`, без credentialed CORS |
+| `SCAN_ON_START` | `1` — поставить полный скан в очередь при каждом старте процесса |
+| `MUSICSH_SCAN_MAX_DEPTH` | Максимальная вложенность каталогов при скане. По умолчанию `256`, потолок `10000` |
+| `MUSICSH_DISABLE_PLAYBACK_TRANSCODE` | `1` / `true` / `yes` — отдавать файл как есть, без перекодирования в MP3 через `ffmpeg` |
+| `MUSICSH_DISABLE_DISK_IO_PRIORITY` | `1` — не понижать приоритет `ffprobe` / `ffmpeg` / `fpcalc` через `ionice` и `nice` (только Linux) |
+| `MUSICSH_LOG_DISK_ACCESS` | `1` / `true` / `yes` / `on` — писать в stdout обращения к диску (открытие стрима, чтение тегов, `ffprobe`, обложки) |
