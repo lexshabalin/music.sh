@@ -4,6 +4,8 @@ Self-hosted web player. It reads audio from a folder on the server, scans tags, 
 
 The web UI is embedded in the same binary. The database is PostgreSQL.
 
+Available on [Dockerhub](https://hub.docker.com/r/lexshabalin/music.sh/tags)
+
 ## Docker Compose
 
 Put a `.env` file next to `docker-compose.yml`. The only required variable is `MUSIC_HOST_DIR`: an absolute path to the music directory on the host. Compose mounts it into the container as `/music`, read-only.
