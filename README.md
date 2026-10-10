@@ -1,4 +1,4 @@
-# MusicSH
+# music.sh 
 
 Self-hosted web player. It reads audio from a folder on the server, scans tags, streams tracks, and stores users, playlists, and likes. Metadata and cover art come from MusicBrainz and the Cover Art Archive. With an AcoustID key, tracks can be identified from a fingerprint (`fpcalc`).
 
