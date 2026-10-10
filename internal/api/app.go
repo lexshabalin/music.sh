@@ -113,6 +113,7 @@ func (a *App) Handlers() http.Handler {
 		g.Post("/api/me/background/settings", a.setBackgroundSettings)
 		g.Post("/api/me/background/upload", a.uploadBackground)
 		g.Post("/api/me/password", a.changePassword)
+		g.Patch("/api/me", a.patchProfile)
 		g.Get("/api/me/home", a.homeDashboard)
 		g.Get("/api/me/stats", a.statsDashboard)
 		g.Get("/api/me/playback", a.getPlayback)
@@ -330,17 +331,22 @@ func (a *App) register(w http.ResponseWriter, r *http.Request) {
 	}
 	id := uuid.New()
 
+	providedUsername := strings.TrimSpace(b.Username) != ""
 	username := strings.ToLower(strings.TrimSpace(b.Username))
 	if username == "" {
 		// keep existing installs ergonomic: default to email local-part (sanitized)
 		username = sanitizeUsername(strings.TrimSpace(strings.SplitN(b.Email, "@", 2)[0]))
 	}
 	if !isValidUsername(username) {
-		// last-resort fallback (should be rare)
+		if providedUsername {
+			JSONError(w, 400, "invalid username (2-32 chars: a-z, 0-9, _, -, .)")
+			return
+		}
+		// last-resort fallback when email local-part cannot form a username
 		username = "user" + strings.ReplaceAll(id.String()[:8], "-", "")
 	}
 	if !isValidUsername(username) {
-		JSONError(w, 400, "invalid username (3-32 chars: a-z, 0-9, _, -, .)")
+		JSONError(w, 400, "invalid username (2-32 chars: a-z, 0-9, _, -, .)")
 		return
 	}
 
@@ -420,14 +426,14 @@ func (a *App) makeToken(_ context.Context, id uuid.UUID, email string) (string, 
 	return t, exp, nil
 }
 
-var reUsername = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$`)
+// 2–32 chars: start/end alnum; . _ - allowed inside (so "rh" is valid).
+var reUsername = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,30}[a-z0-9])?$`)
 
 func isValidUsername(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
-	if len(s) < 3 || len(s) > 32 {
+	if len(s) < 2 || len(s) > 32 {
 		return false
 	}
-	// must start/end with alnum; allow . _ - inside
 	return reUsername.MatchString(s)
 }
 

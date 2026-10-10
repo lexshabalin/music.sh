@@ -53,6 +53,8 @@ export const auth = {
     }),
   login: (login, password) => req("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
   me: () => req("/api/me"),
+  /** Update username and/or displayName. Pass `displayName: ""` to clear. */
+  updateProfile: (body) => req("/api/me", { method: "PATCH", body: JSON.stringify(body ?? {}) }),
   /** Aggregated home dashboard: listen time, library counts, genre breakdown, recent albums.
    * Optional `{ period, from, to }` (YYYY-MM-DD) filters listen + genre + recent by day rollups. */
   home: (opts = {}) => {

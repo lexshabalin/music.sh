@@ -2965,6 +2965,7 @@ function Shell({ children }) {
             } catch (_) {}
           }}
           onBgChange={setBg}
+          onMeUpdated={(u) => setMe(u)}
           onClose={() => setShowProfile(false)}
           onAvatarUpdated={async () => {
             try {
@@ -3131,12 +3132,34 @@ function UserMenu({ anchorRef, name, onClose, onOpenProfile, onLogout }) {
   );
 }
 
-function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClose, onAvatarUpdated, onLogout }) {
+function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onMeUpdated, onClose, onAvatarUpdated, onLogout }) {
   const { t } = useI18n();
   const [err, setErr] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [cur, setCur] = React.useState("");
   const [next, setNext] = React.useState("");
+  const [username, setUsername] = React.useState(me?.username || "");
+  const [displayName, setDisplayName] = React.useState(me?.displayName || "");
+
+  React.useEffect(() => {
+    setUsername(me?.username || "");
+    setDisplayName(me?.displayName || "");
+  }, [me?.username, me?.displayName, me?.id]);
+
+  const saveProfile = async () => {
+    setErr("");
+    setBusy(true);
+    try {
+      const u = await auth.updateProfile({
+        username: String(username || "").trim(),
+        displayName: String(displayName || "").trim(),
+      });
+      onMeUpdated?.(u);
+    } catch (x) {
+      setErr(x?.message || "error");
+    }
+    setBusy(false);
+  };
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -3182,6 +3205,33 @@ function ProfileModal({ me, avatarUrl, bg, lang, onLangChange, onBgChange, onClo
               </label>
             </div>
           </div>
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <p style={{ margin: "0 0 10px" }}>
+            <label>{t("profile.username")}</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              disabled={busy}
+            />
+            <span className="muted" style={{ display: "block", fontSize: 12, marginTop: 4 }}>
+              {t("profile.usernameHint")}
+            </span>
+          </p>
+          <p style={{ margin: "0 0 10px" }}>
+            <label>{t("profile.displayName")}</label>
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={busy} />
+            <span className="muted" style={{ display: "block", fontSize: 12, marginTop: 4 }}>
+              {t("profile.displayNameHint")}
+            </span>
+          </p>
+          <button type="button" disabled={busy} onClick={() => void saveProfile()}>
+            {t("profile.saveProfile")}
+          </button>
         </div>
 
         <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>

@@ -8,7 +8,49 @@ import (
 	"strings"
 
 	"musicsh/internal/auth"
+	"musicsh/internal/store"
 )
+
+type patchProfileBody struct {
+	Username    *string `json:"username"`
+	DisplayName *string `json:"displayName"`
+}
+
+func (a *App) patchProfile(w http.ResponseWriter, r *http.Request) {
+	uid, _ := userIDFromCtx(r.Context())
+	var b patchProfileBody
+	if err := ReadJSON(r, &b); err != nil {
+		JSONError(w, 400, "bad json")
+		return
+	}
+	if b.Username == nil && b.DisplayName == nil {
+		JSONError(w, 400, "nothing to update")
+		return
+	}
+	var usernamePtr *string
+	if b.Username != nil {
+		u := strings.ToLower(strings.TrimSpace(*b.Username))
+		if !isValidUsername(u) {
+			JSONError(w, 400, "invalid username (2-32 chars: a-z, 0-9, _, -, .)")
+			return
+		}
+		usernamePtr = &u
+	}
+	if err := a.DB.UpdateUserProfile(r.Context(), uid, usernamePtr, b.DisplayName); err != nil {
+		if store.IsUniqueViolation(err) {
+			JSONError(w, 400, "username in use")
+			return
+		}
+		JSONError(w, 500, "db")
+		return
+	}
+	u, err := a.DB.UserByID(r.Context(), uid)
+	if err != nil {
+		JSONError(w, 500, "db")
+		return
+	}
+	JSON(w, 200, u)
+}
 
 type uiLangBody struct {
 	Lang string `json:"lang"`

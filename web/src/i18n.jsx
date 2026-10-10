@@ -181,6 +181,11 @@ const dict = {
 
     "profile.title": "Профиль",
     "profile.close": "Закрыть",
+    "profile.username": "Имя пользователя",
+    "profile.displayName": "Отображаемое имя",
+    "profile.displayNameHint": "Показывается в приветствии и меню. Можно оставить пустым.",
+    "profile.usernameHint": "Для входа: 2–32 символа (a–z, 0–9, . _ -).",
+    "profile.saveProfile": "Сохранить имя",
     "profile.uploadAvatar": "Загрузить аватар",
     "profile.background": "Фон",
     "profile.bg.none": "Нет",
@@ -485,6 +490,11 @@ const dict = {
 
     "profile.title": "Profile",
     "profile.close": "Close",
+    "profile.username": "Username",
+    "profile.displayName": "Display name",
+    "profile.displayNameHint": "Shown in the greeting and menu. Leave empty to use username.",
+    "profile.usernameHint": "Login name: 2–32 chars (a–z, 0–9, . _ -).",
+    "profile.saveProfile": "Save name",
     "profile.uploadAvatar": "Upload avatar",
     "profile.background": "Background",
     "profile.bg.none": "None",

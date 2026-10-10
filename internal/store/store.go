@@ -398,6 +398,42 @@ func (d *DB) UserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return u, nil
 }
 
+// UpdateUserProfile sets login username and/or display name.
+// displayName "" clears the column; nil leaves it unchanged.
+func (d *DB) UpdateUserProfile(ctx context.Context, userID uuid.UUID, username *string, displayName *string) error {
+	if username == nil && displayName == nil {
+		return nil
+	}
+	if username != nil && displayName != nil {
+		var dn any
+		if strings.TrimSpace(*displayName) == "" {
+			dn = nil
+		} else {
+			dn = strings.TrimSpace(*displayName)
+		}
+		_, err := d.Pool.Exec(ctx,
+			`UPDATE users SET username = $2, display_name = $3 WHERE id = $1`,
+			userID, strings.ToLower(strings.TrimSpace(*username)), dn,
+		)
+		return err
+	}
+	if username != nil {
+		_, err := d.Pool.Exec(ctx,
+			`UPDATE users SET username = $2 WHERE id = $1`,
+			userID, strings.ToLower(strings.TrimSpace(*username)),
+		)
+		return err
+	}
+	var dn any
+	if strings.TrimSpace(*displayName) == "" {
+		dn = nil
+	} else {
+		dn = strings.TrimSpace(*displayName)
+	}
+	_, err := d.Pool.Exec(ctx, `UPDATE users SET display_name = $2 WHERE id = $1`, userID, dn)
+	return err
+}
+
 // --- UI language (profile) ---
 
 func (d *DB) SetUserUILang(ctx context.Context, userID uuid.UUID, lang string) error {
