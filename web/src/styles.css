@@ -436,6 +436,43 @@ button.ghost {
   border-color: rgba(255, 99, 71, 0.6);
   background: rgba(255, 99, 71, 0.12);
 }
+.viewmode-cols {
+  margin-top: 4px;
+  padding: 8px 6px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.viewmode-cols-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  margin: 0 4px 8px;
+}
+.viewmode-cols-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.viewmode-col-btn {
+  padding: 8px 0;
+  border-radius: 8px;
+  font-weight: 800;
+  justify-content: center;
+}
+.viewmode-col-btn.is-active {
+  border-color: rgba(255, 99, 71, 0.6);
+  background: rgba(255, 99, 71, 0.12);
+}
+.entity-list-cols {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 0 0.75rem;
+  align-items: start;
+}
+.entity-list-cols > li {
+  min-width: 0;
+}
 
 
 /* Ensure playlist header "⋯" is always clickable (some mobile rules hide track-row ⋯). */

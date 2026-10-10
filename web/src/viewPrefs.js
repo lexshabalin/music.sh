@@ -28,7 +28,12 @@ export const SECTIONS = /** @type {const} */ ([
 export const VIEW_MODES = /** @type {const} */ ([
   "grid", // tiles
   "table", // track table / plain table-like list
+  "list", // compact multi-column list
 ]);
+
+export const LIST_COLS_MIN = 2;
+export const LIST_COLS_MAX = 5;
+export const DEFAULT_LIST_COLS = 3;
 
 export const DEFAULT_VIEW_BY_SECTION = {
   home: "grid",
@@ -40,6 +45,9 @@ export const DEFAULT_VIEW_BY_SECTION = {
   playlists: "grid",
   likes: "table",
 };
+
+/** Sections that support multi-column list density. */
+export const LIST_COLS_SECTIONS = /** @type {const} */ (["artists"]);
 
 /** Decode JWT payload `userId` without verifying signature — only for localStorage scoping. */
 export function userIdFromAccessToken(token) {
@@ -75,10 +83,26 @@ function normalizeMode(m) {
 
 export function allowedModesForSection(section) {
   const s = normalizeSection(section);
-  if (s === "songs" || s === "artists" || s === "artist" || s === "albums" || s === "playlists" || s === "likes") {
+  if (s === "artists") return ["table", "list", "grid"];
+  if (s === "songs" || s === "artist" || s === "albums" || s === "playlists" || s === "likes") {
     return ["table", "grid"];
   }
   return ["grid"];
+}
+
+export function normalizeListCols(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return DEFAULT_LIST_COLS;
+  return Math.min(LIST_COLS_MAX, Math.max(LIST_COLS_MIN, Math.round(x)));
+}
+
+function readColsMap(obj) {
+  const raw = obj?.cols && typeof obj.cols === "object" ? obj.cols : {};
+  const out = {};
+  for (const s of LIST_COLS_SECTIONS) {
+    out[s] = normalizeListCols(raw?.[s]);
+  }
+  return out;
 }
 
 function coerceModeForSection(section, mode) {
@@ -95,6 +119,7 @@ function normalizePrefsObject(obj) {
   for (const s of SECTIONS) {
     out[s] = coerceModeForSection(s, obj?.[s]);
   }
+  out.cols = readColsMap(obj);
   return out;
 }
 
@@ -113,7 +138,7 @@ export function readViewPrefs() {
       }
     }
     if (!raw) {
-      const def = { ...DEFAULT_VIEW_BY_SECTION };
+      const def = normalizePrefsObject(null);
       try {
         localStorage.setItem(key, JSON.stringify(def));
       } catch (_) {}
@@ -125,6 +150,10 @@ export function readViewPrefs() {
     for (const s of SECTIONS) {
       if (obj?.[s] !== out[s]) changed = true;
     }
+    for (const s of LIST_COLS_SECTIONS) {
+      if (normalizeListCols(obj?.cols?.[s]) !== out.cols[s]) changed = true;
+    }
+    if (!obj?.cols) changed = true;
     if (changed) {
       try {
         localStorage.setItem(key, JSON.stringify(out));
@@ -132,7 +161,7 @@ export function readViewPrefs() {
     }
     return out;
   } catch (_) {
-    return { ...DEFAULT_VIEW_BY_SECTION };
+    return normalizePrefsObject(null);
   }
 }
 
@@ -188,4 +217,48 @@ export function useSectionViewMode(section) {
   );
 
   return { mode, setMode: set };
+}
+
+export function getSectionListCols(section) {
+  const s = normalizeSection(section);
+  if (!LIST_COLS_SECTIONS.includes(s)) return DEFAULT_LIST_COLS;
+  const cur = readViewPrefs();
+  return normalizeListCols(cur?.cols?.[s]);
+}
+
+export function setSectionListCols(section, cols) {
+  const s = normalizeSection(section);
+  if (!LIST_COLS_SECTIONS.includes(s)) return;
+  const cur = readViewPrefs();
+  writeViewPrefs({ ...cur, cols: { ...(cur.cols || {}), [s]: normalizeListCols(cols) } });
+}
+
+export function useSectionListCols(section) {
+  const s = normalizeSection(section);
+  const [cols, setColsState] = React.useState(() => getSectionListCols(s));
+  const userKey = userIdFromAccessToken(readAccessToken()) || "anon";
+
+  React.useEffect(() => {
+    setColsState(getSectionListCols(s));
+  }, [s, userKey]);
+
+  React.useEffect(() => {
+    const on = () => setColsState(getSectionListCols(s));
+    window.addEventListener("storage", on);
+    window.addEventListener("musicsh:viewprefs", on);
+    return () => {
+      window.removeEventListener("storage", on);
+      window.removeEventListener("musicsh:viewprefs", on);
+    };
+  }, [s]);
+
+  const setCols = React.useCallback(
+    (next) => {
+      setSectionListCols(s, next);
+      setColsState(getSectionListCols(s));
+    },
+    [s]
+  );
+
+  return { cols, setCols };
 }

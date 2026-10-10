@@ -1,27 +1,40 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
-import { VIEW_MODES } from "../viewPrefs";
+import { LIST_COLS_MAX, LIST_COLS_MIN, VIEW_MODES } from "../viewPrefs";
 
 function labelFor(t, mode) {
   if (mode === "grid") return t("view.grid");
   if (mode === "table") return t("view.table");
+  if (mode === "list") return t("view.list");
   return mode;
 }
 
 function iconFor(mode) {
   if (mode === "grid") return "▦";
   if (mode === "table") return "▤";
+  if (mode === "list") return "▥";
   return "▤";
 }
 
-export function ViewModeControl({ value, onChange, modes, compact = false, ariaLabel }) {
+export function ViewModeControl({
+  value,
+  onChange,
+  modes,
+  compact = false,
+  ariaLabel,
+  columns,
+  onColumnsChange,
+}) {
   const { t } = useI18n();
   const allowed = Array.isArray(modes) && modes.length ? modes : VIEW_MODES;
   const [open, setOpen] = React.useState(false);
   const btnRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const [pos, setPos] = React.useState(null);
+  const showCols = typeof onColumnsChange === "function" && allowed.includes("list");
+  const colVal =
+    typeof columns === "number" ? Math.min(LIST_COLS_MAX, Math.max(LIST_COLS_MIN, Math.round(columns))) : LIST_COLS_MIN + 1;
 
   React.useEffect(() => {
     if (!open) return;
@@ -60,6 +73,9 @@ export function ViewModeControl({ value, onChange, modes, compact = false, ariaL
 
   const cur = allowed.includes(value) ? value : allowed[0];
   if (!allowed.length || allowed.length <= 1) return null;
+
+  const colOptions = [];
+  for (let n = LIST_COLS_MIN; n <= LIST_COLS_MAX; n++) colOptions.push(n);
 
   return (
     <div className="viewmode">
@@ -111,6 +127,28 @@ export function ViewModeControl({ value, onChange, modes, compact = false, ariaL
                   <span style={{ flex: 1, textAlign: "left" }}>{labelFor(t, m)}</span>
                 </button>
               ))}
+              {showCols ? (
+                <div className="viewmode-cols" role="group" aria-label={t("view.cols")}>
+                  <div className="viewmode-cols-label">{t("view.cols")}</div>
+                  <div className="viewmode-cols-row">
+                    {colOptions.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`ghost viewmode-col-btn${cur === "list" && n === colVal ? " is-active" : ""}`}
+                        aria-pressed={cur === "list" && n === colVal}
+                        onClick={() => {
+                          onColumnsChange(n);
+                          onChange?.("list");
+                          setOpen(false);
+                        }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>,
             document.body
           )
@@ -118,4 +156,3 @@ export function ViewModeControl({ value, onChange, modes, compact = false, ariaL
     </div>
   );
 }
-

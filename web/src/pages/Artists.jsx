@@ -4,11 +4,12 @@ import { lib } from "../api";
 import { useI18n } from "../i18n";
 import { MediaCover } from "../components/MediaCover";
 import { ViewModeControl } from "../components/ViewModeControl";
-import { useSectionViewMode } from "../viewPrefs";
+import { useSectionListCols, useSectionViewMode } from "../viewPrefs";
 
 export function Artists() {
   const { t } = useI18n();
   const { mode, setMode } = useSectionViewMode("artists");
+  const { cols, setCols } = useSectionListCols("artists");
   const [q, setQ] = useState("");
   const [list, setList] = useState([]);
   const [err, setErr] = useState("");
@@ -37,11 +38,31 @@ export function Artists() {
         <div className="search" style={{ flex: 1, margin: 0 }}>
           <input placeholder={t("artists.searchArtists")} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <ViewModeControl value={mode} onChange={setMode} modes={["table", "grid"]} compact />
+        <ViewModeControl
+          value={mode}
+          onChange={setMode}
+          modes={["table", "list", "grid"]}
+          columns={cols}
+          onColumnsChange={setCols}
+          compact
+        />
       </div>
       {err ? <p style={{ color: "tomato" }}>{err}</p> : null}
       {mode === "table" ? (
         <ul className="plain-list">
+          {sortedArtists.map((a) => (
+            <li key={a.id} className="entity-list-row">
+              <Link to={"/artist/" + a.id} className="entity-row">
+                <MediaCover src={lib.artistImageUrl(a.id)} className="entity-row-art" alt="" loading="lazy" decoding="async" />
+                <div className="entity-row-meta">
+                  <div className="entity-row-title">{a.name}</div>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : mode === "list" ? (
+        <ul className="plain-list entity-list-cols" style={{ "--cols": String(cols) }}>
           {sortedArtists.map((a) => (
             <li key={a.id} className="entity-list-row">
               <Link to={"/artist/" + a.id} className="entity-row">
