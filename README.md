@@ -62,6 +62,14 @@ Self‑hosted веб‑приложение для прослушивания м
 | `DEMO_DEPLOY_WRITE_ENV_FROM_CI` | Опционально: писать `.env` на demo |
 | `DEMO_MUSIC_HOST_DIR` | Путь библиотеки на demo-хосте для `MUSIC_HOST_DIR` |
 
+### Релиз на GitHub (`release:github`)
+
+Тег `vMAJOR.MINOR.PATCH` (например `v1.2.3`) запускает отдельный пайплайн: тег пушится в [github.com/lexshabalin/music.sh](https://github.com/lexshabalin/music.sh) и создаётся GitHub Release с заметками по коммитам. Повторный запуск джобы не создаёт второй релиз.
+
+| Переменная | Смысл |
+|------------|--------|
+| `GITHUB_TOKEN` | Fine-grained PAT, **Contents: Read and write** на этот репозиторий. Включите Mask. Protected — только если теги `v*` тоже protected |
+
 ### Тесты в CI
 
 После **`deploy:dev`** на ветке по умолчанию выполняется **`test:web:post_dev_deploy`** (`cd web && npm ci`, установка Chromium для Playwright, `npm run test:ci`). На остальных ветках и в MR — джоба **`test:web`** после **`build:image`**.
